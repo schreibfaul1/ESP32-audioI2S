@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6s2                                                                                                                            ";
-/*  Updated on: Jun 14, 2026
+    Version 3.4.6t                                                                                                                            ";
+/*  Updated on: Jun 15, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -473,6 +473,7 @@ void Audio::setDefaults() {
     m_dataMode = AUDIO_NONE;
     m_streamTitle.reset();
     m_streamURL.reset();
+    m_playlistBuff.reset();
     m_resumeFilePos = -1;
     m_audioCurrentTime = 0; // Reset playtimer
     m_audioFileDuration = 0;
@@ -915,8 +916,7 @@ bool Audio::httpPrint(const char* host) {
         stopSong();
         AUDIO_LOG_WARN("MP4-Container not supported");
         return false;
-    }
-    else
+    } else
         m_expectedCodec = CODEC_NONE;
 
     if (extension.ends_with_icase(".asx"))
@@ -3516,7 +3516,6 @@ void Audio::loop() {
         }
     } else { // m3u8 datastream only
         ps_ptr<char> host;
-        if (m_lVar.no_host_timer > millis()) { return; }
         switch (m_dataMode) {
             case HTTP_RESPONSE_HEADER:
                 if (!parseHttpResponseHeader()) {
@@ -3540,29 +3539,26 @@ void Audio::loop() {
                 }
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
-                if (!host.valid())
-                    m_lVar.no_host_cnt++;
-                else {
-                    m_lVar.no_host_cnt = 0;
-                    m_lVar.no_host_timer = millis();
-                }
-
-                if (m_lVar.no_host_cnt == 2) { m_lVar.no_host_timer = millis() + 2000; } // no new url? wait 2 seconds
-                if (host.valid()) {                                                      // host contains the next playlist URL
+                if (host.valid()) { // host contains the next playlist URL
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
+                    if (m_lVar.no_host_timer > millis()) {
+                        // AUDIO_LOG_DEBUG("wait");
+                        break;
+                    }
+                    if(m_f_stream) m_lVar.no_host_timer = millis() + 10000;
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
                 break;
             case AUDIO_DATA:
                 if (m_f_ts) {
-                    processWebStreamTS();
-                } // aac or aacp with ts packets
+                    processWebStreamTS(); // aac, mp3 or aacp with ts packets
+                }
                 else {
-                    processWebStreamHLS();
-                } // aac or aacp normal stream
+                    processWebStreamHLS(); // aac, mp3 or aacp normal stream
+                }
 
                 if (m_f_continue) { // at this point m_f_continue is true, means processWebStream() needs more data
                     m_dataMode = AUDIO_PLAYLISTDATA;
@@ -4518,8 +4514,8 @@ chunkFinished:
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
-        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                                                         // ready to play the audio data
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS && !m_f_stream) { // waiting for buffer filled
+            m_f_stream = true;                                                     // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -4637,7 +4633,7 @@ void Audio::processWebStreamHLS() {
         if (streamDetection(m_pwsHLS.availableBytes)) return;
     }
 
-    if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
+    if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS && !m_f_stream) { // waiting for buffer filled
         m_f_stream = true;                                                         // ready to play the audio data
         // uint16_t filltime = millis() - m_t0;
         info(*this, evt_info, "stream ready");
