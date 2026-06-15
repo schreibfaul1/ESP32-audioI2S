@@ -1016,7 +1016,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
     // AUDIO_LOG_INFO("rqh \n{}", rqh.get());
 
     m_client->print(rqh.c_get());
-    m_resumeFilePos = seek; // used in processWebFile()
+    // m_resumeFilePos = seek; // used in processWebFile()
     m_dataMode = HTTP_RANGE_HEADER;
     return true;
 }
