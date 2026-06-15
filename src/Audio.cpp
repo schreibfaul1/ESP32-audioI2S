@@ -5826,8 +5826,9 @@ bool Audio::i2s_config() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
-    bool                  result = i2s_config();
     i2s_std_gpio_config_t gpio_cfg = {};
+    bool                  result = i2s_config();
+
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
     gpio_cfg.dout = (gpio_num_t)DOUT;
@@ -5876,9 +5877,6 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
     //-----------------------------------------------------------------------------
-
-    trim(audioI2SVers);
-    info(*this, evt_info, "audioI2S {}", audioI2SVers);
 
     I2Sstop();
     if (i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg) != ESP_OK) {
@@ -7475,6 +7473,11 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
     }
 
     return presumed_codec; // all other (native FLAC or WAV)
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const char* Audio::getVersion() {
+    trim(audioI2SVers);
+    return audioI2SVers + 8;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::get_info() {

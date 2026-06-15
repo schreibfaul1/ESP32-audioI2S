@@ -188,8 +188,7 @@ class Audio {
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
     const char*      getCodecname() { return codecname[m_codec]; }
-    const char*      getVersion() { return audioI2SVers; }
-
+    const char*      getVersion();
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
   private:
