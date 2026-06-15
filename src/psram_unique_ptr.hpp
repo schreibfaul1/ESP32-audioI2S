@@ -1176,19 +1176,6 @@ class ps_ptr {
         return -1;
     }
 
-    // int last_index_of(const T& value, int start_pos = -1) const {
-    //     if (!mem || allocated_size < sizeof(T)) return -1;
-
-    //     std::size_t count = allocated_size / sizeof(T);
-    //     T*          data = get();
-
-    //     if (start_pos < 0 || start_pos >= static_cast<int>(count)) start_pos = static_cast<int>(count) - 1;
-
-    //     for (int i = start_pos; i >= 0; --i) {
-    //         if (data[i] == value) return i;
-    //     }
-    //     return -1;
-    // }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F _ S U B S T R   📌📌📌
 

@@ -404,7 +404,6 @@ class Audio {
     std::vector<ps_ptr<char>> m_linesWithEXTINF; // extract from m_playlistContent, contains length and metadata
     std::vector<ps_ptr<char>> m_syltLines;       // SYLT line table
     std::vector<uint32_t>     m_syltTimeStamp;   // SYLT time table
-    std::vector<uint32_t>     m_hashQueue;
 
     static const uint8_t m_tsPacketSize = 188;
     static const uint8_t m_tsHeaderSize = 4;
@@ -434,7 +433,6 @@ class Audio {
     int            m_readbytes = 0;                 // bytes read
     uint32_t       m_metacount = 0;                 // counts down bytes between metadata
     int            m_controlCounter = 0;            // Status within readID3data() and readWaveHeader()
-    int32_t        m_inputHistory[6] = {0};         // used in resampleI2Soutput()
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample
     uint8_t        m_channels = 2;                  //

@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6t                                                                                                                            ";
+    Version 3.4.6ta                                                                                                                            ";
 /*  Updated on: Jun 15, 2026
 
     Author: Wolle (schreibfaul1)
@@ -404,7 +404,6 @@ esp_err_t Audio::I2Sstart() {
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear();                                                  // Clear OutputBuffer
     m_resamplesBuff.clear();                                            // Clear m_resamplesBuff
-    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in m_resamplesBuff
     esp_err_t err = ESP_FAIL;
     if (m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
     m_f_i2s_channel_enabled = false;
@@ -420,34 +419,34 @@ void Audio::zeroI2Sbuff() {
 void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
+
     InBuff.reset();
+    m_streamTitle.reset();
+    m_streamURL.reset();
+    m_playlistBuff.reset();
+    m_m3u8_host.reset();
+
     m_outBuff.clear();       // Clear OutputBuffer
     m_resamplesBuff.clear(); // Clear m_resamplesBuff
+    m_syltTimeStamp.clear();
+
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     vector_clear_and_shrink(m_syltLines);
-    m_syltTimeStamp.clear();
-    m_hashQueue.clear();
-    m_hashQueue.shrink_to_fit(); // uint32_t vector
+
     client.stop();
     clientsecure.stop();
     m_client = static_cast<NetworkClient*>(&client); /* default to *something* so that no NULL deref can happen */
-    ts_parsePacket(0, 0, 0);                         // reset ts routine
-    m_m3u8_host.reset();
-
-    AUDIO_LOG_DEBUG("buffers freed, free Heap: {} bytes", ESP.getFreeHeap());
 
     m_f_timeout = false;
     m_f_chunked = false; // Assume not chunked
     m_f_firstmetabyte = false;
     m_f_playing = false;
-    //    m_f_ssl = false;
     m_f_tts = false;
     m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
     m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;   // InitSequence for playAudioData
-    //    m_f_running = false;       // already done in stopSong
     m_f_firstLoop = true;
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -464,19 +463,18 @@ void Audio::setDefaults() {
     m_f_lockInBuffer = false;
     m_f_acceptRanges = false;
     m_f_connectionClose = false;
-
-    m_streamType = ST_NONE;
-    m_codec = CODEC_NONE;
-    m_m3u8Codec = CODEC_AAC;
-    m_playlistFormat = FORMAT_NONE;
     m_f_allDataReceived = false;
+
+    m_codec = CODEC_NONE;
     m_dataMode = AUDIO_NONE;
-    m_streamTitle.reset();
-    m_streamURL.reset();
-    m_playlistBuff.reset();
-    m_resumeFilePos = -1;
-    m_audioCurrentTime = 0; // Reset playtimer
+    m_streamType = ST_NONE;
+    m_playlistFormat = FORMAT_NONE;
+    m_m3u8Codec = CODEC_AAC;
+
+    m_validSamples = 0;
+    m_audioCurrentTime = 0;
     m_audioFileDuration = 0;
+    m_resumeFilePos = -1;
     m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_audioFileSize = 0;
@@ -496,7 +494,6 @@ void Audio::setDefaults() {
     m_M4A_sampleRate = 0;
     m_lastGranulePosition = 0;
     m_validSamples = 0;
-    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -3256,13 +3253,6 @@ uint32_t Audio::stopSong() {
             }
         }
         destroy_decoder();
-        m_validSamples = 0;
-        m_audioCurrentTime = 0;
-        m_audioFileDuration = 0;
-        m_codec = CODEC_NONE;
-        m_dataMode = AUDIO_NONE;
-        m_streamType = ST_NONE;
-        m_playlistFormat = FORMAT_NONE;
         m_f_lockInBuffer = false;
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
@@ -3969,11 +3959,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         return {};
     }
 
-    if (m_pplM3U8.firstCall) {
-        m_pplM3U8.firstCall = false;
-        m_pplM3U8.xMedSeq = 0;
-        m_pplM3U8.f_mediaSeq_found = false;
-    }
+
 
     if (m_codec == CODEC_NONE) {
         m_codec = CODEC_AAC;
