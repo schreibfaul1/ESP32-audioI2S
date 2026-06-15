@@ -288,14 +288,9 @@ class Audio {
     void                   strlower(char* str);
     void                   trim(char* str);
     bool                   startsWith(const char* base, const char* str);
-    bool                   endsWith(const char* base, const char* searchString);
     int                    indexOf(const char* base, const char* str, int startIndex = 0);
     int                    indexOf(const char* base, char ch, int startIndex = 0);
-    int                    lastIndexOf(const char* haystack, const char* needle);
-    int                    lastIndexOf(const char* haystack, const char needle);
     int                    specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
-    int                    specialIndexOfLast(uint8_t* base, const char* str, int baselen);
-    int                    find_utf16_null_terminator(const uint8_t* buf, int start, int max);
     int32_t                min3(int32_t a, int32_t b, int32_t c);
     uint64_t               bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
     bool                   b64encode(const char* source, uint16_t sourceLength, char* dest);
@@ -303,8 +298,6 @@ class Audio {
     void                   deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
     uint32_t               simpleHash(const char* str);
     ps_ptr<char>           urlencode(const char* str, bool spacesOnly);
-    uint32_t               bswap32(uint32_t x);
-    uint64_t               bswap64(uint64_t x);
     audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs);
 
   private:

@@ -402,8 +402,8 @@ esp_err_t Audio::I2Sstart() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
-    m_outBuff.clear();                                                  // Clear OutputBuffer
-    m_resamplesBuff.clear();                                            // Clear m_resamplesBuff
+    m_outBuff.clear();       // Clear OutputBuffer
+    m_resamplesBuff.clear(); // Clear m_resamplesBuff
     esp_err_t err = ESP_FAIL;
     if (m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
     m_f_i2s_channel_enabled = false;
@@ -3537,7 +3537,7 @@ void Audio::loop() {
                         // AUDIO_LOG_DEBUG("wait");
                         break;
                     }
-                    if(m_f_stream) m_lVar.no_host_timer = millis() + 10000;
+                    if (m_f_stream) m_lVar.no_host_timer = millis() + 10000;
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
@@ -3545,8 +3545,7 @@ void Audio::loop() {
             case AUDIO_DATA:
                 if (m_f_ts) {
                     processWebStreamTS(); // aac, mp3 or aacp with ts packets
-                }
-                else {
+                } else {
                     processWebStreamHLS(); // aac, mp3 or aacp normal stream
                 }
 
@@ -3958,8 +3957,6 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
-
-
 
     if (m_codec == CODEC_NONE) {
         m_codec = CODEC_AAC;
@@ -4620,7 +4617,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS && !m_f_stream) { // waiting for buffer filled
-        m_f_stream = true;                                                         // ready to play the audio data
+        m_f_stream = true;                                                     // ready to play the audio data
         // uint16_t filltime = millis() - m_t0;
         info(*this, evt_info, "stream ready");
         // info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -6185,26 +6182,20 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
     if (codec != CODEC_OPUS && codec != CODEC_VORBIS) return 0; // only opus or vorbis
     if (m_audioFileSize == 0) { return 0; }                     // only files
 
-    uint64_t granulePos = 0;
-    uint8_t* buff = (uint8_t*)ps_malloc(UINT16_MAX);
-    if (!buff) {
-        AUDIO_LOG_ERROR("oom");
-        return 0;
-    }
+    uint64_t     granulePos = 0;
+    ps_ptr<char> buff;
+    buff.alloc(UINT16_MAX, "buff");
+
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
-    AUDIO_LOG_DEBUG("rangeStart: {}, audioFileSize: {}, len: {}", rangeStart, m_audioFileSize, UINT16_MAX);
     audioFileSeek(rangeStart, UINT16_MAX);
-    audioFileRead(buff, UINT16_MAX);
-    int32_t pos = specialIndexOfLast(buff, "OggS", UINT16_MAX);
+    audioFileRead((uint8_t*)buff.get(), UINT16_MAX);
+    int32_t pos = buff.last_special_index_of("OggS", UINT16_MAX);
     if (buff[pos + 5] & 0x04) { // is last page;
         for (int j = 0; j < 8; j++) { granulePos |= ((uint64_t)buff[pos + 6 + j] << (j * 8)); }
     }
     AUDIO_LOG_DEBUG("granulePos {}", granulePos);
+
     m_resumeFilePos = 0;
-    if (buff) {
-        free(buff);
-        buff = NULL;
-    }
     return granulePos;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7546,16 +7537,6 @@ bool Audio::startsWith(const char* base, const char* str) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::endsWith(const char* base, const char* searchString) {
-    int32_t slen = strlen(searchString);
-    if (slen == 0) return false;
-    const char* p = base + strlen(base);
-    //  while(p > base && isspace(*p)) p--;  // rtrim
-    p -= slen;
-    if (p < base) return false;
-    return (strncmp(p, searchString, slen) == 0);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::indexOf(const char* base, const char* str, int startIndex) {
     // fbi
     const char* p = base;
@@ -7576,26 +7557,6 @@ int Audio::indexOf(const char* base, char ch, int startIndex) {
     return pos - base;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int Audio::lastIndexOf(const char* haystack, const char* needle) {
-    // fb
-    int nlen = strlen(needle);
-    if (nlen == 0) return -1;
-    const char* p = haystack - nlen + strlen(haystack);
-    while (p >= haystack) {
-        int i = 0;
-        while (needle[i] == p[i])
-            if (++i == nlen) return p - haystack;
-        p--;
-    }
-    return -1;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int Audio::lastIndexOf(const char* haystack, const char needle) {
-    // fb
-    const char* p = strrchr(haystack, needle);
-    return (p ? p - haystack : -1);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact) {
     int result = 0;                       // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
@@ -7610,31 +7571,6 @@ int Audio::specialIndexOf(uint8_t* base, const char* str, int baselen, bool exac
         if (result >= 0) break;
     }
     return result;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// Find the last instance of Str in the buffer backwards and checks end-of-stream-bit
-int Audio::specialIndexOfLast(uint8_t* base, const char* str, int baselen) {
-    int result = -1;
-    if (strlen(str) > baselen) return -1; // too short buffer
-
-    for (int i = baselen - strlen(str); i >= 0; i--) { // search backwards, start at the end of the buffer
-        int match = 1;
-        for (int j = 0; j < strlen(str); j++) {
-            if (base[i + j] != str[j]) {
-                match = 0;
-                break;
-            }
-        }
-        if (match) return i;
-    }
-    return result;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int Audio::find_utf16_null_terminator(const uint8_t* buf, int start, int max) {
-    for (int i = start; i + 1 < max; i += 2) {
-        if (buf[i] == 0x00 && buf[i + 1] == 0x00) return i; // Index to the first zero-byte
-    }
-    return -1; // not found
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::min3(int32_t a, int32_t b, int32_t c) {
@@ -7752,18 +7688,6 @@ ps_ptr<char> Audio::urlencode(const char* str, bool spacesOnly) {
     encoded.shrink_to_fit();
     return encoded;
 }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//  Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
-uint32_t Audio::bswap32(uint32_t x) {
-    return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) | ((x & 0x0000FF00) << 8) | ((x & 0x000000FF) << 24);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//  Function to reverse the byte order of a 64-bit value (big-endian to little-endian)
-uint64_t Audio::bswap64(uint64_t x) {
-    return ((x & 0xFF00000000000000ULL) >> 56) | ((x & 0x00FF000000000000ULL) >> 40) | ((x & 0x0000FF0000000000ULL) >> 24) | ((x & 0x000000FF00000000ULL) >> 8) | ((x & 0x00000000FF000000ULL) << 8) |
-           ((x & 0x0000000000FF0000ULL) << 24) | ((x & 0x000000000000FF00ULL) << 40) | ((x & 0x00000000000000FFULL) << 56);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // separate task for decoding and outputting the data. 'playAudioData()' is started periodically and fetches the data from the InBuffer. This ensures
 // that the I2S-DMA is always sufficiently filled, even if the Arduino 'loop' is stuck.
