@@ -1290,6 +1290,44 @@ class ps_ptr {
         return ps_ptr<char>(src + pos, n);
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O L O W E R C A S E  📌📌📌
+
+    // ps_ptr<char> a;  // ascii and ISO-8859-1 only!
+    // a = "Hallo Welt!";
+    // a.toLowerCase();
+    // printf("%s\n", a.get());   // hallo welt!
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void toLowerCase() {
+        if (!mem) return;
+
+        char* str = get();
+        if (!str) return;
+
+        for (; *str; ++str) { *str = static_cast<char>(std::tolower(static_cast<unsigned char>(*str))); }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O U P P E R C A S E  📌📌📌
+
+    // ps_ptr<char> a; // ascii and ISO-8859-1 only!
+    // a = "Hallo Welt!";
+    // a.toUpperCase();
+    // printf("%s\n", a.get());   // HALLO WELT!
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void toUpperCase() {
+        if (!mem) return;
+
+        char* str = get();
+        if (!str) return;
+
+        for (; *str; ++str) { *str = static_cast<char>(std::toupper(static_cast<unsigned char>(*str))); }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T R L E N  📌📌📌
 
     // ps_ptr<char> text;

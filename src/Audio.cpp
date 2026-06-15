@@ -5107,7 +5107,7 @@ bool Audio::initializeDecoder() {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::parseContentType(char* ct) {
+bool Audio::parseContentType(ps_ptr<char> ct) {
     enum : int { CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX, CT_M3U8, CT_TXT, CT_AACP, CT_OPUS, CT_OGG, CT_VORBIS };
 
     // MIME types and their CT_Val values
@@ -5153,26 +5153,26 @@ bool Audio::parseContentType(char* ct) {
         {NULL, CT_NONE} // Final marker
     };
 
-    strlower(ct);
-    trim(ct);
+    ct.trim();
 
     m_codec = CODEC_NONE;
     int ct_val = CT_NONE;
 
     // Search in the Lookup table
     for (int i = 0; mime_map[i].mime_type != NULL; i++) {
-        if (!strcmp(ct, mime_map[i].mime_type)) {
+        ct.toLowerCase();
+        if (ct.equals(mime_map[i].mime_type)) {
             ct_val = mime_map[i].ct_val;
             break;
         }
     }
 
     // Special cases for video/mp2t and audio/mp2t
-    if (ct_val == CT_AAC && (strcmp(ct, "video/mp2t") == 0 || strcmp(ct, "audio/mp2t") == 0) && m_m3u8Codec == CODEC_MP3) { ct_val = CT_MP3; }
+    if (ct_val == CT_AAC && (ct == "video/mp2t" || ct == "audio/mp2t") && m_m3u8Codec == CODEC_MP3) { ct_val = CT_MP3; }
     // Special case for audio/mpegurl
-    if (ct_val == CT_M3U && strcmp(ct, "audio/mpegurl") == 0 && m_expectedPlsFmt == FORMAT_M3U8) { ct_val = CT_M3U8; }
+    if (ct_val == CT_M3U && ct == "audio/mpegurl" && m_expectedPlsFmt == FORMAT_M3U8) { ct_val = CT_M3U8; }
     // Special case for application/json
-    if (ct_val == CT_TXT && strcmp(ct, "application/json") == 0 && m_expectedPlsFmt == FORMAT_M3U8) { ct_val = CT_M3U8; }
+    if (ct_val == CT_TXT && ct == "application/json" && m_expectedPlsFmt == FORMAT_M3U8) { ct_val = CT_M3U8; }
 
     // exam for invalid content types
     if (ct_val == CT_NONE) {
@@ -7500,14 +7500,6 @@ bool Audio::get_info() {
         audio_info_callback(i);
     }
     return true;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::strlower(char* str) {
-    unsigned char* p = (unsigned char*)str;
-    while (*p) {
-        *p = tolower((unsigned char)*p);
-        p++;
-    }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::trim(char* str) {

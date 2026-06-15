@@ -245,7 +245,7 @@ class Audio {
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
     void                     showstreamtitle(char* ml);
-    bool                     parseContentType(char* ct);
+    bool                     parseContentType(ps_ptr<char> ct);
     bool                     parseHttpResponseHeader();
     bool                     parseHttpRangeHeader();
     bool                     initializeDecoder();
@@ -285,7 +285,6 @@ class Audio {
     int32_t                wav_correctResumeFilePos();
     uint8_t                determineCodec(uint8_t presumed_codec);
     bool                   get_info();
-    void                   strlower(char* str);
     void                   trim(char* str);
     bool                   startsWith(const char* base, const char* str);
     int                    indexOf(const char* base, const char* str, int startIndex = 0);
