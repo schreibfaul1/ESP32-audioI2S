@@ -27,6 +27,7 @@
 #include <libb64/cencode.h>
 #include <locale>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -147,7 +148,7 @@ class Audio {
 
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     audiolib::hwoe_t dismantle_host(const char* host);
-    bool             connecttohost(const char* host, const char* user = "", const char* pwd = "");
+    bool             connecttohost(const char* host, const char* user = nullptr, const char* pwd = nullptr);
     bool             connecttospeech(const char* speech, const char* lang);
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
@@ -188,8 +189,7 @@ class Audio {
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
     const char*      getCodecname() { return codecname[m_codec]; }
-    const char*      getVersion() { return audioI2SVers; }
-
+    const char*      getVersion();
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
   private:
@@ -245,7 +245,7 @@ class Audio {
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
     void                     showstreamtitle(char* ml);
-    bool                     parseContentType(char* ct);
+    bool                     parseContentType(ps_ptr<char> ct);
     bool                     parseHttpResponseHeader();
     bool                     parseHttpRangeHeader();
     bool                     initializeDecoder();
@@ -285,17 +285,11 @@ class Audio {
     int32_t                wav_correctResumeFilePos();
     uint8_t                determineCodec(uint8_t presumed_codec);
     bool                   get_info();
-    void                   strlower(char* str);
     void                   trim(char* str);
     bool                   startsWith(const char* base, const char* str);
-    bool                   endsWith(const char* base, const char* searchString);
     int                    indexOf(const char* base, const char* str, int startIndex = 0);
     int                    indexOf(const char* base, char ch, int startIndex = 0);
-    int                    lastIndexOf(const char* haystack, const char* needle);
-    int                    lastIndexOf(const char* haystack, const char needle);
     int                    specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
-    int                    specialIndexOfLast(uint8_t* base, const char* str, int baselen);
-    int                    find_utf16_null_terminator(const uint8_t* buf, int start, int max);
     int32_t                min3(int32_t a, int32_t b, int32_t c);
     uint64_t               bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
     bool                   b64encode(const char* source, uint16_t sourceLength, char* dest);
@@ -303,8 +297,6 @@ class Audio {
     void                   deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
     uint32_t               simpleHash(const char* str);
     ps_ptr<char>           urlencode(const char* str, bool spacesOnly);
-    uint32_t               bswap32(uint32_t x);
-    uint64_t               bswap64(uint64_t x);
     audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs);
 
   private:
@@ -362,17 +354,20 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 32;        // number of I2S DMA buffer
-        uint16_t DMA_FRAME_NUM = 256;      // number of frames in one DMA buffer
-        uint16_t FREQ_LS_HZ = 500;         // IIR Filter, lowshelf
-        uint16_t FREQ_PEAK_HZ = 1800;      // IIR Filter, peakingEQ
-        uint16_t FREQ_HS_HZ = 6000;        // IIR Filter, highshelf
-        float    QUALITY_SLOPE = 0.707;    // Quality (all shelfes)
-        uint16_t PEAK_HOLD_SAMPLES = 2000; // VU_meter, (2000) ca. 20 ms @ 48 kHz
-        uint8_t  PEAK_RELEASE = 1;         // VU_meter, Fall rate
-        bool     VU_LEVEL = true;          // true: vu meter is enabled
-        bool     IIR_FILTER = true;        // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
-        bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
+        uint16_t DMA_DESC_NUM = 32;            // number of I2S DMA buffer
+        uint16_t DMA_FRAME_NUM = 256;          // number of frames in one DMA buffer
+        uint16_t FREQ_LS_HZ = 500;             // IIR Filter, lowshelf
+        uint16_t FREQ_PEAK_HZ = 1800;          // IIR Filter, peakingEQ
+        uint16_t FREQ_HS_HZ = 6000;            // IIR Filter, highshelf
+        float    QUALITY_SLOPE = 0.707;        // Quality (all shelfes)
+        uint16_t PEAK_HOLD_SAMPLES = 2000;     // VU_meter, (2000) ca. 20 ms @ 48 kHz
+        uint8_t  PEAK_RELEASE = 1;             // VU_meter, Fall rate
+        bool     VU_LEVEL = true;              // true: vu meter is enabled
+        bool     IIR_FILTER = true;            // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
+        bool     SPECTRUM = false;             // true: spectrum analyzer is enabled
+        bool     VOLUME_CONTROL = true;        // true: volume and balance control is enabled
+        float    VOL_FADING_SPEED = 50.0;      // mute, volume fading 1.0f (fast) ... 100.0f (slow)
+        uint32_t BUFFER_TRESHOLD_HLS = 120000; // Level at which the HLS-TS stream starts and is reloaded
     } settings;
 
   private:
@@ -401,7 +396,6 @@ class Audio {
     std::vector<ps_ptr<char>> m_linesWithEXTINF; // extract from m_playlistContent, contains length and metadata
     std::vector<ps_ptr<char>> m_syltLines;       // SYLT line table
     std::vector<uint32_t>     m_syltTimeStamp;   // SYLT time table
-    std::vector<uint32_t>     m_hashQueue;
 
     static const uint8_t m_tsPacketSize = 188;
     static const uint8_t m_tsHeaderSize = 4;
@@ -414,7 +408,7 @@ class Audio {
     ps_ptr<char>             m_ibuff;           // used in log_info()
     ps_ptr<char>             m_lastHost;        // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;     // can be changed by redirection or playlist
-    ps_ptr<char>             m_lastM3U8host;
+    ps_ptr<char>             m_m3u8_host;
     ps_ptr<char>             m_speechtxt;   // stores tts text
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_streamURL;   // stores the last StreamURL
@@ -431,7 +425,6 @@ class Audio {
     int            m_readbytes = 0;                 // bytes read
     uint32_t       m_metacount = 0;                 // counts down bytes between metadata
     int            m_controlCounter = 0;            // Status within readID3data() and readWaveHeader()
-    int32_t        m_inputHistory[6] = {0};         // used in resampleI2Soutput()
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample
     uint8_t        m_channels = 2;                  //

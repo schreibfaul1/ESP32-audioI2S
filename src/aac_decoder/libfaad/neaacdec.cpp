@@ -355,8 +355,8 @@ int NeaacDecoder::NeAACDecGetVersion(const char** faad_id_string, const char** f
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* NeaacDecoder::NeAACDecGetErrorMessage(const uint8_t errcode) {
-    if (errcode >= NUM_ERROR_MESSAGES) return NULL;
+error_info_t NeaacDecoder::NeAACDecGetErrorMessage(const uint8_t errcode) {
+    if (errcode > NUM_ERROR_MESSAGES) return err_msg[NUM_ERROR_MESSAGES]; // unspecified
     return err_msg[errcode];
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6731,27 +6731,31 @@ real_t NeaacDecoder::iquant(int16_t q, const real_t* tab, uint8_t* error) {
     real_t       x1, x2;
     #endif
     int16_t sgn = 1;
-    if (q < 0) {
-        q = -q;
+    /* compute the magnitude in int: -q is evaluated as int and so does not wrap for q == -32768 the way an int16_t negation would, which keeps the
+       comparison against IQ_TABLE_SIZE in range like the floating-point path */
+    int32_t aq = q;
+
+    if (aq < 0) {
+        aq = -aq;
         sgn = -1;
     }
-    if (q < IQ_TABLE_SIZE) {
+    if (aq < IQ_TABLE_SIZE) {
     // #define IQUANT_PRINT
     #ifdef IQUANT_PRINT
-        // printf("0x%.8X\n", sgn * tab[q]);
-        printf("%d\n", sgn * tab[q]);
+        // printf("0x%.8X\n", sgn * tab[aq]);
+        printf("%d\n", sgn * tab[aq]);
     #endif
-        return sgn * tab[q];
+        return sgn * tab[aq];
     }
     #ifndef BIG_IQ_TABLE
-    if (q >= 8192) {
+    if (aq >= 8192) {
         *error = 17;
         return 0;
     }
     /* linear interpolation */
-    x1 = tab[q >> 3];
-    x2 = tab[(q >> 3) + 1];
-    return sgn * 16 * (MUL_R(errcorr[q & 7], (x2 - x1)) + x1);
+    x1 = tab[aq >> 3];
+    x2 = tab[(aq >> 3) + 1];
+    return sgn * 16 * (MUL_R(errcorr[aq & 7], (x2 - x1)) + x1);
     #else
     *error = 17;
     return 0;

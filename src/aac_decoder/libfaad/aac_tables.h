@@ -61,40 +61,50 @@ static const uint8_t Parity[256] = { // parity
  *  XORed values of both generators.
  */
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const char* err_msg[] = {"No error",
-                                "Gain control not yet implemented",
-                                "Pulse coding not allowed in short blocks",
-                                "Invalid huffman codebook",
-                                "Scalefactor out of range",
-                                "Unable to find ADTS syncword",
-                                "Channel coupling not yet implemented",
-                                "Channel configuration not allowed in error resilient frame",
-                                "Bit error in error resilient scalefactor decoding",
-                                "Error decoding huffman scalefactor (bitstream error)",
-                                "Error decoding huffman codeword (bitstream error)",
-                                "Non existent huffman codebook number found",
-                                "Invalid number of channels",
-                                "Maximum number of bitstream elements exceeded",
-                                "Input data buffer too small",
-                                "Array index out of range",
-                                "Maximum number of scalefactor bands exceeded",
-                                "Quantised value out of range",
-                                "LTP lag out of range",
-                                "Invalid SBR parameter decoded",
-                                "SBR called without being initialised",
-                                "Unexpected channel configuration change",
-                                "Error in program_config_element",
-                                "First SBR frame is not the same as first AAC frame",
-                                "Unexpected fill element with SBR data",
-                                "Not all elements were provided with SBR data",
-                                "LTP decoding not available",
-                                "Output data buffer too small",
-                                "CRC error in DRM data",
-                                "PNS not allowed in DRM data stream",
-                                "No standard extension payload allowed in DRM",
-                                "PCE shall be the first element in a frame",
-                                "Bitstream value not allowed by specification",
-                                "MAIN prediction not initialised"};
+typedef enum { AAC_VERBOSE, AAC_DEBUG, AAC_INFO, AAC_WARN, AAC_ERROR } error_level_t;
+
+typedef struct {
+    const char*   text;
+    error_level_t level;
+} error_info_t;
+
+static error_info_t err_msg[] = {
+    {"No AAC_ERROR", AAC_ERROR},                                                   /*0*/
+    {"Gain control not yet implemented", AAC_ERROR},                               /*1*/
+    {"Pulse coding not allowed in short blocks", AAC_ERROR},                       /*2*/
+    {"Invalid huffman codebook", AAC_ERROR},                                       /*3*/
+    {"Scalefactor out of range", AAC_ERROR},                                       /*4*/
+    {"Unable to find ADTS syncword", AAC_ERROR},                                   /*5*/
+    {"Channel coupling not yet implemented", AAC_ERROR},                           /*6*/
+    {"Channel configuration not allowed in AAC_ERROR resilient frame", AAC_ERROR}, /*7*/
+    {"Bit AAC_ERROR in AAC_ERROR resilient scalefactor decoding", AAC_ERROR},      /*8*/
+    {"AAC_ERROR decoding huffman scalefactor (bitstream AAC_ERROR)", AAC_ERROR},   /*9*/
+    {"AAC_ERROR decoding huffman codeword (bitstream AAC_ERROR)", AAC_ERROR},      /*10*/
+    {"Non existent huffman codebook number found", AAC_ERROR},                     /*11*/
+    {"Invalid number of channels", AAC_ERROR},                                     /*12*/
+    {"Maximum number of bitstream elements exceeded", AAC_ERROR},                  /*13*/
+    {"Input data buffer too small", AAC_ERROR},                                    /*14*/
+    {"Array index out of range", AAC_ERROR},                                       /*15*/
+    {"Maximum number of scalefactor bands exceeded", AAC_ERROR},                   /*16*/
+    {"Quantised value out of range", AAC_ERROR},                                   /*17*/
+    {"LTP lag out of range", AAC_ERROR},                                           /*18*/
+    {"Invalid SBR parameter decoded", AAC_ERROR},                                  /*19*/
+    {"SBR called without being initialised", AAC_ERROR},                           /*20*/
+    {"Unexpected channel configuration change", AAC_DEBUG},                        /*21*/
+    {"AAC_ERROR in program_config_element", AAC_ERROR},                            /*22*/
+    {"First SBR frame is not the same as first AAC frame", AAC_ERROR},             /*23*/
+    {"Unexpected fill element with SBR data", AAC_ERROR},                          /*24*/
+    {"Not all elements were provided with SBR data", AAC_ERROR},                   /*25*/
+    {"LTP decoding not available", AAC_ERROR},                                     /*26*/
+    {"Output data buffer too small", AAC_ERROR},                                   /*27*/
+    {"CRC AAC_ERROR in DRM data", AAC_ERROR},                                      /*28*/
+    {"PNS not allowed in DRM data stream", AAC_ERROR},                             /*29*/
+    {"No standard extension payload allowed in DRM", AAC_ERROR},                   /*30*/
+    {"PCE shall be the first element in a frame", AAC_ERROR},                      /*31*/
+    {"Bitstream value not allowed by specification", AAC_ERROR},                   /*32*/
+    {"MAIN prediction not initialised", AAC_ERROR},                                /*33*/
+    {"Unknown AAC_ERROR", AAC_ERROR},                                              /*34*/
+};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
     #define TABLE_BITS 6
@@ -21925,7 +21935,7 @@ static const uint8_t delay_length_d[NO_ALLPASS_LINKS] = {
 };
     #endif                                          //  PARAM_32KHZ
 static const real_t   filter_a[NO_ALLPASS_LINKS] = {/* a(m) = exp(-d_48kHz(m)/7) */
-                                                  FRAC_CONST(0.65143905753106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
+                                                    FRAC_CONST(0.65143905753106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
 static const uint8_t  group_border20[10 + 12 + 1] = {6,  7,  0, 1, 2, 3, /* 6 subqmf subbands */
                                                      9,  8,              /* 2 subqmf subbands */
                                                      10, 11,             /* 2 subqmf subbands */
@@ -23726,14 +23736,14 @@ static rvlc_huff_table book_rvlc[] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 static const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
-                            REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
+                                   REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 static const real_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
-                                 FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000), FRAC_CONST(0.707106781186547), FRAC_CONST(1.000000000000000)};
+                                        FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000), FRAC_CONST(0.707106781186547), FRAC_CONST(1.000000000000000)};
 static const real_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.707106781186547),  FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548), FRAC_CONST(0.000000000000000),
-                                 FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000)};
+                                        FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000)};
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC

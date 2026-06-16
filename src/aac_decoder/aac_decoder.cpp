@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 23.04.2026
+ *  Updated on: 13.06.2026
  */
 
 #include "aac_decoder.h"
@@ -122,7 +122,7 @@ const char* AACDecoder::whoIsIt() {
     return "AAC";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* AACDecoder::getErrorMessage(int8_t err) {
+error_info_t AACDecoder::getErrorMessage(int8_t err) {
     return m_neaacdec->NeAACDecGetErrorMessage(abs(err));
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -158,10 +158,12 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     m_compressionRatio = (float)m_frameInfo.samples * 2 / m_frameInfo.bytesconsumed;
     if (err < 0) {
         if (err == -100) return AAC_ID3_HDR; // ID3 header found
-        if (err == -21) {
-            AAC_LOG_INFO("{}", getErrorMessage(abs(err)));
-        } else {
-            AAC_LOG_ERROR("{}", getErrorMessage(abs(err)));
+        else{
+            if(getErrorMessage(abs(err)).level == AAC_ERROR) AAC_LOG_ERROR("{}", getErrorMessage(abs(err)).text);
+            if(getErrorMessage(abs(err)).level == AAC_WARN) AAC_LOG_WARN("{}", getErrorMessage(abs(err)).text);
+            if(getErrorMessage(abs(err)).level == AAC_INFO) AAC_LOG_INFO("{}", getErrorMessage(abs(err)).text);
+            if(getErrorMessage(abs(err)).level == AAC_DEBUG) AAC_LOG_DEBUG("{}", getErrorMessage(abs(err)).text);
+            if(getErrorMessage(abs(err)).level == AAC_VERBOSE) AAC_LOG_VERBOSE("{}", getErrorMessage(abs(err)).text);
         }
     } else {
 

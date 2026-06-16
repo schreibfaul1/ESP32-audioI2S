@@ -597,6 +597,11 @@ class ps_ptr {
             return;
         }
 
+        if constexpr (std::is_same_v<T, char>) {
+            assign(other.get());
+            return;
+        }
+
         std::size_t sz = other.size();
         alloc(sz);
         if (mem && sz > 0) { std::memcpy(mem.get(), other.get(), sz); }
@@ -974,7 +979,6 @@ class ps_ptr {
 
         // neuen Text anhängen
         std::memcpy(mem.get() + old_len, tmp.c_str(), add_len + 1);
-        allocated_size = old_len + add_len;
     }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1082,13 +1086,54 @@ class ps_ptr {
         log_d("index_of: Needle not found within %lu bytes", max_length);
         return -1;
     }
-
-    // Overload for C-string needle (automatically determines needle length, excluding null terminator)
     template <typename U = T>
         requires std::is_same_v<U, char>
     int32_t special_index_of(const char* needle, uint32_t max_length) const {
         return special_index_of(needle, needle ? std::strlen(needle) : 0, max_length);
     }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  L A S T _ S P E C I A L _ I N D E X _ O F  📌📌📌
+    // Overload for C-string needle (automatically determines needle length, excluding null terminator)
+    // Searches backwards for needle in the buffer.
+    // Returns the offset of the last occurrence or -1 if not found.
+
+    int32_t last_special_index_of(const char* needle, uint32_t needle_length, uint32_t max_length) const {
+        static_assert(std::is_same_v<T, char>, "last_special_index_of is only valid for ps_ptr<char>");
+
+        if (!mem || !get()) {
+            log_e("last_special_index_of: No valid buffer data");
+            return -1;
+        }
+
+        if (!needle || needle_length == 0) {
+            log_e("last_special_index_of: Invalid needle (null or empty)");
+            return -1;
+        }
+
+        if (max_length < needle_length) {
+            log_e("last_special_index_of: max_length (%u) too short to find needle of length %u", max_length, needle_length);
+            return -1;
+        }
+
+        const char* data = get();
+
+        for (int32_t i = static_cast<int32_t>(max_length - needle_length); i >= 0; --i) {
+
+            if (std::memcmp(data + i, needle, needle_length) == 0) { return i; }
+        }
+
+        log_d("last_special_index_of: Needle not found within %lu bytes", max_length);
+        return -1;
+    }
+
+    // Overload for C-string needle
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    int32_t last_special_index_of(const char* needle, uint32_t max_length) const {
+        return last_special_index_of(needle, needle ? std::strlen(needle) : 0, max_length);
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F _ I C A S E  📌📌📌
 
@@ -1172,19 +1217,39 @@ class ps_ptr {
         return -1;
     }
 
-    // int last_index_of(const T& value, int start_pos = -1) const {
-    //     if (!mem || allocated_size < sizeof(T)) return -1;
+    // ps_ptr<char> str;
+    // str.assign("/audiofiles/my_playlist/podcast/h.mp3");
+    // int p1 = str.last_index_of("/");          // 31
+    // int p2 = str.last_index_of("podcast");    // 24
+    // int p3 = str.last_index_of(".mp3");       // 33
+    // int p4 = str.last_index_of("xyz");        // -1
 
-    //     std::size_t count = allocated_size / sizeof(T);
-    //     T*          data = get();
+    // ps_ptr<char> str;
+    // str.assign("abc test abc test abc");
+    // int last = str.last_index_of("abc");      // 18
+    // int prev = str.last_index_of("abc", last - 1); // 9
 
-    //     if (start_pos < 0 || start_pos >= static_cast<int>(count)) start_pos = static_cast<int>(count) - 1;
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    int last_index_of(const char* substr, int start_pos = -1) const {
+        if (!mem || !substr || !*substr) return -1;
 
-    //     for (int i = start_pos; i >= 0; --i) {
-    //         if (data[i] == value) return i;
-    //     }
-    //     return -1;
-    // }
+        const char* str = static_cast<const char*>(mem.get());
+
+        int len = static_cast<int>(std::strlen(str));
+        int sub_len = static_cast<int>(std::strlen(substr));
+
+        if (sub_len > len) return -1;
+
+        // Standard: am Ende beginnen
+        if (start_pos < 0 || start_pos > len - sub_len) { start_pos = len - sub_len; }
+
+        for (int i = start_pos; i >= 0; --i) {
+            if (std::strncmp(str + i, substr, sub_len) == 0) { return i; }
+        }
+        return -1;
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F _ S U B S T R   📌📌📌
 
@@ -1224,6 +1289,44 @@ class ps_ptr {
 
         return ps_ptr<char>(src + pos, n);
     }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O L O W E R C A S E  📌📌📌
+
+    // ps_ptr<char> a;  // ascii and ISO-8859-1 only!
+    // a = "Hallo Welt!";
+    // a.toLowerCase();
+    // printf("%s\n", a.get());   // hallo welt!
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void toLowerCase() {
+        if (!mem) return;
+
+        char* str = get();
+        if (!str) return;
+
+        for (; *str; ++str) { *str = static_cast<char>(std::tolower(static_cast<unsigned char>(*str))); }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O U P P E R C A S E  📌📌📌
+
+    // ps_ptr<char> a; // ascii and ISO-8859-1 only!
+    // a = "Hallo Welt!";
+    // a.toUpperCase();
+    // printf("%s\n", a.get());   // HALLO WELT!
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void toUpperCase() {
+        if (!mem) return;
+
+        char* str = get();
+        if (!str) return;
+
+        for (; *str; ++str) { *str = static_cast<char>(std::toupper(static_cast<unsigned char>(*str))); }
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T R L E N  📌📌📌
 
