@@ -6045,34 +6045,21 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
             if (res >= 0) m_audioFilePosition++;
         }
     } else { // read len
-        uint32_t t = millis();
-        while (len > 0) {
-            if (m_dataMode == AUDIO_LOCALFILE) {
-                readed_bytes = m_audiofile.read(buff + offset, len);
-
-                if (readed_bytes >= 0) {
-                    m_audioFilePosition += readed_bytes;
-                    len -= readed_bytes;
-                    offset += readed_bytes;
-                    res = offset;
-                    t = millis();
-                }
-                if (readed_bytes <= 0) break;
-            } else {
-                readed_bytes = m_client->read(buff + offset, len);
-                if (readed_bytes > 0) {
-                    m_audioFilePosition += readed_bytes;
-                    len -= readed_bytes;
-                    offset += readed_bytes;
-                    res = offset;
-                    t = millis();
-                }
-                if (readed_bytes <= 0) break;
+        if (m_dataMode == AUDIO_LOCALFILE) {
+            readed_bytes = m_audiofile.read(buff + offset, len);
+            if (readed_bytes >= 0) {
+                m_audioFilePosition += readed_bytes;
+                len -= readed_bytes;
+                offset += readed_bytes;
+                res = offset;
             }
-            if (t + 3000 < millis()) {
-                AUDIO_LOG_ERROR("timeout");
-                res = -1;
-                break;
+        } else {
+            readed_bytes = m_client->read(buff + offset, len);
+            if (readed_bytes > 0) {
+                m_audioFilePosition += readed_bytes;
+                len -= readed_bytes;
+                offset += readed_bytes;
+                res = offset;
             }
         }
     }
