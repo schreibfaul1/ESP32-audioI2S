@@ -6066,6 +6066,25 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t Audio::audioFileRead(uint8_t* buff, size_t len, uint16_t timeout_ms) {
+
+    uint32_t timeout = millis() + timeout_ms;
+    int32_t  bytes_has_read = 0;
+    uint8_t  cnt = 0;
+    while (bytes_has_read < len) {
+        int32_t res = audioFileRead(buff + bytes_has_read, len - bytes_has_read);
+        if (res <= 0) { vTaskDelay(10); }
+        if (res > 0) { bytes_has_read += res; }
+        if (timeout < millis()) {
+            AUDIO_LOG_ERROR("timeout, len: {} != bytes_has_read: {}", len, bytes_has_read);
+            return -1;
+        }
+        AUDIO_LOG_DEBUG("buffFillValue {}, res {}, bytes_has_read {}", len, res, bytes_has_read);
+    }
+    AUDIO_LOG_DEBUG("len: {} != bytes_has_read: {}", len, bytes_has_read);
+    return bytes_has_read;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
     int32_t res = -1;
 
@@ -6177,7 +6196,8 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
 
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
     audioFileSeek(rangeStart, UINT16_MAX);
-    audioFileRead((uint8_t*)buff.get(), UINT16_MAX);
+    audioFileRead((uint8_t*)buff.get(), UINT16_MAX, 3000);
+
     int32_t pos = buff.last_special_index_of("OggS", UINT16_MAX);
     if (buff[pos + 5] & 0x04) { // is last page;
         for (int j = 0; j < 8; j++) { granulePos |= ((uint64_t)buff[pos + 6 + j] << (j * 8)); }
@@ -7119,26 +7139,9 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
     InBuff.reset();
-    int32_t bytes_has_read = 0;
-    uint8_t cnt = 0;
-    while (bytes_has_read < buffFillValue) {
-        int32_t res = audioFileRead(InBuff.getWritePtr(), buffFillValue - bytes_has_read);
-        AUDIO_LOG_DEBUG("buffFillValue {}, res {}, bytes_readed {}", buffFillValue, res, bytes_has_read);
-        if(res <= 0){
-            vTaskDelay(10);
-            cnt++;
-        }
-        if (res > 0){
-            bytes_has_read += res;
-            InBuff.bytesWritten(res);
-        }
-        if (cnt == 255) {
-            AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
-            break;
-        }
-    }
-    if (bytes_has_read != buffFillValue) AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
-
+    int32_t bw = audioFileRead(InBuff.getWritePtr(), buffFillValue, 3000);
+    if(bw == buffFillValue) InBuff.bytesWritten(bw);
+    else return -1;
 
     int32_t offset = 0;
     int32_t newFilePos = resumeFilePos;
