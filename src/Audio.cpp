@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6u                                                                                                                            ";
-/*  Updated on: Jun 16, 2026
+    Version 3.4.6v                                                                                                                            ";
+/*  Updated on: Jun 17, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5956,7 +5956,11 @@ bool Audio::setAudioPlayTime(uint16_t sec) {
     if (!getBitRate()) return false;                                                   // guard
     if (!m_f_running) return false;                                                    // guard
 
-    if (sec > getAudioFileDuration()) sec = getAudioFileDuration();
+    if (sec > getAudioFileDuration()) {
+        AUDIO_LOG_WARN("setAudioPlayTime: {}s >= audioFileDuration: {}s -> stopSong", sec, getAudioFileDuration());
+        stopSong();
+        return false;
+    }
     uint32_t filepos = m_audioDataStart + (getBitRate() * sec / 8);
     m_resumeFilePos = filepos;
     m_cat.sum_samples = (float)m_cat.tota_samples * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
@@ -6027,52 +6031,48 @@ bool Audio::getMute() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
     if (buff && len == 0) return 0; // nothing to do
-    int32_t  bytes_has_read = 0;
+    int32_t  readed_bytes = 0;
     uint32_t offset = 0;
     // This method standardized reading files, regardless of the source (local or web) and the correct number of the bytes read must be determined.
-    int32_t res = -1;
-    auto waitForClientData = [&]() -> bool {
-        uint32_t start = millis();
-        while (!m_client->available()) {
-            if (millis() - start >= 3000) {
-                AUDIO_LOG_ERROR("audioFileRead: timeout waiting for stream data");
-                return false;
-            }
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-        return true;
-    };
+    int res = -1;
 
     if (!buff && !len) { // read one byte
         if (m_dataMode == AUDIO_LOCALFILE) {
             res = m_audiofile.read();
             if (res >= 0) m_audioFilePosition++;
         } else {
-            if (!waitForClientData()) return -1;
             res = m_client->read();
             if (res >= 0) m_audioFilePosition++;
         }
     } else { // read len
+        uint32_t t = millis();
         while (len > 0) {
             if (m_dataMode == AUDIO_LOCALFILE) {
-                bytes_has_read = m_audiofile.read(buff + offset, len);
-                if (bytes_has_read >= 0) {
-                    m_audioFilePosition += bytes_has_read;
-                    len -= bytes_has_read;
-                    offset += bytes_has_read;
+                readed_bytes = m_audiofile.read(buff + offset, len);
+
+                if (readed_bytes >= 0) {
+                    m_audioFilePosition += readed_bytes;
+                    len -= readed_bytes;
+                    offset += readed_bytes;
                     res = offset;
+                    t = millis();
                 }
-                if (bytes_has_read <= 0) break;
+                if (readed_bytes <= 0) break;
             } else {
-                if (!waitForClientData()) return offset > 0 ? offset : -1;
-                bytes_has_read = m_client->read(buff + offset, len);
-                if (bytes_has_read > 0) {
-                    m_audioFilePosition += bytes_has_read;
-                    len -= bytes_has_read;
-                    offset += bytes_has_read;
+                readed_bytes = m_client->read(buff + offset, len);
+                if (readed_bytes > 0) {
+                    m_audioFilePosition += readed_bytes;
+                    len -= readed_bytes;
+                    offset += readed_bytes;
                     res = offset;
+                    t = millis();
                 }
-                if (bytes_has_read <= 0) break;
+                if (readed_bytes <= 0) break;
+            }
+            if (t + 3000 < millis()) {
+                AUDIO_LOG_ERROR("timeout");
+                res = -1;
+                break;
             }
         }
     }
@@ -7132,9 +7132,26 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
     InBuff.reset();
-    int32_t bytes_has_read = audioFileRead(InBuff.getWritePtr(), buffFillValue);
-    if(bytes_has_read != buffFillValue) AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
-    InBuff.bytesWritten(buffFillValue);
+    int32_t bytes_has_read = 0;
+    uint8_t cnt = 0;
+    while (bytes_has_read < buffFillValue) {
+        int32_t res = audioFileRead(InBuff.getWritePtr(), buffFillValue - bytes_has_read);
+        AUDIO_LOG_DEBUG("buffFillValue {}, res {}, bytes_readed {}", buffFillValue, res, bytes_has_read);
+        if(res <= 0){
+            vTaskDelay(10);
+            cnt++;
+        }
+        if (res > 0){
+            bytes_has_read += res;
+            InBuff.bytesWritten(res);
+        }
+        if (cnt == 255) {
+            AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
+            break;
+        }
+    }
+    if (bytes_has_read != buffFillValue) AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
+
 
     int32_t offset = 0;
     int32_t newFilePos = resumeFilePos;
