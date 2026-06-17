@@ -6066,7 +6066,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t Audio::audioFileRead(uint8_t* buff, size_t len, uint16_t timeout_ms) {
+int32_t Audio::audioFileReadBytes(uint8_t* buff, size_t len, uint16_t timeout_ms) {
 
     uint32_t timeout = millis() + timeout_ms;
     int32_t  bytes_has_read = 0;
@@ -6196,7 +6196,7 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
 
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
     audioFileSeek(rangeStart, UINT16_MAX);
-    audioFileRead((uint8_t*)buff.get(), UINT16_MAX, 3000);
+    audioFileReadBytes((uint8_t*)buff.get(), UINT16_MAX, 3000);
 
     int32_t pos = buff.last_special_index_of("OggS", UINT16_MAX);
     if (buff[pos + 5] & 0x04) { // is last page;
@@ -7139,7 +7139,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
     InBuff.reset();
-    int32_t bw = audioFileRead(InBuff.getWritePtr(), buffFillValue, 3000);
+    int32_t bw = audioFileReadBytes(InBuff.getWritePtr(), buffFillValue, 3000);
     if(bw == buffFillValue) InBuff.bytesWritten(bw);
     else return -1;
 
