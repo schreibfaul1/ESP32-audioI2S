@@ -4540,6 +4540,7 @@ void Audio::processWebStreamHLS() {
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
+            if(m_pwsHLS.chunkSize == -1) return;
             m_pwsHLS.byteCounter += readedBytes;
         }
 
@@ -6029,54 +6030,78 @@ bool Audio::getMute() {
     return m_audio_items.mute;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t Audio::audioFileRead() {
+    int res = -1;
+    if (m_dataMode == AUDIO_LOCALFILE) {
+        res = m_audiofile.read();
+        if (res >= 0) m_audioFilePosition++;
+    } else {
+        res = m_client->read();
+        if (res >= 0) m_audioFilePosition++;
+    }
+    return res;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t Audio::audioFileRead(uint16_t timeout_ms) {
+    int32_t  res = -1;
+    uint32_t timeout = millis() + timeout_ms;
+
+    while (true) {
+        res = audioFileRead();
+        if (res >= 0) break;
+        if (timeout < millis()) {
+            AUDIO_LOG_ERROR("timeout");
+            return -1;
+        }
+        vTaskDelay(10);
+    }
+    return res;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
     if (buff && len == 0) return 0; // nothing to do
     int32_t  readed_bytes = 0;
     uint32_t offset = 0;
-    // This method standardized reading files, regardless of the source (local or web) and the correct number of the bytes read must be determined.
     int res = -1;
 
-    if (!buff && !len) { // read one byte
-        if (m_dataMode == AUDIO_LOCALFILE) {
-            res = m_audiofile.read();
-            if (res >= 0) m_audioFilePosition++;
-        } else {
-            res = m_client->read();
-            if (res >= 0) m_audioFilePosition++;
+    // read len
+    if (m_dataMode == AUDIO_LOCALFILE) {
+        readed_bytes = m_audiofile.read(buff + offset, len);
+        if (readed_bytes >= 0) {
+            m_audioFilePosition += readed_bytes;
+            len -= readed_bytes;
+            offset += readed_bytes;
+            res = offset;
         }
-    } else { // read len
-        uint32_t t = millis();
-        while (len > 0) {
-            if (m_dataMode == AUDIO_LOCALFILE) {
-                readed_bytes = m_audiofile.read(buff + offset, len);
-
-                if (readed_bytes >= 0) {
-                    m_audioFilePosition += readed_bytes;
-                    len -= readed_bytes;
-                    offset += readed_bytes;
-                    res = offset;
-                    t = millis();
-                }
-                if (readed_bytes <= 0) break;
-            } else {
-                readed_bytes = m_client->read(buff + offset, len);
-                if (readed_bytes > 0) {
-                    m_audioFilePosition += readed_bytes;
-                    len -= readed_bytes;
-                    offset += readed_bytes;
-                    res = offset;
-                    t = millis();
-                }
-                if (readed_bytes <= 0) break;
-            }
-            if (t + 3000 < millis()) {
-                AUDIO_LOG_ERROR("timeout");
-                res = -1;
-                break;
-            }
+    } else {
+        readed_bytes = m_client->read(buff + offset, len);
+        if (readed_bytes > 0) {
+            m_audioFilePosition += readed_bytes;
+            len -= readed_bytes;
+            offset += readed_bytes;
+            res = offset;
         }
     }
     return res;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t Audio::audioFileRead(uint8_t* buff, size_t len, uint16_t timeout_ms) {
+
+    uint32_t timeout = millis() + timeout_ms;
+    int32_t  bytes_has_read = 0;
+    uint8_t  cnt = 0;
+    while (bytes_has_read < len) {
+        int32_t res = audioFileRead(buff + bytes_has_read, len - bytes_has_read);
+        if (res <= 0) { vTaskDelay(10); }
+        if (res > 0) { bytes_has_read += res; }
+        if (timeout < millis()) {
+            AUDIO_LOG_ERROR("timeout, len: {} != bytes_has_read: {}", len, bytes_has_read);
+            return -1;
+        }
+        AUDIO_LOG_DEBUG("buffFillValue {}, res {}, bytes_has_read {}", len, res, bytes_has_read);
+    }
+    AUDIO_LOG_DEBUG("len: {} != bytes_has_read: {}", len, bytes_has_read);
+    return bytes_has_read;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
@@ -6190,7 +6215,8 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
 
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
     audioFileSeek(rangeStart, UINT16_MAX);
-    audioFileRead((uint8_t*)buff.get(), UINT16_MAX);
+    audioFileRead((uint8_t*)buff.get(), UINT16_MAX, 3000);
+
     int32_t pos = buff.last_special_index_of("OggS", UINT16_MAX);
     if (buff[pos + 5] & 0x04) { // is last page;
         for (int j = 0; j < 8; j++) { granulePos |= ((uint64_t)buff[pos + 6 + j] << (j * 8)); }
@@ -6964,13 +6990,13 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             }
         }
         if (!m_gchs.oneByteOfTwo) {
-            int a = audioFileRead();
+            int a = audioFileRead(3000);
             if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x{:02X}", a);
             *readedBytes += 1;
             if (!m_client->available()) { return -1; }
         }
         m_gchs.oneByteOfTwo = false;
-        int b = audioFileRead();
+        int b = audioFileRead(3000);
         if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x{:02X}", b);
         *readedBytes += 1;
         m_gchs.f_skipCRLF = false;
@@ -6982,8 +7008,8 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
                     break; // ok
                 }
                 i++;
-                if (i == 150) {
-                    AUDIO_LOG_WARN("need more data");
+                if (i == 5) {
+                    AUDIO_LOG_DEBUG("need more data");
                     return -1;
                 }
                 vTaskDelay(10);
@@ -7001,7 +7027,10 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             stopSong();
             return 0;
         }
-        if (!m_client->available()) continue;
+        if (!m_client->available()) {
+            vTaskDelay(10);
+            continue;
+        }
         int b = audioFileRead();
         if (b < 0) continue;
 
@@ -7132,26 +7161,11 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
     InBuff.reset();
-    int32_t bytes_has_read = 0;
-    uint8_t cnt = 0;
-    while (bytes_has_read < buffFillValue) {
-        int32_t res = audioFileRead(InBuff.getWritePtr(), buffFillValue - bytes_has_read);
-        AUDIO_LOG_DEBUG("buffFillValue {}, res {}, bytes_readed {}", buffFillValue, res, bytes_has_read);
-        if(res <= 0){
-            vTaskDelay(10);
-            cnt++;
-        }
-        if (res > 0){
-            bytes_has_read += res;
-            InBuff.bytesWritten(res);
-        }
-        if (cnt == 255) {
-            AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
-            break;
-        }
-    }
-    if (bytes_has_read != buffFillValue) AUDIO_LOG_ERROR("read error {} != {}", bytes_has_read, buffFillValue);
-
+    int32_t bw = audioFileRead(InBuff.getWritePtr(), buffFillValue, 3000);
+    if (bw == buffFillValue)
+        InBuff.bytesWritten(bw);
+    else
+        return -1;
 
     int32_t offset = 0;
     int32_t newFilePos = resumeFilePos;
@@ -7245,6 +7259,7 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
             m_sdet.cnt_lost = 0;
             info(*this, evt_info, "Stream lost -> try new connection");
             InBuff.reset();
+            setDefaults();
             httpPrint(m_lastHost.get());
             return true;
         }
