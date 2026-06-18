@@ -200,8 +200,10 @@ class Audio {
     void                     latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void                     htmlToUTF8(char* str);
     void                     setDefaults(); // free buffers and set defaults
-    int32_t                  audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
-    int32_t                  audioFileReadBytes(uint8_t* buff, size_t len, uint16_t timeout_ms);
+    int32_t                  audioFileRead();
+    int32_t                  audioFileRead(uint16_t timeout_ms);
+    int32_t                  audioFileRead(uint8_t* buff, size_t len);
+    int32_t                  audioFileRead(uint8_t* buff, size_t len, uint16_t timeout_ms);
     int32_t                  audioFileSeek(uint32_t position, size_t len = 0);
     void                     initInBuff();
     bool                     httpPrint(const char* host);
