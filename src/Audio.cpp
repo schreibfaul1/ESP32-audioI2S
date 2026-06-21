@@ -4185,10 +4185,12 @@ void Audio::processWebStream() {
     // chunked data tramsfer
     if (m_f_chunked && m_pwst.availableBytes) {
         if (m_pwst.chunkSize == 0) {
-            vTaskDelay(1);
             int chunkLen = getChunkSize(&m_pwst.readedBytes);
-            if (chunkLen == -1) return; // need more data
-            if (chunkLen == -100) {     // error
+            if (chunkLen == -1) { // need more data
+                vTaskDelay(10);
+                return;
+            }
+            if (chunkLen == -100) { // error
                 stopSong();
                 return;
             }
@@ -4393,7 +4395,10 @@ void Audio::processWebStreamTS() {
         if (m_pwsst.f_chunkFinished) goto chunkFinished;
         if (m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
             int chunkLen = getChunkSize(&readedBytes);
-            if (chunkLen == -1) return; // need more data
+            if (chunkLen == -1) { // need more data
+                vTaskDelay(10);
+                return;
+            }
             if (chunkLen == -100) {     // error
                 stopSong();
                 return;
@@ -4543,7 +4548,14 @@ void Audio::processWebStreamHLS() {
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
-            if (m_pwsHLS.chunkSize == -1) return;
+            if (m_pwsHLS.chunkSize == -1){ // need more data
+                vTaskDelay(10);
+                return;
+            }
+            if (m_pwsHLS.chunkSize == -100){ // error
+                stopSong();
+                return;
+            }
             m_pwsHLS.byteCounter += readedBytes;
         }
 
