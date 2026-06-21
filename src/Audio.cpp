@@ -6988,10 +6988,10 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
     int32_t      chunkSize = -1;
 
     if (first) {
-        m_gchs1.reset();
+        m_gchs.reset();
         return 0;
     }
-    if (!m_gchs1.chunkLine.valid()) m_gchs1.chunkLine.calloc(CHUNK_LINE_LENGTH, "m_gchs1.chunkLine");
+    if (!m_gchs.chunkLine.valid()) m_gchs.chunkLine.calloc(CHUNK_LINE_LENGTH, "m_gchs1.chunkLine");
 
     auto hex_to_int = [&](ps_ptr<char> hexstr) -> int32_t {
         if (!hexstr.valid()) return -1;
@@ -7010,53 +7010,53 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             break;
         }
 
-        m_gchs1.chunkLine[m_gchs1.position] = b;
+        m_gchs.chunkLine[m_gchs.position] = b;
         *readedBytes += 1;
-        m_gchs1.position += 1;
+        m_gchs.position += 1;
 
-        if (m_gchs1.chunkLine == "\r\n") { // skip CRLF
-            m_gchs1.chunkLine.clear();
-            m_gchs1.position = 0;
+        if (m_gchs.chunkLine == "\r\n") { // skip CRLF
+            m_gchs.chunkLine.clear();
+            m_gchs.position = 0;
             AUDIO_LOG_DEBUG("skip CRLF");
         }
 
-        if (m_gchs1.position == CHUNK_LINE_LENGTH) {
+        if (m_gchs.position == CHUNK_LINE_LENGTH) {
             AUDIO_LOG_ERROR("ChunkLine is too long");
-            m_gchs1.chunkLine.hex_dump(CHUNK_LINE_LENGTH);
+            m_gchs.chunkLine.hex_dump(CHUNK_LINE_LENGTH);
             goto error;
         }
-        if (m_gchs1.chunkLine.ends_with("\r\n") && m_gchs1.chunkSize == -1) {
-            idx1 = m_gchs1.chunkLine.index_of(";");
+        if (m_gchs.chunkLine.ends_with("\r\n") && m_gchs.chunkSize == -1) {
+            idx1 = m_gchs.chunkLine.index_of(";");
             if (idx1 > 0) {                                                  // extension follows, e.g. "AF4;test=123\r\n"
-                hex_str = m_gchs1.chunkLine.substr(0, idx1);                 // "AF4;test=123\r\n" -> "AF4"
-                ps_ptr<char> extension = m_gchs1.chunkLine.substr(idx1 + 1); // "AF4;test=123\r\n" -> "test=123\r\n"
+                hex_str = m_gchs.chunkLine.substr(0, idx1);                 // "AF4;test=123\r\n" -> "AF4"
+                ps_ptr<char> extension = m_gchs.chunkLine.substr(idx1 + 1); // "AF4;test=123\r\n" -> "test=123\r\n"
                 extension = extension.substr(0, extension.strlen() - 2);     // "test=123\r\n" -> "test=123"
-                if (extension != m_gchs1.extension) {
-                    m_gchs1.extension = extension;
-                    AUDIO_LOG_INFO("extension {}", m_gchs1.extension);
+                if (extension != m_gchs.extension) {
+                    m_gchs.extension = extension;
+                    AUDIO_LOG_INFO("extension {}", m_gchs.extension);
                 }
             } else {
-                hex_str = m_gchs1.chunkLine.substr(0, m_gchs1.chunkLine.strlen() - 2); // "AF4\r\n" -> "AF4"
+                hex_str = m_gchs.chunkLine.substr(0, m_gchs.chunkLine.strlen() - 2); // "AF4\r\n" -> "AF4"
             }
-            m_gchs1.chunkSize = hex_to_int(hex_str); // "AF4" -> 2804
-            if (m_gchs1.chunkSize == -1) {
+            m_gchs.chunkSize = hex_to_int(hex_str); // "AF4" -> 2804
+            if (m_gchs.chunkSize == -1) {
                 AUDIO_LOG_ERROR("Invalid char in hex_str");
                 hex_str.hex_dump(20);
                 goto error;
             }
         }
-        if (m_gchs1.chunkSize > 0) {
-            chunkSize = m_gchs1.chunkSize;
+        if (m_gchs.chunkSize > 0) {
+            chunkSize = m_gchs.chunkSize;
             break;
         } else { // m_gchs1.chunkSize is 0
-            if (m_gchs1.chunkLine.ends_with("\r\n\r\n")) {
-                idx1 = m_gchs1.chunkLine.index_of("\r\n");
-                idx2 = m_gchs1.chunkLine.index_of("\r\n\r");
+            if (m_gchs.chunkLine.ends_with("\r\n\r\n")) {
+                idx1 = m_gchs.chunkLine.index_of("\r\n");
+                idx2 = m_gchs.chunkLine.index_of("\r\n\r");
                 if (idx1 == idx2) {
                     //  e.g. "000\r\n\r\n" or "0\r\n\r\n" or "0;end=true\r\n\r\n"
                 } else { // can have trailer "0\r\nContent-MD5: abcdef\r\nServer: xyz\r\n\r\n"
-                    m_gchs1.trailer = m_gchs1.chunkLine.substr(idx1 + 1, idx1 - idx2);
-                    AUDIO_LOG_INFO("trailer {}", m_gchs1.trailer);
+                    m_gchs.trailer = m_gchs.chunkLine.substr(idx1 + 1, idx1 - idx2);
+                    AUDIO_LOG_INFO("trailer {}", m_gchs.trailer);
                 }
                 chunkSize = 0;
                 break;
@@ -7066,21 +7066,21 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
 
     AUDIO_LOG_DEBUG("chunkSize {}", chunkSize);
     if (chunkSize == -1) {
-        if (m_gchs1.timeStamp + 3000 < millis()) {
+        if (m_gchs.timeStamp + 3000 < millis()) {
             AUDIO_LOG_WARN("timeout while get next chunkSize");
-            m_gchs1.timeStamp = millis();
+            m_gchs.timeStamp = millis();
         }
     }
     if (chunkSize >= 0) {
-        m_gchs1.chunkSize = -1;
-        m_gchs1.position = 0;
-        m_gchs1.chunkLine.clear();
-        m_gchs1.timeStamp = millis();
+        m_gchs.chunkSize = -1;
+        m_gchs.position = 0;
+        m_gchs.chunkLine.clear();
+        m_gchs.timeStamp = millis();
     }
     return chunkSize;
 
 error:
-    m_gchs1.reset();
+    m_gchs.reset();
     return -100;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-

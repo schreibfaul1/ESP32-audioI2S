@@ -518,7 +518,6 @@ class Audio {
     audiolib::tspp_t       m_tspp;
     audiolib::pwst_t       m_pwst;
     audiolib::gchs_t       m_gchs;
-    audiolib::gchs1_t      m_gchs1;
     audiolib::pwf_t        m_pwf;
     audiolib::pad_t        m_pad;
     audiolib::sbyt_t       m_sbyt;
