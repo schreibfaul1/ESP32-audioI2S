@@ -3509,10 +3509,12 @@ void Audio::loop() {
         switch (m_dataMode) {
             case HTTP_RESPONSE_HEADER:
                 if (!parseHttpResponseHeader()) {
-                    if (m_f_timeout && m_lVar.count < 3) {
-                        m_f_timeout = false;
+                    if (m_lVar.count < 3) {
                         m_lVar.count++;
                         connecttohost(m_lastHost.get());
+                    }
+                    else{
+                        stopSong();
                     }
                 } else {
                     m_lVar.count = 0;
@@ -3573,7 +3575,7 @@ bool Audio::readPlayListData() {
             vTaskDelay(2);
             if (t + 2000 < millis()) {
                 AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
-                if (m_f_chunked) getChunkSize(0, true);
+                if (m_f_chunked) getChunkSize1(0, true);
                 return true;
             }
         }
@@ -3586,8 +3588,8 @@ bool Audio::readPlayListData() {
     }
 
     if (m_f_chunked) {
-        getChunkSize(0, true);
-        chunkLen = getChunkSize(&readedBytes);
+        getChunkSize1(0, true);
+        chunkLen = getChunkSize1(&readedBytes);
         if (chunkLen <= 0) {
             AUDIO_LOG_ERROR("chunked datatransfer but chunkLen is invalid");
             goto exit;
@@ -3687,7 +3689,7 @@ bool Audio::readPlayListData() {
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
         if (ctl == plSize) {
             if (m_f_chunked) {
-                chunkLen = getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n" if ready
+                chunkLen = getChunkSize1(&readedBytes); // expected: "\r\n\0\r\n\r\n" if ready
                 if (chunkLen > 0) {
                     plSize += chunkLen;
                     continue; // next round
@@ -3702,7 +3704,7 @@ bool Audio::readPlayListData() {
 
 exit:
     vector_clear_and_shrink(m_playlistContent);
-    getChunkSize(0, true);
+    getChunkSize1(0, true);
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
@@ -4363,12 +4365,6 @@ void Audio::processWebFile() {
 void Audio::processWebStreamTS() {
 PROFILE_SCOPE_N(1000);
 
-    uint32_t availableBytes; // available bytes in stream
-
-    if (m_pwsst.f_nextRound) { goto nextRound; }
-    m_pwsst.ts_packetStart = 0;
-    m_pwsst.ts_packetLength = 0;
-
     // first call, set some values to default ———————————————————————————————————
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
         m_f_firstCall = false;
@@ -4389,10 +4385,10 @@ PROFILE_SCOPE_N(1000);
         }
     } // —————————————————————————————————————————————————————————————————————————
 
-    if (m_dataMode != AUDIO_DATA) return; // guard
+    m_pwsst.ts_packetStart = 0;
+    m_pwsst.ts_packetLength = 0;
+    uint32_t availableBytes = m_client->available(); // available bytes in stream
 
-nextRound:
-    availableBytes = m_client->available();
     if (availableBytes) {
         /* If the m3u8 stream uses 'chunked data transfer' no content length is supplied. Then the chunk size determines the audio data to be processed.
            However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
@@ -4488,8 +4484,9 @@ nextRound:
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
-            m_pwsst.f_nextRound = false;
+
         }
+        m_pwsst.f_nextRound = false;
         goto exit;
     }
 
@@ -4542,7 +4539,7 @@ void Audio::processWebStreamHLS() {
         m_pwsHLS.ID3WritePtr = 0;
         m_pwsHLS.ID3ReadPtr = 0;
         m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize, "m_pwsHLS.ID3Buff");
-        getChunkSize(0, true);
+        getChunkSize1(0, true);
         if (!m_decoder && !initializeDecoder()) return;
         m_pwsHLS.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     }
@@ -4554,7 +4551,7 @@ void Audio::processWebStreamHLS() {
         uint16_t readedBytes = 0;
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
-            m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
+            m_pwsHLS.chunkSize = getChunkSize1(&readedBytes);
             if (m_pwsHLS.chunkSize == -1) return;
             m_pwsHLS.byteCounter += readedBytes;
         }
@@ -4755,7 +4752,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
             AUDIO_LOG_ERROR("timeout");
             m_phreh.f_time = false;
-            stopSong();
+            // stopSong();
             return false;
         }
     }
@@ -7084,121 +7081,6 @@ int32_t Audio::getChunkSize1(uint16_t* readedBytes, bool first) {
 error:
     m_gchs1.reset();
     return -100;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
-    uint32_t timeout = 2000; // ms
-    uint32_t ctime;
-
-    if (first) {
-        m_gchs.oneByteOfTwo = false;
-        m_gchs.f_skipCRLF = false;
-        m_gchs.isHttpChunked = true; // default: We assume http chunked
-        m_gchs.transportLimit = 0;   // 0 = not yet recognized
-        return 0;
-    }
-
-    *readedBytes = 0;
-
-    // if we are in transport chunk mode → return limit
-    if (!m_gchs.isHttpChunked) { return m_gchs.transportLimit; }
-
-    // skip CRLF from the previous chunk (only http-chunked)
-    if (m_gchs.f_skipCRLF) {
-        uint32_t t = millis();
-
-        if (m_client->available() == 1 && !m_gchs.oneByteOfTwo) {
-            int a = audioFileRead();
-            m_gchs.oneByteOfTwo = true;
-            *readedBytes = 1;
-            // Special case: there is only one byte left in m_client; this must be read first in order to proceed.
-            if (a != 0x0D) {
-                AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x{:02X}", a);
-                return -1;
-            }
-        }
-        if (!m_gchs.oneByteOfTwo) {
-            int a = audioFileRead(3000);
-            if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x{:02X}", a);
-            *readedBytes += 1;
-            if (!m_client->available()) { return -1; }
-        }
-        m_gchs.oneByteOfTwo = false;
-        int b = audioFileRead(3000);
-        if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x{:02X}", b);
-        *readedBytes += 1;
-        m_gchs.f_skipCRLF = false;
-        if (!m_client->available()) { // wait
-            int i = 0;
-            while (true) {
-                if (m_client->available()) {
-                    AUDIO_LOG_DEBUG("av {}", m_client->available());
-                    break; // ok
-                }
-                i++;
-                if (i == 5) {
-                    AUDIO_LOG_DEBUG("need more data");
-                    return -1;
-                }
-                vTaskDelay(10);
-            }
-        }
-    }
-
-    // -------- HTTP-chunked-Read Logic --------
-    std::string chunkLine;
-    ctime = millis();
-
-    while (true) {
-        if ((millis() - ctime) > timeout) {
-            AUDIO_LOG_ERROR("chunkedDataTransfer: timeout");
-            stopSong();
-            return 0;
-        }
-        if (!m_client->available()) {
-            vTaskDelay(10);
-            continue;
-        }
-        int b = audioFileRead();
-        if (b < 0) continue;
-
-        (*readedBytes)++;
-
-        if (b == '\n') break; // End of the line
-        if (b == '\r') continue;
-
-        chunkLine += static_cast<char>(b);
-
-        // Detection: if signs are not hexadecimal and not ';'→ No http chunk
-        if (!isxdigit(b) && b != ';') {
-            // We have no valid HTTP chunk line → assume transport chunking
-            m_gchs.isHttpChunked = false;
-            // determine limit from the current data volume + already read bytes
-            m_gchs.transportLimit = m_client->available() + *readedBytes;
-            AUDIO_LOG_DEBUG("No http chunked recognized-switch to transport chunking with limit {}", m_gchs.transportLimit);
-            return m_gchs.transportLimit;
-        }
-    }
-
-    // Extract the hex number (before possibly ';')
-    size_t      semicolonPos = chunkLine.find(';');
-    std::string hexSize = (semicolonPos != std::string::npos) ? chunkLine.substr(0, semicolonPos) : chunkLine;
-
-    size_t chunksize = strtoul(hexSize.c_str(), nullptr, 16);
-
-    if (chunksize > 0) {
-        m_gchs.f_skipCRLF = true; // skip next CRLF after data
-    } else {
-        // last chunk: read the final CRLF
-        uint8_t idx = 0;
-        ctime = millis();
-        while (idx < 2 && (millis() - ctime) < timeout) {
-            int ch = audioFileRead();
-            if (ch < 0) continue;
-            idx++;
-        }
-    }
-    return chunksize;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readID3V1Tag() {
