@@ -202,8 +202,7 @@ typedef struct _tspp { // used in ts_parsePacket
     uint8_t fillData{};
 
     void reset() {
-        // Default-initialize alles neu (inklusive Array)
-        *this = _tspp{};
+        *this = _tspp{}; // Default-initialize all new (inclusive Array)
     }
 } tspp_t;
 
@@ -218,10 +217,30 @@ struct pwst_t { // used in processWebStream
 };
 
 struct gchs_t { // used in getChunkSize
-    bool   f_skipCRLF;
-    bool   isHttpChunked;
-    size_t transportLimit;
-    bool   oneByteOfTwo;
+    bool         f_skipCRLF = {};
+    int32_t      chunkSize = -1;
+    bool         isHttpChunked = {};
+    size_t       transportLimit = {};
+    bool         oneByteOfTwo = {};
+    ps_ptr<char> chunkLine = {};
+    ps_ptr<char> extension = {};
+    ps_ptr<char> trailer = {};
+    uint16_t     position = {};
+    bool         isxdigit = {};
+
+    void reset() { *this = gchs_t{}; }
+};
+
+struct gchs1_t { // used in getChunkSize
+    int32_t      chunkSize = -1;
+    uint32_t     timeStamp = {};
+    ps_ptr<char> tmp_str = {};
+    ps_ptr<char> chunkLine = {};
+    ps_ptr<char> extension = {};
+    ps_ptr<char> trailer = {};
+    uint16_t     position = 0;
+
+    void reset() { *this = gchs1_t{}; }
 };
 
 struct pwf_t { // used in processWebFile
@@ -329,7 +348,7 @@ struct phrah_t { // used in parseHttpRangeHeader
 struct sdet_t { // used in streamDetection
     uint32_t tmr_slow = 0;
     uint32_t tmr_lost = 0;
-    uint8_t  cnt_slow = 0;
+    uint32_t cnt_slow = 0;
     uint8_t  cnt_lost = 0;
 };
 

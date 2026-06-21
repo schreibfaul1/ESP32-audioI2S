@@ -276,6 +276,7 @@ class Audio {
 
     //+++ H E L P   F U N C T I O N S +++
     bool                   readMetadata(uint32_t b, uint16_t* readedBytes, bool first = false);
+    int32_t                getChunkSize1(uint16_t* readedBytes, bool first = false);
     int32_t                getChunkSize(uint16_t* readedBytes, bool first = false);
     bool                   readID3V1Tag();
     int32_t                newInBuffStart(int32_t resumeFilePos);
@@ -518,6 +519,7 @@ class Audio {
     audiolib::tspp_t       m_tspp;
     audiolib::pwst_t       m_pwst;
     audiolib::gchs_t       m_gchs;
+    audiolib::gchs1_t      m_gchs1;
     audiolib::pwf_t        m_pwf;
     audiolib::pad_t        m_pad;
     audiolib::sbyt_t       m_sbyt;
@@ -786,12 +788,14 @@ class _AutoProfiler {
         uint64_t elapsed = esp_timer_get_time() - start;
         sum += elapsed;
         count++;
+        if(max_dt < elapsed) max_dt = elapsed;
 
         if (count >= N) {
             double avg_us = (double)sum / count;
-            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %lu runs" ANSI_ESC_RESET "\n", tag, avg_us, count);
+            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %lu runs, max %lu µs" ANSI_ESC_RESET "\n", tag, avg_us, count, max_dt);
             sum = 0;
             count = 0;
+            max_dt = 0;
         }
     }
 
@@ -799,6 +803,7 @@ class _AutoProfiler {
     const char*            tag;
     uint32_t               N;
     uint64_t               start;
+    static inline uint32_t max_dt = 0;
     static inline uint64_t sum = 0;
     static inline uint32_t count = 0;
 };

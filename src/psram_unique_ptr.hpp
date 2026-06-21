@@ -1882,6 +1882,10 @@ class ps_ptr {
         const char* str = get();
         char*       end = nullptr;
         long        result = std::strtol(str, &end, base);
+        if (result == 0 && errno == EINVAL) {
+            log_e("invalid content %s", str);
+            return 0;
+        }
 
         if (end == str) {
             log_e("to_int32: Invalid numeric value in '%s' for base %i", str, base);

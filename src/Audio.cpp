@@ -3543,6 +3543,7 @@ void Audio::loop() {
                 }
                 break;
             case AUDIO_DATA:
+                PROFILE_SCOPE_N(1000);
                 if (m_f_ts) {
                     processWebStreamTS(); // aac, mp3 or aacp with ts packets
                 } else {
@@ -4161,7 +4162,7 @@ void Audio::processLocalFile() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 void Audio::processWebStream() {
-
+PROFILE_SCOPE_N(1000);
     if (m_dataMode != AUDIO_DATA) return; // guard
     uint16_t readedBytes = 0;
 
@@ -4177,7 +4178,7 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         m_f_allDataReceived = false;
         readMetadata(0, &readedBytes, true);
-        getChunkSize(0, true);
+        getChunkSize1(0, true);
         m_audioFilePosition = 0;
     }
 
@@ -4186,8 +4187,12 @@ void Audio::processWebStream() {
     if (m_f_chunked && m_pwst.availableBytes) {
         if (m_pwst.chunkSize == 0) {
             vTaskDelay(1);
-            int chunkLen = getChunkSize(&m_pwst.readedBytes);
-            if (chunkLen < 0) return;
+            int chunkLen = getChunkSize1(&m_pwst.readedBytes);
+            if (chunkLen == -1) return; // need more data
+            if (chunkLen == -100) {     // error
+                stopSong();
+                return;
+            }
             if (chunkLen == 0) m_f_allDataReceived = true;
             m_pwst.chunkSize = chunkLen;
             m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
@@ -4213,14 +4218,6 @@ void Audio::processWebStream() {
     }
     if (m_metaint) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
 
-    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_stream) {
-        if (!m_f_allDataReceived)
-            if (streamDetection(m_pwst.availableBytes)) return;
-        if (!m_pwst.f_clientIsConnected) {
-            if (m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;
-        } // connection closed (OpenAi)
-    }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_pwst.availableBytes) {
@@ -4234,6 +4231,16 @@ void Audio::processWebStream() {
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
     }
+
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if (m_f_stream) {
+        if (!m_f_allDataReceived)
+            streamDetection(m_pwst.availableBytes);
+        if (!m_pwst.f_clientIsConnected) {
+            if (m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;
+        } // connection closed (OpenAi)
+    }
+
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (initializeDecoder())
             m_pwst.maxFrameSize = InBuff.getMaxBlockSize();
@@ -4492,7 +4499,7 @@ chunkFinished:
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
-        if (streamDetection(availableBytes)) goto exit;
+        streamDetection(availableBytes);
     }
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4540,7 +4547,7 @@ void Audio::processWebStreamHLS() {
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
-            if(m_pwsHLS.chunkSize == -1) return;
+            if (m_pwsHLS.chunkSize == -1) return;
             m_pwsHLS.byteCounter += readedBytes;
         }
 
@@ -4614,7 +4621,7 @@ void Audio::processWebStreamHLS() {
 
     // if the buffer is often almost empty issue a warning or try a new connection - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
-        if (streamDetection(m_pwsHLS.availableBytes)) return;
+        streamDetection(m_pwsHLS.availableBytes);
     }
 
     if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS && !m_f_stream) { // waiting for buffer filled
@@ -6062,7 +6069,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
     if (buff && len == 0) return 0; // nothing to do
     int32_t  readed_bytes = 0;
     uint32_t offset = 0;
-    int res = -1;
+    int      res = -1;
 
     // read len
     if (m_dataMode == AUDIO_LOCALFILE) {
@@ -6958,6 +6965,119 @@ bool Audio::readMetadata(uint32_t maxBytes, uint16_t* readedBytes, bool first) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
+int32_t Audio::getChunkSize1(uint16_t* readedBytes, bool first) {
+
+    // <chunk-size in hex>\r\n
+    // <chunk-data\r\n
+    // <chunk-size in hex>\r\n
+    // <chunk-data\r\n
+    // ...
+    // 0\r\n
+    // \r\n
+
+    constexpr uint16_t CHUNK_LINE_LENGTH = 255;
+
+    ps_ptr<char> hex_str;
+    int16_t      idx1, idx2, idx3;
+    int32_t      chunkSize = -1;
+
+    if (first) {
+        m_gchs1.reset();
+        return 0;
+    }
+    if (!m_gchs1.chunkLine.valid()) m_gchs1.chunkLine.calloc(CHUNK_LINE_LENGTH, "m_gchs1.chunkLine");
+
+    auto hex_to_int = [&](ps_ptr<char> hexstr) -> int32_t {
+        if (!hexstr.valid()) return -1;
+        for (int i = 0; i < hexstr.strlen(); i++) {
+            if (!isxdigit(hexstr[i])) return -1;
+        }
+        return hexstr.to_int32(16);
+    };
+
+    *readedBytes = 0;
+
+    while (true) {
+        int16_t b = audioFileRead();
+        if (b == -1) { // need mor data
+            chunkSize = -1;
+            break;
+        }
+
+        m_gchs1.chunkLine[m_gchs1.position] = b;
+        *readedBytes += 1;
+        m_gchs1.position += 1;
+
+        if (m_gchs1.chunkLine == "\r\n") { // skip CRLF
+            m_gchs1.chunkLine.clear();
+            m_gchs1.position = 0;
+            AUDIO_LOG_DEBUG("skip CRLF");
+        }
+
+        if (m_gchs1.position == CHUNK_LINE_LENGTH) {
+            AUDIO_LOG_ERROR("ChunkLine is too long");
+            m_gchs1.chunkLine.hex_dump(CHUNK_LINE_LENGTH);
+            goto error;
+        }
+        if (m_gchs1.chunkLine.ends_with("\r\n") && m_gchs1.chunkSize == -1) {
+            idx1 = m_gchs1.chunkLine.index_of(";");
+            if (idx1 > 0) {                                                  // extension follows, e.g. "AF4;test=123\r\n"
+                hex_str = m_gchs1.chunkLine.substr(0, idx1);                 // "AF4;test=123\r\n" -> "AF4"
+                ps_ptr<char> extension = m_gchs1.chunkLine.substr(idx1 + 1); // "AF4;test=123\r\n" -> "test=123\r\n"
+                extension = extension.substr(0, extension.strlen() - 2);     // "test=123\r\n" -> "test=123"
+                if (extension != m_gchs1.extension) {
+                    m_gchs1.extension = extension;
+                    AUDIO_LOG_INFO("extension {}", m_gchs1.extension);
+                }
+            } else {
+                hex_str = m_gchs1.chunkLine.substr(0, m_gchs1.chunkLine.strlen() - 2); // "AF4\r\n" -> "AF4"
+            }
+            m_gchs1.chunkSize = hex_to_int(hex_str); // "AF4" -> 2804
+            if (m_gchs1.chunkSize == -1) {
+                AUDIO_LOG_ERROR("Invalid char in hex_str");
+                hex_str.hex_dump(20);
+                goto error;
+            }
+        }
+        if (m_gchs1.chunkSize > 0) {
+            chunkSize = m_gchs1.chunkSize;
+            break;
+        } else { // m_gchs1.chunkSize is 0
+            if (m_gchs1.chunkLine.ends_with("\r\n\r\n")) {
+                idx1 = m_gchs1.chunkLine.index_of("\r\n");
+                idx2 = m_gchs1.chunkLine.index_of("\r\n\r");
+                if (idx1 == idx2) {
+                    //  e.g. "000\r\n\r\n" or "0\r\n\r\n" or "0;end=true\r\n\r\n"
+                } else { // can have trailer "0\r\nContent-MD5: abcdef\r\nServer: xyz\r\n\r\n"
+                    m_gchs1.trailer = m_gchs1.chunkLine.substr(idx1 + 1, idx1 - idx2);
+                    AUDIO_LOG_INFO("trailer {}", m_gchs1.trailer);
+                }
+                chunkSize = 0;
+                break;
+            }
+        }
+    }
+
+    AUDIO_LOG_DEBUG("chunkSize {}", chunkSize);
+    if (chunkSize == -1) {
+        if (m_gchs1.timeStamp + 3000 < millis()) {
+            AUDIO_LOG_WARN("timeout while get next chunkSize");
+            m_gchs1.timeStamp = millis();
+        }
+    }
+    if (chunkSize >= 0) {
+        m_gchs1.chunkSize = -1;
+        m_gchs1.position = 0;
+        m_gchs1.chunkLine.clear();
+        m_gchs1.timeStamp = millis();
+    }
+    return chunkSize;
+
+error:
+    m_gchs1.reset();
+    return -100;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
     uint32_t timeout = 2000; // ms
     uint32_t ctime;
@@ -7232,37 +7352,36 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 boolean Audio::streamDetection(uint32_t bytesAvail) {
-    if (!m_lastHost.valid()) {
-        AUDIO_LOG_ERROR("m_lastHost is empty");
-        return false;
+
+    if (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
+        if (m_sdet.cnt_slow == 0) m_sdet.tmr_slow = millis();
+        m_sdet.cnt_slow++;
+    } else {
+        m_sdet.cnt_slow = 0;
+        m_sdet.cnt_lost = 0;
     }
 
     // if within one second the content of the audio buffer falls below the size of an audio frame 100 times,
     // issue a message
-    if (m_sdet.tmr_slow + 1000 < millis()) {
+    if (m_sdet.cnt_slow && m_sdet.tmr_slow + 2000 < millis()) {
         m_sdet.tmr_slow = millis();
-        if (m_sdet.cnt_slow > 100) info(*this, evt_info, "slow stream, dropouts are possible");
+        info(*this, evt_info, "slow stream");
         m_sdet.cnt_slow = 0;
+        m_sdet.cnt_lost++;
     }
-    if (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) m_sdet.cnt_slow++;
+
     if (bytesAvail) {
-        m_sdet.tmr_lost = millis() + 1000;
         m_sdet.cnt_lost = 0;
     }
-    if (InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return false; // enough data available to play
+    if (InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return true; // enough data available to play
 
-    // if no audio data is received within three seconds, a new connection attempt is started.
-    if (m_sdet.tmr_lost < millis()) {
-        m_sdet.cnt_lost++;
-        m_sdet.tmr_lost = millis() + 1000;
-        if (m_sdet.cnt_lost == 5) { // 5s no data?
-            m_sdet.cnt_lost = 0;
-            info(*this, evt_info, "Stream lost -> try new connection");
-            InBuff.reset();
-            setDefaults();
-            httpPrint(m_lastHost.get());
-            return true;
-        }
+    // if no audio data is received within 10 seconds, a new connection attempt is started.
+    if (m_sdet.cnt_lost == 5) {
+        info(*this, evt_info, "Stream lost");
+        connecttohost(m_lastHost.get());
+        m_sdet.cnt_slow = 0;
+        m_sdet.cnt_lost = 0;
+        return false;
     }
     return false;
 }
@@ -7737,9 +7856,10 @@ void Audio::setAudioTaskCore(uint8_t coreID) { // Recommendation:If the ARDUINO 
 void Audio::startAudioTask() {
 
     if (m_f_audioTaskIsRunning) {
-        AUDIO_LOG_INFO("audio task is already running.");
+        AUDIO_LOG_DEBUG("audio task is already running.");
         return;
     }
+    AUDIO_LOG_INFO("start audio task.");
     m_f_audioTaskIsRunning = true;
 
     m_audioTaskHandle = xTaskCreateStaticPinnedToCore(&Audio::audioTaskWrapper, /* Function to implement the task */
@@ -7755,9 +7875,10 @@ void Audio::startAudioTask() {
 
 void Audio::stopAudioTask() {
     if (!m_f_audioTaskIsRunning) {
-        AUDIO_LOG_INFO("audio task is not running.");
+        AUDIO_LOG_DEBUG("audio task is not running.");
         return;
     }
+    AUDIO_LOG_INFO("stop audio task.");
     xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     m_f_audioTaskIsRunning = false;
     if (m_audioTaskHandle != nullptr) {
