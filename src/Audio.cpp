@@ -3544,7 +3544,6 @@ void Audio::loop() {
                 }
                 break;
             case AUDIO_DATA:
-                PROFILE_SCOPE_N(1000);
                 if (m_f_ts) {
                     processWebStreamTS(); // aac, mp3 or aacp with ts packets
                 } else {
@@ -4163,7 +4162,6 @@ void Audio::processLocalFile() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 void Audio::processWebStream() {
-    PROFILE_SCOPE_N(1000);
     if (m_dataMode != AUDIO_DATA) return; // guard
     uint16_t readedBytes = 0;
 
@@ -4360,7 +4358,6 @@ void Audio::processWebFile() {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
-    PROFILE_SCOPE_N(1000);
 
     // first call, set some values to default ———————————————————————————————————
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
@@ -7055,7 +7052,7 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
         }
     }
 
-    AUDIO_LOG_INFO("chunkSize {}", chunkSize);
+    AUDIO_LOG_DEBUG("chunkSize {}", chunkSize);
     if (chunkSize == -1) {
         if (m_gchs1.timeStamp + 3000 < millis()) {
             AUDIO_LOG_WARN("timeout while get next chunkSize");
