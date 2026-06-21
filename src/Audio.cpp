@@ -3512,8 +3512,7 @@ void Audio::loop() {
                     if (m_lVar.count < 3) {
                         m_lVar.count++;
                         connecttohost(m_lastHost.get());
-                    }
-                    else{
+                    } else {
                         stopSong();
                     }
                 } else {
@@ -3575,7 +3574,7 @@ bool Audio::readPlayListData() {
             vTaskDelay(2);
             if (t + 2000 < millis()) {
                 AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
-                if (m_f_chunked) getChunkSize1(0, true);
+                if (m_f_chunked) getChunkSize(0, true);
                 return true;
             }
         }
@@ -3588,8 +3587,8 @@ bool Audio::readPlayListData() {
     }
 
     if (m_f_chunked) {
-        getChunkSize1(0, true);
-        chunkLen = getChunkSize1(&readedBytes);
+        getChunkSize(0, true);
+        chunkLen = getChunkSize(&readedBytes);
         if (chunkLen <= 0) {
             AUDIO_LOG_ERROR("chunked datatransfer but chunkLen is invalid");
             goto exit;
@@ -3689,7 +3688,7 @@ bool Audio::readPlayListData() {
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
         if (ctl == plSize) {
             if (m_f_chunked) {
-                chunkLen = getChunkSize1(&readedBytes); // expected: "\r\n\0\r\n\r\n" if ready
+                chunkLen = getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n" if ready
                 if (chunkLen > 0) {
                     plSize += chunkLen;
                     continue; // next round
@@ -3704,7 +3703,7 @@ bool Audio::readPlayListData() {
 
 exit:
     vector_clear_and_shrink(m_playlistContent);
-    getChunkSize1(0, true);
+    getChunkSize(0, true);
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
@@ -4164,7 +4163,7 @@ void Audio::processLocalFile() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 void Audio::processWebStream() {
-PROFILE_SCOPE_N(1000);
+    PROFILE_SCOPE_N(1000);
     if (m_dataMode != AUDIO_DATA) return; // guard
     uint16_t readedBytes = 0;
 
@@ -4180,7 +4179,7 @@ PROFILE_SCOPE_N(1000);
         m_metacount = m_metaint;
         m_f_allDataReceived = false;
         readMetadata(0, &readedBytes, true);
-        getChunkSize1(0, true);
+        getChunkSize(0, true);
         m_audioFilePosition = 0;
     }
 
@@ -4189,7 +4188,7 @@ PROFILE_SCOPE_N(1000);
     if (m_f_chunked && m_pwst.availableBytes) {
         if (m_pwst.chunkSize == 0) {
             vTaskDelay(1);
-            int chunkLen = getChunkSize1(&m_pwst.readedBytes);
+            int chunkLen = getChunkSize(&m_pwst.readedBytes);
             if (chunkLen == -1) return; // need more data
             if (chunkLen == -100) {     // error
                 stopSong();
@@ -4220,7 +4219,6 @@ PROFILE_SCOPE_N(1000);
     }
     if (m_metaint) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
 
-
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_pwst.availableBytes) {
         m_pwst.writeSpace = min(m_pwst.writeSpace, (uint32_t)InBuff.writeSpace());
@@ -4236,8 +4234,7 @@ PROFILE_SCOPE_N(1000);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
-        if (!m_f_allDataReceived)
-            streamDetection(m_pwst.availableBytes);
+        if (!m_f_allDataReceived) streamDetection(m_pwst.availableBytes);
         if (!m_pwst.f_clientIsConnected) {
             if (m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;
         } // connection closed (OpenAi)
@@ -4363,7 +4360,7 @@ void Audio::processWebFile() {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
-PROFILE_SCOPE_N(1000);
+    PROFILE_SCOPE_N(1000);
 
     // first call, set some values to default ———————————————————————————————————
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
@@ -4377,7 +4374,7 @@ PROFILE_SCOPE_N(1000);
         m_t0 = millis();
         if (!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
         if (!m_decoder) {                                                                                          // first init
-            getChunkSize1(0, true);
+            getChunkSize(0, true);
             m_pwsst.chunkSize = 0;
             ts_parsePacket(0, 0, 0);
             m_pwsst.ts_packetPtr = 0;
@@ -4398,7 +4395,7 @@ PROFILE_SCOPE_N(1000);
         uint32_t minAvBytes = 0;
         if (m_pwsst.f_chunkFinished) goto chunkFinished;
         if (m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
-            int chunkLen = getChunkSize1(&readedBytes);
+            int chunkLen = getChunkSize(&readedBytes);
             if (chunkLen == -1) return; // need more data
             if (chunkLen == -100) {     // error
                 stopSong();
@@ -4484,7 +4481,6 @@ PROFILE_SCOPE_N(1000);
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
-
         }
         m_pwsst.f_nextRound = false;
         goto exit;
@@ -4503,9 +4499,7 @@ chunkFinished:
     }
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_stream) {
-        streamDetection(availableBytes);
-    }
+    if (m_f_stream) { streamDetection(availableBytes); }
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
@@ -4539,7 +4533,7 @@ void Audio::processWebStreamHLS() {
         m_pwsHLS.ID3WritePtr = 0;
         m_pwsHLS.ID3ReadPtr = 0;
         m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize, "m_pwsHLS.ID3Buff");
-        getChunkSize1(0, true);
+        getChunkSize(0, true);
         if (!m_decoder && !initializeDecoder()) return;
         m_pwsHLS.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     }
@@ -4551,7 +4545,7 @@ void Audio::processWebStreamHLS() {
         uint16_t readedBytes = 0;
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
-            m_pwsHLS.chunkSize = getChunkSize1(&readedBytes);
+            m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
             if (m_pwsHLS.chunkSize == -1) return;
             m_pwsHLS.byteCounter += readedBytes;
         }
@@ -4625,9 +4619,7 @@ void Audio::processWebStreamHLS() {
     }
 
     // if the buffer is often almost empty issue a warning or try a new connection - - - - - - - - - - - - - - - - - - -
-    if (m_f_stream) {
-        streamDetection(m_pwsHLS.availableBytes);
-    }
+    if (m_f_stream) { streamDetection(m_pwsHLS.availableBytes); }
 
     if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS && !m_f_stream) { // waiting for buffer filled
         m_f_stream = true;                                                     // ready to play the audio data
@@ -6970,7 +6962,7 @@ bool Audio::readMetadata(uint32_t maxBytes, uint16_t* readedBytes, bool first) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-int32_t Audio::getChunkSize1(uint16_t* readedBytes, bool first) {
+int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
 
     // <chunk-size in hex>\r\n
     // <chunk-data\r\n
@@ -7260,9 +7252,7 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         m_sdet.cnt_lost++;
     }
 
-    if (bytesAvail) {
-        m_sdet.cnt_lost = 0;
-    }
+    if (bytesAvail) { m_sdet.cnt_lost = 0; }
     if (InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return true; // enough data available to play
 
     // if no audio data is received within 10 seconds, a new connection attempt is started.
