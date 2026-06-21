@@ -4361,9 +4361,13 @@ void Audio::processWebFile() {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
+PROFILE_SCOPE_N(1000);
+
     uint32_t availableBytes; // available bytes in stream
-    uint8_t  ts_packetStart = 0;
-    uint8_t  ts_packetLength = 0;
+
+    if (m_pwsst.f_nextRound) { goto nextRound; }
+    m_pwsst.ts_packetStart = 0;
+    m_pwsst.ts_packetLength = 0;
 
     // first call, set some values to default ———————————————————————————————————
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
@@ -4377,7 +4381,7 @@ void Audio::processWebStreamTS() {
         m_t0 = millis();
         if (!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
         if (!m_decoder) {                                                                                          // first init
-            getChunkSize(0, true);
+            getChunkSize1(0, true);
             m_pwsst.chunkSize = 0;
             ts_parsePacket(0, 0, 0);
             m_pwsst.ts_packetPtr = 0;
@@ -4398,11 +4402,15 @@ nextRound:
         uint32_t minAvBytes = 0;
         if (m_pwsst.f_chunkFinished) goto chunkFinished;
         if (m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
-            int cs = getChunkSize(&readedBytes);
-            if (cs == -1) return;
-            m_pwsst.chunkSize += cs;
-            AUDIO_LOG_DEBUG("cs {}, rb {}", cs, readedBytes);
-            if (cs == 0) {
+            int chunkLen = getChunkSize1(&readedBytes);
+            if (chunkLen == -1) return; // need more data
+            if (chunkLen == -100) {     // error
+                stopSong();
+                return;
+            }
+            m_pwsst.chunkSize += chunkLen;
+            AUDIO_LOG_DEBUG("chunkLen {}, rb {}", chunkLen, readedBytes);
+            if (chunkLen == 0) {
                 m_pwsst.f_chunkFinished = true;
                 m_pwsst.chunkSize = 0;
                 m_pwsst.byteCounter = 0;
@@ -4434,26 +4442,26 @@ nextRound:
                     return;
                 }
             }
-            if (!ts_parsePacket(&m_pwsst.ts_packet.get()[0], &ts_packetStart, &ts_packetLength)) {
+            if (!ts_parsePacket(&m_pwsst.ts_packet.get()[0], &m_pwsst.ts_packetStart, &m_pwsst.ts_packetLength)) {
                 stopSong();
                 AUDIO_LOG_ERROR("song stopped");
                 return;
             };
 
-            if (ts_packetLength) {
+            if (m_pwsst.ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
-                if (ws >= ts_packetLength) {
-                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ts_packetLength);
-                    InBuff.bytesWritten(ts_packetLength);
+                if (ws >= m_pwsst.ts_packetLength) {
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + m_pwsst.ts_packetStart, m_pwsst.ts_packetLength);
+                    InBuff.bytesWritten(m_pwsst.ts_packetLength);
                     m_pwsst.f_nextRound = true;
                 } else {
                     int t = 0;
-                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ws); // write everything that fits into the buffer
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + m_pwsst.ts_packetStart, ws); // write everything that fits into the buffer
                     InBuff.bytesWritten(ws);
                     while (true) {
-                        if (InBuff.writeSpace() >= ts_packetLength - ws) {
-                            memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet.get()[ws + ts_packetStart], ts_packetLength - ws); // write the rest
-                            InBuff.bytesWritten(ts_packetLength - ws);
+                        if (InBuff.writeSpace() >= m_pwsst.ts_packetLength - ws) {
+                            memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet.get()[ws + m_pwsst.ts_packetStart], m_pwsst.ts_packetLength - ws); // write the rest
+                            InBuff.bytesWritten(m_pwsst.ts_packetLength - ws);
                             break;
                         }
                         t++;
@@ -4511,7 +4519,7 @@ chunkFinished:
             info(*this, evt_info, "buffer filled in {} ms", filltime);
         }
     }
-    if (m_pwsst.f_nextRound) { goto nextRound; }
+
 exit:
     return;
 }
@@ -7058,7 +7066,7 @@ int32_t Audio::getChunkSize1(uint16_t* readedBytes, bool first) {
         }
     }
 
-    AUDIO_LOG_DEBUG("chunkSize {}", chunkSize);
+    AUDIO_LOG_INFO("chunkSize {}", chunkSize);
     if (chunkSize == -1) {
         if (m_gchs1.timeStamp + 3000 < millis()) {
             AUDIO_LOG_WARN("timeout while get next chunkSize");
