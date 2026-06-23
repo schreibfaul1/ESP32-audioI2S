@@ -219,7 +219,6 @@ struct pwst_t { // used in processWebStream
 struct gchs_t { // used in getChunkSize
     int32_t      chunkSize = -1;
     uint32_t     timeStamp = {};
-    ps_ptr<char> tmp_str = {};
     ps_ptr<char> chunkLine = {};
     ps_ptr<char> extension = {};
     ps_ptr<char> trailer = {};

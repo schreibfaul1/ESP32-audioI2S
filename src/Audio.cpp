@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6x                                                                                                                            ";
-/*  Updated on: Jun 21, 2026
+    Version 3.4.6y                                                                                                                            ";
+/*  Updated on: Jun 23, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4181,7 +4181,7 @@ void Audio::processWebStream() {
         m_audioFilePosition = 0;
     }
 
-    if (m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
+    m_pwst.availableBytes = m_client->available(); // available from stream
     // chunked data tramsfer
     if (m_f_chunked && m_pwst.availableBytes) {
         if (m_pwst.chunkSize == 0) {
@@ -4194,7 +4194,7 @@ void Audio::processWebStream() {
                 stopSong();
                 return;
             }
-            if (chunkLen == 0) m_f_allDataReceived = true;
+            if (chunkLen == 0) { m_f_allDataReceived = true; }
             m_pwst.chunkSize = chunkLen;
             m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
         }
@@ -4248,7 +4248,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (InBuff.bufferFilled() > m_pwst.maxFrameSize * 2 && !m_f_stream) { // waiting for buffer filled
+    if (((InBuff.bufferFilled() > m_pwst.maxFrameSize * 2) || (m_f_allDataReceived)) && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
@@ -4399,7 +4399,7 @@ void Audio::processWebStreamTS() {
                 vTaskDelay(10);
                 return;
             }
-            if (chunkLen == -100) {     // error
+            if (chunkLen == -100) { // error
                 stopSong();
                 return;
             }
@@ -4548,11 +4548,11 @@ void Audio::processWebStreamHLS() {
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
-            if (m_pwsHLS.chunkSize == -1){ // need more data
+            if (m_pwsHLS.chunkSize == -1) { // need more data
                 vTaskDelay(10);
                 return;
             }
-            if (m_pwsHLS.chunkSize == -100){ // error
+            if (m_pwsHLS.chunkSize == -100) { // error
                 stopSong();
                 return;
             }
@@ -4709,7 +4709,11 @@ void Audio::playAudioData() {
                 }
             }
             if (m_pad.lastFrames) {
-                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                if (m_f_chunked) {
+                    m_pad.bytesToDecode = InBuff.readSpace();
+                } else {
+                    m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                }
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
                 m_pad.bytesToDecode = InBuff.readSpace();
@@ -7027,10 +7031,10 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
         }
         if (m_gchs.chunkLine.ends_with("\r\n") && m_gchs.chunkSize == -1) {
             idx1 = m_gchs.chunkLine.index_of(";");
-            if (idx1 > 0) {                                                  // extension follows, e.g. "AF4;test=123\r\n"
+            if (idx1 > 0) {                                                 // extension follows, e.g. "AF4;test=123\r\n"
                 hex_str = m_gchs.chunkLine.substr(0, idx1);                 // "AF4;test=123\r\n" -> "AF4"
                 ps_ptr<char> extension = m_gchs.chunkLine.substr(idx1 + 1); // "AF4;test=123\r\n" -> "test=123\r\n"
-                extension = extension.substr(0, extension.strlen() - 2);     // "test=123\r\n" -> "test=123"
+                extension = extension.substr(0, extension.strlen() - 2);    // "test=123\r\n" -> "test=123"
                 if (extension != m_gchs.extension) {
                     m_gchs.extension = extension;
                     AUDIO_LOG_INFO("extension {}", m_gchs.extension);
