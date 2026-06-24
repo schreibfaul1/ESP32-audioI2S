@@ -9270,6 +9270,11 @@ uint8_t NeaacDecoder::rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
     ics->length_of_rvlc_sf = (uint16_t)faad_getbits(ld, bits);
     if (ics->noise_used) {
         ics->dpcm_noise_nrg = (uint16_t)faad_getbits(ld, 9);
+
+        /* the 9 bits of dpcm_noise_nrg are counted in length_of_rvlc_sf, so a conformant value is at least 9; reject a smaller one before the
+           unsigned subtraction wraps length_of_rvlc_sf to a huge value */
+        if (ics->length_of_rvlc_sf < 9) return 8;
+
         ics->length_of_rvlc_sf -= 9;
     }
     ics->sf_escapes_present = faad_get1bit(ld);

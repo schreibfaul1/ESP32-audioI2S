@@ -201,7 +201,10 @@ class Audio {
     void                     latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void                     htmlToUTF8(char* str);
     void                     setDefaults(); // free buffers and set defaults
-    int32_t                  audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
+    int32_t                  audioFileRead();
+    int32_t                  audioFileRead(uint16_t timeout_ms);
+    int32_t                  audioFileRead(uint8_t* buff, size_t len);
+    int32_t                  audioFileRead(uint8_t* buff, size_t len, uint16_t timeout_ms);
     int32_t                  audioFileSeek(uint32_t position, size_t len = 0);
     void                     initInBuff();
     bool                     httpPrint(const char* host);
@@ -785,12 +788,14 @@ class _AutoProfiler {
         uint64_t elapsed = esp_timer_get_time() - start;
         sum += elapsed;
         count++;
+        if(max_dt < elapsed) max_dt = elapsed;
 
         if (count >= N) {
             double avg_us = (double)sum / count;
-            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %lu runs" ANSI_ESC_RESET "\n", tag, avg_us, count);
+            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %lu runs, max %lu µs" ANSI_ESC_RESET "\n", tag, avg_us, count, max_dt);
             sum = 0;
             count = 0;
+            max_dt = 0;
         }
     }
 
@@ -798,6 +803,7 @@ class _AutoProfiler {
     const char*            tag;
     uint32_t               N;
     uint64_t               start;
+    static inline uint32_t max_dt = 0;
     static inline uint64_t sum = 0;
     static inline uint32_t count = 0;
 };
