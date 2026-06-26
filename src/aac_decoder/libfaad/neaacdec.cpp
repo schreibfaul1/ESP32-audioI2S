@@ -11858,7 +11858,8 @@ uint8_t NeaacDecoder::sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qm
             for (k = 0; k < kx_band + bsco_band; k++) { QMF_RE(X[l][k]) = QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][k]); }
             for (k = kx_band + bsco_band; k < min(kx_band + M_band, 63); k++) { QMF_RE(X[l][k]) = QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][k]); }
             for (k = max(kx_band + bsco_band, kx_band + M_band); k < 64; k++) { QMF_RE(X[l][k]) = 0; }
-            QMF_RE(X[l][kx_band - 1 + bsco_band]) += QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][kx_band - 1 + bsco_band]);
+            /* kx_band can be 0 (kx_prev on the first frame's leading slots),  which would make kx_band - 1 + bsco_band index X[l][-1]. There is no band below 0 to add in that case, so skip the overlap. */
+            if (kx_band + bsco_band > 0) { QMF_RE(X[l][kx_band - 1 + bsco_band]) += QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][kx_band - 1 + bsco_band]); }
     #endif
         }
     }
