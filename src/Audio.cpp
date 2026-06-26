@@ -3395,11 +3395,17 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
+    auto convertTo16Bit = [&](int32_t* buffer) {
+        uint16_t* out = (uint16_t*)buffer;
+        for (uint32_t i = 0; i < m_validSamples * 2; i++)
+            out[i] = (int16_t)(buffer[i] >> 16);
+    };
+
     bool continueI2S = true;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
+    int BYTES_PER_FRAME = (m_f_output16Bit)? 2 * sizeof(int16_t) : 2 * sizeof(int32_t);
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3417,8 +3423,10 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
         m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+        if (m_f_output16Bit) convertTo16Bit(m_resamplesBuff.get());
         audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
     } else {
+        if (m_f_output16Bit) convertTo16Bit(m_outBuff.get());
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
     //------------------------------------------------------------------------------------------------------
@@ -5821,7 +5829,11 @@ bool Audio::i2s_config() {
     }
 
     memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
-    m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
+    if (m_f_output16Bit) {
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    } else {
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
+    }
     m_i2s_std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;                                                                // BCLK, Assignment in setPinout()
     m_i2s_std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;                                                                 // not used
     m_i2s_std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;                                                                // DOUT, Assignment in setPinout()
@@ -6264,9 +6276,17 @@ void Audio::reconfigI2S() {
     i2s_channel_disable(m_i2s_tx_handle);
 
     if (m_i2s_items.commFMT) {
-        m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        if(m_f_output16Bit) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        }
     } else {
-        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        if(m_f_output16Bit) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        }
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
@@ -6395,6 +6415,11 @@ void Audio::setOutputSampleRate(OutputSR_t sr) { //
     } else {
         m_output_sr = SR_ORIGIN; // output sr is source sr
     }
+    reconfigI2S();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setOutput16Bit(bool f16) { //
+    m_f_output16Bit = f16;             // true if 16 bit output via I2S
     reconfigI2S();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
