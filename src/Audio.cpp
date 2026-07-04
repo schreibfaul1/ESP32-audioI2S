@@ -4091,7 +4091,9 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
-        m_audioDataReadPtr = m_prlf.newFilePos;
+        m_audioDataReadPtr = (m_prlf.newFilePos > (int32_t)m_audioDataStart)
+                                 ? (m_prlf.newFilePos - m_audioDataStart)
+                                 : 0;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4100,7 +4102,7 @@ void Audio::processLocalFile() {
     m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
     m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_prlf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_prlf.bytesAddedToBuffer); }
-    if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
+    if (m_audioDataSize && m_audioFilePosition >= m_audioDataStart + m_audioDataSize) {
         if (!m_f_allDataReceived) m_f_allDataReceived = true;
     }
     if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
@@ -4289,7 +4291,9 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
-        m_audioDataReadPtr = m_pwf.newFilePos;
+        m_audioDataReadPtr = (m_pwf.newFilePos > (int32_t)m_audioDataStart)
+                                 ? (m_pwf.newFilePos - m_audioDataStart)
+                                 : 0;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4298,7 +4302,7 @@ void Audio::processWebFile() {
     m_pwf.availableBytes = min(m_client->available(), (int)InBuff.writeSpace());
     m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_pwf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_pwf.bytesAddedToBuffer); }
-    if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
+    if (m_audioDataSize && m_audioFilePosition >= m_audioDataStart + m_audioDataSize) {
         if (!m_f_allDataReceived) m_f_allDataReceived = true;
     }
     if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
@@ -4678,21 +4682,24 @@ void Audio::playAudioData() {
         m_pad.bytesDecoded = 0;
         if (isFile) {
             if (!m_audioDataSize) goto exit; // no data to decode if filesize is 0
-            if (m_audioDataStart + m_audioDataSize - m_audioDataReadPtr == 128) {
+            size_t audioBytesRemaining = (m_audioDataReadPtr < m_audioDataSize)
+                                             ? (m_audioDataSize - m_audioDataReadPtr)
+                                             : 0;
+            if (audioBytesRemaining == 128) {
                 m_f_ID3v1TagFound = true;
                 m_f_eof = true;
                 goto exit;
             }
-            if (m_audioDataSize <= m_audioDataReadPtr) {
+            if (!audioBytesRemaining) {
                 m_f_eof = true;
                 goto exit;
             }
 
-            if (m_audioDataStart + m_audioDataSize >= m_audioFilePosition) m_f_allDataReceived = true;
-            if (m_audioDataSize - m_audioDataReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
+            if (m_audioFilePosition >= m_audioDataStart + m_audioDataSize) m_f_allDataReceived = true;
+            if (audioBytesRemaining <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
 
             if (m_pad.lastFrames) {
-                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                m_pad.bytesToDecode = min(InBuff.readSpace(), audioBytesRemaining);
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
                 m_pad.bytesToDecode = InBuff.readSpace();
@@ -5956,7 +5963,7 @@ bool Audio::setAudioFilePosition(uint32_t pos) {
     }
     if (pos < m_audioDataStart) {
         AUDIO_LOG_WARN("set audiodatastart at {}", m_audioDataStart);
-        m_resumeFilePos = m_audioDataStart;
+        pos = m_audioDataStart;
     }
     m_resumeFilePos = pos;
 
@@ -7164,7 +7171,8 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     // keep resumeFilePos within the audio data
     if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
 
-    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataSize - resumeFilePos, UINT16_MAX);
+    uint32_t audioDataEnd = m_audioDataStart + m_audioDataSize;
+    uint32_t buffFillValue = std::min<uint32_t>(audioDataEnd - resumeFilePos, UINT16_MAX);
 
     AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}", m_resumeFilePos, m_audioDataStart);
 
