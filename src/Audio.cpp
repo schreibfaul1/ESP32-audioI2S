@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6y                                                                                                                            ";
-/*  Updated on: Jun 23, 2026
+    Version 3.4.7 rc1                                                                                                                            ";
+/*  Updated on: Jul 05, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4089,7 +4089,7 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
         m_audioFilePosition = 0;
-        m_audioDataSize = m_audioFileSize;
+        m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
         m_prlf.timeout = 8000; // ms
@@ -4285,7 +4285,7 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = 0;
         m_pwf.ctime = millis();
         m_audioFilePosition = 0;
-        m_audioDataSize = m_audioFileSize;
+        m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
         m_pwf.timeout = 8000; // ms
@@ -4691,7 +4691,7 @@ void Audio::playAudioData() {
                 m_f_eof = true;
                 goto exit;
             }
-            if (m_audioDataSize <= m_audioDataReadPtr) {
+            if (m_audioDataStart + m_audioDataSize <= m_audioDataReadPtr) {
                 m_f_eof = true;
                 goto exit;
             }
@@ -5507,7 +5507,10 @@ void Audio::setDecoderItems() {
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
         info(*this, evt_info, "AudioDataStart: {}", m_audioDataStart);
-        if (m_audioFileSize && !m_audioDataSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
+        if (m_audioDataStart && m_audioDataSize == m_audioFileSize) {
+            m_audioDataSize = m_audioFileSize - m_audioDataStart;
+            info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
+        }
     }
     if (m_lastGranulePosition && m_audioFileSize && m_i2s_items.sampleRate) {
         m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_i2s_items.sampleRate);
