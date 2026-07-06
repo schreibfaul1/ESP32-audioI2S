@@ -4311,7 +4311,7 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
-        m_audioDataReadPtr = m_pwf.newFilePos;
+        m_audioDataReadPtr = m_pwf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -5520,9 +5520,7 @@ void Audio::setDecoderItems() {
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
     }
-    if (m_audioDataStart && m_audioDataSize == m_audioFileSize) {
-        m_audioDataSize = m_audioFileSize - m_audioDataStart;
-    }
+    if (m_audioDataStart && m_audioDataSize == m_audioFileSize) { m_audioDataSize = m_audioFileSize - m_audioDataStart; }
 
     info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
     info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
