@@ -2197,11 +2197,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 else
                     idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // UTF-16LE, UTF-16BE
 
-                if (tmp.starts_with("\n")) tmp.remove_before(1);
-                m_syltLines.push_back(std::move(tmp));
-                if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-                uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                m_syltTimeStamp.push_back(timestamp);
+                if (idx + 4 <= m_ID3Hdr.SYLT.size) {
+                    if (tmp.starts_with("\n"))
+                        tmp.remove_before(1);
+                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                    m_syltLines.push_back(std::move(tmp));
+                    m_syltTimeStamp.push_back(timestamp);
+                }
                 idx += 4;
             }
             info(*this, evt_info, "audiofile contains synchronized lyrics");
@@ -2298,13 +2300,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                         // ISO-8859-1 / UTF-8
                         idx += tmp.copy_from((const char*)syltBuff.get() + idx);
                     }
-                    if (tmp.starts_with("\n")) tmp.remove_before(1);
-                    m_syltLines.push_back(std::move(tmp));
-
-                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-
-                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                    m_syltTimeStamp.push_back(timestamp);
+                    if (idx + 4 <= m_ID3Hdr.SYLT.size) {
+                        if (tmp.starts_with("\n"))
+                            tmp.remove_before(1);
+                        uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                        m_syltLines.push_back(std::move(tmp));
+                        m_syltTimeStamp.push_back(timestamp);
+                    }
 
                     idx += 4;
                 }
