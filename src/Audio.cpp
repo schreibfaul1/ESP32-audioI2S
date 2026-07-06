@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7 rc1a                                                                                                                            ";
+    Version 3.4.7 rc1b                                                                                                                            ";
 /*  Updated on: Jul 06, 2026
 
     Author: Wolle (schreibfaul1)
@@ -478,7 +478,6 @@ void Audio::setDefaults() {
     m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_audioFileSize = 0;
-    m_audioDataReadPtr = 0;
     m_avr_bitrate = 0;
     m_nominal_bitrate = 0;
     m_bytesNotConsumed = 0; // counts all not decodable bytes
@@ -4101,7 +4100,6 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
         m_audioFilePosition = 0;
-        m_audioDataReadPtr = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
@@ -4112,7 +4110,6 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
-        m_audioDataReadPtr = m_prlf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4300,7 +4297,6 @@ void Audio::processWebFile() {
         m_audioFilePosition = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
-        m_audioDataReadPtr = 0;
         m_f_allDataReceived = false;
         m_pwf.timeout = 8000; // ms
         if (!initializeDecoder()) return;
@@ -4311,7 +4307,6 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
-        m_audioDataReadPtr = m_pwf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4678,6 +4673,7 @@ void Audio::playAudioData() {
 
     if (m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
+        m_audioDataReadPtr = 0;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
         m_bytesNotConsumed = 0;
@@ -6249,7 +6245,7 @@ uint32_t Audio::getBitRate() {
 uint64_t Audio::getLastGranulePosition(uint8_t codec) {
     if (codec != CODEC_OPUS && codec != CODEC_VORBIS) return 0; // only opus or vorbis
     if (m_audioFileSize == 0) { return 0; }                     // only files
-
+    uint32_t     afp = m_audioFilePosition;
     uint64_t     granulePos = 0;
     ps_ptr<char> buff;
     buff.alloc(UINT16_MAX, "buff");
@@ -6263,8 +6259,7 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
         for (int j = 0; j < 8; j++) { granulePos |= ((uint64_t)buff[pos + 6 + j] << (j * 8)); }
     }
     AUDIO_LOG_DEBUG("granulePos {}", granulePos);
-
-    m_resumeFilePos = 0;
+    audioFileSeek(afp); // restore
     return granulePos;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7181,16 +7176,21 @@ bool Audio::readID3V1Tag() {
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
     if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
-        AUDIO_LOG_WARN("timeOffset not possible");
-        return 0;
+        AUDIO_LOG_WARN("timeOffset not possible (1)");
+        return -1;
     }
 
     // keep resumeFilePos within the audio data
     if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
 
-    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataSize - resumeFilePos, UINT16_MAX);
+    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataStart + m_audioDataSize - resumeFilePos, UINT16_MAX);
 
-    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}", m_resumeFilePos, m_audioDataStart);
+    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}, buffFillValue {}", m_resumeFilePos, m_audioDataStart, buffFillValue);
+
+    if (buffFillValue < InBuff.getMaxBlockSize()) {
+        AUDIO_LOG_WARN("timeOffset not possible (2)");
+        return -1;
+    }
 
     // --- enter critical area ------------------------------------------
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
@@ -7214,7 +7214,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     // ---------------------------------------------------------------------------
 
     auto fail = [&]() {
-        AUDIO_LOG_ERROR("can't set newFilePos");
+        AUDIO_LOG_ERROR("timeOffset not possible (3)");
         InBuff.bytesWasRead(0);
         m_f_lockInBuffer = false;
         xSemaphoreGive(mutex_audioTaskIsDecoding);
@@ -7263,6 +7263,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
     // --- leaf critical area ----------------------------------------------
     InBuff.bytesWasRead(offset);
+    m_audioDataReadPtr = (resumeFilePos + offset) - m_audioDataStart;
     m_f_lockInBuffer = false;
     xSemaphoreGive(mutex_audioTaskIsDecoding);
 
@@ -7355,9 +7356,9 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     return pos - m_resumeFilePos; // return the number of bytes to jump
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-uint32_t Audio::ogg_correctResumeFilePos() {
+int32_t Audio::ogg_correctResumeFilePos() {
     // The starting point is the next OggS magic word
-    if (InBuff.bufferFilled() < 0xFFFF) return 0;
+    if (InBuff.bufferFilled() < UINT16_MAX) return -1;
     vTaskDelay(1);
     // // AUDIO_LOG_INFO("in_resumeFilePos {}", resumeFilePos);
 
@@ -7509,8 +7510,9 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
             idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
             if (idx >= 28) { res = CODEC_VORBIS; }
 
-            m_lastGranulePosition = getLastGranulePosition(res); // VORBIS or OPUS only
-            audioFileSeek(0);                                    // if isFile?
+            if (m_streamType == ST_WEBFILE || m_dataMode == AUDIO_LOCALFILE) { // is file?
+                m_lastGranulePosition = getLastGranulePosition(res);           // VORBIS or OPUS only
+            }
             AUDIO_LOG_DEBUG("lastGranulePosition {}", m_lastGranulePosition);
         }
         return res;

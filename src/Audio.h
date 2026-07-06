@@ -281,7 +281,7 @@ class Audio {
     int32_t                newInBuffStart(int32_t resumeFilePos);
     boolean                streamDetection(uint32_t bytesAvail);
     uint32_t               m4a_correctResumeFilePos();
-    uint32_t               ogg_correctResumeFilePos();
+    int32_t                ogg_correctResumeFilePos();
     int32_t                flac_correctResumeFilePos();
     int32_t                mp3_correctResumeFilePos();
     int32_t                wav_correctResumeFilePos();
