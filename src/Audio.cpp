@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7 rc1                                                                                                                            ";
-/*  Updated on: Jul 05, 2026
+    Version 3.4.7 rc1a                                                                                                                            ";
+/*  Updated on: Jul 06, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -478,6 +478,7 @@ void Audio::setDefaults() {
     m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_audioFileSize = 0;
+    m_audioDataReadPtr = 0;
     m_avr_bitrate = 0;
     m_nominal_bitrate = 0;
     m_bytesNotConsumed = 0; // counts all not decodable bytes
@@ -1631,8 +1632,6 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     }
     m_controlCounter = 100; // header succesfully read
     m_audioDataStart = m_rwh.headerSize;
-    info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
-    info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1711,8 +1710,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             info(*this, evt_image, m_rflh.picVec);
         }
 
-        info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
-        info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
         if (m_rflh.duration) {
             m_rflh.nominalBitrate = (m_audioDataSize * 8) / m_rflh.duration;
             m_nominal_bitrate = m_rflh.nominalBitrate;
@@ -2198,8 +2195,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                     idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // UTF-16LE, UTF-16BE
 
                 if (idx + 4 <= m_ID3Hdr.SYLT.size) {
-                    if (tmp.starts_with("\n"))
-                        tmp.remove_before(1);
+                    if (tmp.starts_with("\n")) { tmp.remove_before(1); }
                     uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
                     m_syltLines.push_back(std::move(tmp));
                     m_syltTimeStamp.push_back(timestamp);
@@ -2301,8 +2297,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                         idx += tmp.copy_from((const char*)syltBuff.get() + idx);
                     }
                     if (idx + 4 <= m_ID3Hdr.SYLT.size) {
-                        if (tmp.starts_with("\n"))
-                            tmp.remove_before(1);
+                        if (tmp.starts_with("\n")) tmp.remove_before(1);
                         uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
                         m_syltLines.push_back(std::move(tmp));
                         m_syltTimeStamp.push_back(timestamp);
@@ -2372,8 +2367,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
             m_controlCounter = MP3_OKAY; // 100 -> ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
-            if (!m_f_m3u8data) info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
-            if (!m_f_m3u8data) info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
 
             uint32_t hdr = bigEndian(data, 4);
             if ((hdr & 0xFFE00000) != 0xFFE00000) AUDIO_LOG_ERROR("Syncword not found"); // check sync
@@ -3172,8 +3165,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
         m_stsz_position = m_m4aHdr.stsz_table_pos;
-        info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
-        info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
         if (m_audioFileDuration) {
             m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
             info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
@@ -4070,6 +4061,33 @@ ps_ptr<char> Audio::m3u8redirection(uint8_t* codec) {
     return result; // it's a redirection, a new m3u8 playlist
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*
+
+                              m_audioFilePosition
+                                      |
+    |-------------------------------- ▼ -----------------------------------------------------------------------------------|
+    |                                                                                                                      |
+    |<------------------------------------------------- m_audioFileSize -------------------------------------------------->|
+    |        m_audioDataStart                                                                                              |
+    |               |                                                                                                      |
+    |               ▼                                                                                                      |
+    |               |<--------------------------------- m_audioDataSize ------------------------------------->|            |
+    ▼               ▼                                                                                         ▼            ▼
+    +——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————+
+    | audio header  |                           audio data block                                              | other data |
+    +——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————+
+                    ▲                                                                                         ▲
+                    |--------------------------------------- ▲ -----------------------------------------------|
+                                                             |
+                                                      m_audioDataReadPtr
+
+
+    m_audioFilePosition is the position of the read/write pointer within the entire file
+    m_audioFileSize contains the total length of the file
+    m_audioDataStart is the start of the audio block; it is also the size of the audio header
+    m_audioDataSize contains the length of the audio block
+    m_audioDataReadPtr is the read pointer within the audio block
+*/
 void Audio::processLocalFile() {
     if (!(m_audiofile && m_f_running && m_dataMode == AUDIO_LOCALFILE)) return; // guard
 
@@ -4083,6 +4101,7 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
         m_audioFilePosition = 0;
+        m_audioDataReadPtr = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
@@ -4093,7 +4112,7 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
-        m_audioDataReadPtr = m_prlf.newFilePos;
+        m_audioDataReadPtr = m_prlf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4281,6 +4300,7 @@ void Audio::processWebFile() {
         m_audioFilePosition = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
+        m_audioDataReadPtr = 0;
         m_f_allDataReceived = false;
         m_pwf.timeout = 8000; // ms
         if (!initializeDecoder()) return;
@@ -4657,7 +4677,6 @@ void Audio::playAudioData() {
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
-        m_audioDataReadPtr = 0;
         m_f_firstPlayCall = false;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
@@ -4680,12 +4699,12 @@ void Audio::playAudioData() {
         m_pad.bytesDecoded = 0;
         if (isFile) {
             if (!m_audioDataSize) goto exit; // no data to decode if filesize is 0
-            if (m_audioDataStart + m_audioDataSize - m_audioDataReadPtr == 128) {
+            if (m_audioDataSize - m_audioDataReadPtr == 128) {
                 m_f_ID3v1TagFound = true;
                 m_f_eof = true;
                 goto exit;
             }
-            if (m_audioDataStart + m_audioDataSize <= m_audioDataReadPtr) {
+            if (m_audioDataSize <= m_audioDataReadPtr) {
                 m_f_eof = true;
                 goto exit;
             }
@@ -4694,7 +4713,7 @@ void Audio::playAudioData() {
             if (m_audioDataSize - m_audioDataReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
 
             if (m_pad.lastFrames) {
-                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataSize - m_audioDataReadPtr));
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
                 m_pad.bytesToDecode = InBuff.readSpace();
@@ -5500,12 +5519,14 @@ void Audio::setDecoderItems() {
     if (m_decoder->arg1()) info(*this, evt_info, "{}", m_decoder->arg1());
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
-        info(*this, evt_info, "AudioDataStart: {}", m_audioDataStart);
-        if (m_audioDataStart && m_audioDataSize == m_audioFileSize) {
-            m_audioDataSize = m_audioFileSize - m_audioDataStart;
-            info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
-        }
     }
+    if (m_audioDataStart && m_audioDataSize == m_audioFileSize) {
+        m_audioDataSize = m_audioFileSize - m_audioDataStart;
+    }
+
+    info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
+    info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
+
     if (m_lastGranulePosition && m_audioFileSize && m_i2s_items.sampleRate) {
         m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_i2s_items.sampleRate);
         m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
