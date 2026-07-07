@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7 rc1b                                                                                                                            ";
-/*  Updated on: Jul 06, 2026
+    Version 3.4.7 rc1c                                                                                                                            ";
+/*  Updated on: Jul 07, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3391,7 +3391,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
+    constexpr int BYTES_PER_SAMPLE = sizeof(int32_t);
+    constexpr int BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3423,17 +3424,9 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
     } else { // without resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
-    }
-
-    if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
-    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_FRAME;
-    m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
-    if (m_validSamples <= 0) {
-        m_validSamples = 0;
-        m_plCh.count = 0;
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
     }
 
     // ---- statistics, bytes written to I2S (every 10s)
@@ -3448,18 +3441,24 @@ i2swrite:
     // cnt+= i2s_bytesConsumed;
     //-------------------------------------------
 
+    if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
+    // if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
+    if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
+
+    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_STEREOFRAME;
+
+    if (m_validSamples < 0) {
+        AUDIO_LOG_ERROR("valid samples counter is negative: {}", m_validSamples);
+        m_validSamples = 0;
+    }
+
+    if(m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
+
+    m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+
+    if (m_validSamples == 0) { m_plCh.count = 0; }
+
     return;
-exit:
-    if (m_plCh.err == ESP_OK)
-        return;
-    else if (m_plCh.err == ESP_ERR_INVALID_ARG)
-        AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
-    else if (m_plCh.err == ESP_ERR_TIMEOUT)
-        AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
-    else if (m_plCh.err == ESP_ERR_INVALID_STATE)
-        AUDIO_LOG_ERROR("I2S is not ready to write");
-    else
-        AUDIO_LOG_ERROR("i2s err {}", m_plCh.err);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
@@ -4266,7 +4265,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (((InBuff.bufferFilled() > m_pwst.maxFrameSize * 2) || (m_f_allDataReceived)) && !m_f_stream) { // waiting for buffer filled
+    if (((InBuff.bufferFilled() > m_pwst.maxFrameSize) || (m_f_allDataReceived)) && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
@@ -4400,6 +4399,7 @@ void Audio::processWebStreamTS() {
 
     m_pwsst.ts_packetStart = 0;
     m_pwsst.ts_packetLength = 0;
+nextRound:
     uint32_t availableBytes = m_client->available(); // available bytes in stream
 
     if (availableBytes) {
@@ -4496,7 +4496,7 @@ void Audio::processWebStreamTS() {
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4507,7 +4507,7 @@ void Audio::processWebStreamTS() {
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4529,7 +4529,7 @@ chunkFinished:
             info(*this, evt_info, "buffer filled in {} ms", filltime);
         }
     }
-
+    if (m_pwsst.f_nextRound) { goto nextRound; }
 exit:
     return;
 }
@@ -4638,7 +4638,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if (m_pwsHLS.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -4663,6 +4663,7 @@ void Audio::playAudioData() {
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
     if (m_validSamples) {
+        vTaskDelay(5);
         playChunk();
         return;
     } // guard, play samples first
@@ -7823,15 +7824,12 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
-        while (m_validSamples) {
-            vTaskDelay(20 / portTICK_PERIOD_MS);
-            playChunk();
-        } // I2S buffer full
         playAudioData();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
         return;
     } else {
+        if(m_validSamples) playChunk(); // empty I2S DMA
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
