@@ -153,7 +153,7 @@ size_t AudioBuffer::bufferFilled() {
         }
 
         // should never happen
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
         m_log.println();
         goto exit;
     }
@@ -190,7 +190,7 @@ size_t AudioBuffer::freeSpace() {
             goto exit;
         }
 
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
         m_log.println();
         goto exit;
     }
@@ -288,7 +288,7 @@ void AudioBuffer::bytesWritten(size_t bytes) {
     //------------------------------------------------------------
 
     if (bytes > m_writeSpace) {
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] writeSpace {}, bytes {}", __FILE__, __LINE__, m_writeSpace, bytes);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writeSpace {}, bytes {}", __FILE__, __LINE__, m_writeSpace, bytes);
         m_log.println();
         bytes = m_writeSpace;
     }
@@ -299,8 +299,8 @@ void AudioBuffer::bytesWritten(size_t bytes) {
 
     if (m_writePtr < m_readPtr) {
         if (m_writePtr + bytes > m_readPtr) {
-            m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr overruns readPtr "
-                          "(write {}, read {}, bytes {})",
+            m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr overruns readPtr "
+                                       "(write {}, read {}, bytes {})",
                           __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_readPtr - m_bufferBegin, bytes);
             m_log.println();
             bytes = m_readPtr - m_writePtr;
@@ -312,8 +312,8 @@ void AudioBuffer::bytesWritten(size_t bytes) {
     //------------------------------------------------------------
 
     if (m_writePtr + bytes > m_bufferEnd) {
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr overruns bufferEnd "
-                      "(write {}, end {}, bytes {})",
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr overruns bufferEnd "
+                                   "(write {}, end {}, bytes {})",
                       __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
 
         m_log.println();
@@ -406,7 +406,7 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
     //------------------------------------------------------------
 
     if (bytes > m_readSpace) {
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] readSpace {}, bytes {}", __FILE__, __LINE__, m_readSpace, bytes);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] readSpace {}, bytes {}", __FILE__, __LINE__, m_readSpace, bytes);
         m_log.println();
         bytes = m_readSpace;
     }
@@ -417,8 +417,8 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
 
     if (m_readPtr < m_writePtr) {
         if (m_readPtr + bytes > m_writePtr) {
-            m_log.assignf( ANSI_ESC_RED "[{}:{}] readPtr overruns writePtr "
-                          "(read {}, write {}, bytes {})",
+            m_log.assignf(ANSI_ESC_RED "[{}:{}] readPtr overruns writePtr "
+                                       "(read {}, write {}, bytes {})",
                           __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_writePtr - m_bufferBegin, bytes);
 
             m_log.println();
@@ -432,8 +432,8 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
 
     if (m_readPtr + bytes > m_bufferEnd) {
 
-        m_log.assignf( ANSI_ESC_RED "[{}:{}] readPtr overruns bufferEnd "
-                      "(read {}, end {}, bytes {})",
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] readPtr overruns bufferEnd "
+                                   "(read {}, end {}, bytes {})",
                       __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
 
         m_log.println();
@@ -591,6 +591,7 @@ void Audio::setDefaults() {
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
     m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;   // InitSequence for playAudioData
+    m_isFirstChunkCall = true;  // InitSequence for playChunk
     m_f_firstLoop = true;
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -3520,6 +3521,11 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
+
+    if (m_isFirstChunkCall) {
+        m_isFirstChunkCall = false;
+        m_plCh.count = 0;
+    }
 
     bool continueI2S = true;
     m_plCh.i2s_bytesConsumed = 0;
