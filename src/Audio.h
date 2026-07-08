@@ -41,52 +41,6 @@ extern char                       audioI2SVers[];
 class Decoder; // prototype
 
 //----------------------------------------------------------------------------------------------------------------------
-// class AudioBuffer {
-
-//   public:
-//     AudioBuffer();   // constructor
-//     ~AudioBuffer();  // frees the buffer
-//     size_t   init(); // set default values
-//     bool     isInitialized() { return m_init; };
-//     size_t   getBufsize();
-//     size_t   getMaxBlockSize(); // returns maxBlockSize
-//     void     setMaxBlocksize(uint32_t mbs);
-//     size_t   freeSpace();             // number of free bytes to overwrite
-//     size_t   writeSpace();            // space fom writepointer to bufferend
-//     size_t   bufferFilled();          // returns the number of filled bytes
-//     size_t   readSpace();             // max readable bytes in one block
-//     void     bytesWritten(size_t bw); // update writepointer
-//     void     bytesWasRead(size_t br); // update readpointer
-//     uint8_t* getWritePtr();           // returns the current writepointer
-//     uint8_t* getReadPtr();            // returns the current readpointer
-//     void     reset();                 // restore defaults
-//     void     showStatus();
-
-//   protected:
-//     size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
-//     size_t          m_freeSpace = 0;
-//     size_t          m_writeSpace = 0;
-//     size_t          m_resBuffSize = 0;
-//     size_t          m_maxBlockSize = 0;
-//     size_t          m_readSpace = 0;
-//     const size_t    m_maxRet = UINT16_MAX;
-//     ps_ptr<uint8_t> m_buffer;
-//     uint8_t*        m_buffEnd = nullptr;
-//     uint8_t*        m_writePtr = nullptr;
-//     uint8_t*        m_readPtr = nullptr;
-//     uint8_t*        m_endPtr = nullptr;
-//     uint8_t*        m_startPtr = nullptr;
-//     ps_ptr<char>    m_log;
-//     bool            m_init = false;
-//     bool            m_isEmpty = true;
-//     bool            m_isFull = false;
-
-//   private:
-//     SemaphoreHandle_t m_mutex = nullptr;
-// #define ANSI_ESC_RED "\033[31m"
-// };
-
-//----------------------------------------------------------------------------------------------------------------------
 
 //  The reserve area contains a copy of the first bytes of the main buffer.
 //  Therefore every decoder always receives one contiguous memory block, even if the read position crosses the end of the main buffer.
