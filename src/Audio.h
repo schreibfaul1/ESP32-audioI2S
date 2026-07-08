@@ -41,50 +41,191 @@ extern char                       audioI2SVers[];
 class Decoder; // prototype
 
 //----------------------------------------------------------------------------------------------------------------------
+// class AudioBuffer {
+
+//   public:
+//     AudioBuffer();   // constructor
+//     ~AudioBuffer();  // frees the buffer
+//     size_t   init(); // set default values
+//     bool     isInitialized() { return m_init; };
+//     size_t   getBufsize();
+//     size_t   getMaxBlockSize(); // returns maxBlockSize
+//     void     setMaxBlocksize(uint32_t mbs);
+//     size_t   freeSpace();             // number of free bytes to overwrite
+//     size_t   writeSpace();            // space fom writepointer to bufferend
+//     size_t   bufferFilled();          // returns the number of filled bytes
+//     size_t   readSpace();             // max readable bytes in one block
+//     void     bytesWritten(size_t bw); // update writepointer
+//     void     bytesWasRead(size_t br); // update readpointer
+//     uint8_t* getWritePtr();           // returns the current writepointer
+//     uint8_t* getReadPtr();            // returns the current readpointer
+//     void     reset();                 // restore defaults
+//     void     showStatus();
+
+//   protected:
+//     size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
+//     size_t          m_freeSpace = 0;
+//     size_t          m_writeSpace = 0;
+//     size_t          m_resBuffSize = 0;
+//     size_t          m_maxBlockSize = 0;
+//     size_t          m_readSpace = 0;
+//     const size_t    m_maxRet = UINT16_MAX;
+//     ps_ptr<uint8_t> m_buffer;
+//     uint8_t*        m_buffEnd = nullptr;
+//     uint8_t*        m_writePtr = nullptr;
+//     uint8_t*        m_readPtr = nullptr;
+//     uint8_t*        m_endPtr = nullptr;
+//     uint8_t*        m_startPtr = nullptr;
+//     ps_ptr<char>    m_log;
+//     bool            m_init = false;
+//     bool            m_isEmpty = true;
+//     bool            m_isFull = false;
+
+//   private:
+//     SemaphoreHandle_t m_mutex = nullptr;
+// #define ANSI_ESC_RED "\033[31m"
+// };
+
+//----------------------------------------------------------------------------------------------------------------------
+
+//  The reserve area contains a copy of the first bytes of the main buffer.
+//  Therefore every decoder always receives one contiguous memory block, even if the read position crosses the end of the main buffer.
+//
+//  Only one memcpy() is required during wrap-around.
+//
+//  Writer:
+//      WiFi / SD
+//
+//  Reader:
+//      Audio decoder
+//
+//  Reader and writer may work simultaneously.
+// ——————————————————————————————————————————————————————————————————————————————
+
 class AudioBuffer {
 
   public:
-    AudioBuffer();   // constructor
-    ~AudioBuffer();  // frees the buffer
-    size_t   init(); // set default values
-    bool     isInitialized() { return m_init; };
-    size_t   getBufsize();
-    size_t   getMaxBlockSize(); // returns maxBlockSize
-    void     setMaxBlocksize(uint32_t mbs);
-    size_t   freeSpace();             // number of free bytes to overwrite
-    size_t   writeSpace();            // space fom writepointer to bufferend
-    size_t   bufferFilled();          // returns the number of filled bytes
-    size_t   readSpace();             // max readable bytes in one block
-    void     bytesWritten(size_t bw); // update writepointer
-    void     bytesWasRead(size_t br); // update readpointer
-    uint8_t* getWritePtr();           // returns the current writepointer
-    uint8_t* getReadPtr();            // returns the current readpointer
-    void     reset();                 // restore defaults
-    void     showStatus();
+    // ------------------------------------------------------------
+    // Configuration
+    // ------------------------------------------------------------
+
+    static constexpr size_t DEFAULT_MAIN_BUFFER_SIZE = UINT16_MAX * 10;
+    static constexpr size_t DEFAULT_RESERVE_BUFFER_SIZE = UINT16_MAX;
+    // Maximum contiguous block returned by readSpace()/writeSpace().
+    // All supported decoders use uint16_t (bytesLeft, bytesAvail, ...). Returning larger blocks has no benefit and would only increase decoder latency.
+    static constexpr size_t MAX_TRANSFER_SIZE = UINT16_MAX;
+
+    // ------------------------------------------------------------
+    // Construction
+    // ------------------------------------------------------------
+
+    AudioBuffer();
+    AudioBuffer(size_t mainSize, size_t reserveSize);
+
+    ~AudioBuffer();
+
+    // ------------------------------------------------------------
+    // Initialization
+    // ------------------------------------------------------------
+
+    size_t init();
+    bool   isInitialized() const { return m_initialized; }
+    void   reset();
+
+    // ------------------------------------------------------------
+    // Configuration
+    // ------------------------------------------------------------
+
+    void   setMaxBlocksize(size_t size);
+    size_t getMaxBlockSize() const;
+    size_t getBufsize() const;
+
+    // ------------------------------------------------------------
+    // Buffer information
+    // ------------------------------------------------------------
+
+    size_t bufferFilled();
+    size_t freeSpace();
+    size_t readSpace();
+    size_t writeSpace();
+
+    // ------------------------------------------------------------
+    // Pointer access
+    // ------------------------------------------------------------
+
+    uint8_t* getReadPtr() { return m_readPtr; }   // Pointer remains valid until the next call to bytesWasRead() or reset().
+    uint8_t* getWritePtr() { return m_writePtr; } // Pointer remains valid until the next call to bytesWritten() or reset().
+
+    // ------------------------------------------------------------
+    // Update pointers
+    // ------------------------------------------------------------
+
+    void bytesWritten(size_t bytes);
+    void bytesWasRead(size_t bytes);
+
+    // ------------------------------------------------------------
+    // Debug
+    // ------------------------------------------------------------
+
+    void showStatus();
 
   protected:
-    size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
-    size_t          m_freeSpace = 0;
-    size_t          m_writeSpace = 0;
-    size_t          m_resBuffSize = 0;
-    size_t          m_maxBlockSize = 0;
-    size_t          m_readSpace = 0;
-    const size_t    m_maxRet = UINT16_MAX;
+    //-------------------------------------------------------------
+    // Buffer configuration
+    //-------------------------------------------------------------
+
+    size_t m_mainSize;
+    size_t m_reserveSize;
+    size_t m_totalSize;
+    size_t m_maxBlockSize = 0;
+    size_t m_readSpace = 0;
+    size_t m_writeSpace = 0;
+
+    //-------------------------------------------------------------
+    // Memory
+    //-------------------------------------------------------------
+
     ps_ptr<uint8_t> m_buffer;
-    uint8_t*        m_buffEnd = nullptr;
-    uint8_t*        m_writePtr = nullptr;
-    uint8_t*        m_readPtr = nullptr;
-    uint8_t*        m_endPtr = nullptr;
-    uint8_t*        m_startPtr = nullptr;
-    ps_ptr<char>    m_log;
-    bool            m_init = false;
-    bool            m_isEmpty = true;
-    bool            m_isFull = false;
+
+    //-------------------------------------------------------------
+    // Pointer layout
+    //-------------------------------------------------------------
+
+    uint8_t* m_bufferBegin = nullptr;
+    uint8_t* m_mainEnd = nullptr;
+    uint8_t* m_bufferEnd = nullptr;
+    uint8_t* m_readPtr = nullptr;
+    uint8_t* m_writePtr = nullptr;
+
+    //-------------------------------------------------------------
+    // State
+    //-------------------------------------------------------------
+
+    bool m_initialized = false;
+    bool m_isEmpty = true;
+    bool m_isFull = false;
+
+    //-------------------------------------------------------------
+    // Debug
+    //-------------------------------------------------------------
+
+    ps_ptr<char> m_log;
+
+    //-------------------------------------------------------------
+    // Synchronisation
+    //-------------------------------------------------------------
+
+    SemaphoreHandle_t m_mutex = nullptr;
 
   private:
-    SemaphoreHandle_t m_mutex = nullptr;
+    //-------------------------------------------------------------
+    // Internal helper
+    //-------------------------------------------------------------
+    void sanityCheck();
+
 #define ANSI_ESC_RED "\033[31m"
 };
+
 //----------------------------------------------------------------------------------------------------------------------
 
 class Audio {
@@ -146,7 +287,7 @@ class Audio {
     // -------------------------------------------------------------------
     typedef enum : uint32_t { SR_ORIGIN = 0, SR_44100 = 44100, SR_48000 = 48000 } OutputSR_t;
 
-    bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
+    bool             openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     audiolib::hwoe_t dismantle_host(const char* host);
     bool             connecttohost(const char* host, const char* user = nullptr, const char* pwd = nullptr);
     bool             connecttospeech(const char* speech, const char* lang);

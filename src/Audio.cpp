@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7                                                                                                                            ";
+    Version 3.4.7a                                                                                                                            ";
 /*  Updated on: Jul 08, 2026
 
     Author: Wolle (schreibfaul1)
@@ -52,291 +52,434 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-// AudioBuffer will be allocated in PSRAM
+// Main buffer:
+// +-----------------------------------------------------------+
+
+// Reserve buffer:
+// +-------------------------+
+
+// The reserve buffer always contains a copy of the first
+// reserveSize bytes of the main buffer.
+
+// This guarantees that every decoder receives one contiguous
+// memory block even if reading crosses the end of the main
+// buffer.
+
+// Only one memcpy() is required per wrap.
 //
-//  m_startPtr       m_readPtr                  m_writePtr                                                    m_endPtr
+//  m_bufferBegin     m_readPtr                  m_writePtr
 //   |                  |<------maxAvailableBytes----->|<--------------------- writeSpace ----------------------->|
 //   ▼                  ▼                              ▼                                                          ▼
 //   ---------------------------------------------------------------------------------------------------------------
 //   |                         <--m_mainBuffSize-->                               |      <--m_resBuffSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
-//                                                                                ▲
-//                                                                                |
-//                                                                             m_buffEnd
-//   if resBuff is full copy data from resBuff to the beginning
-//   if m_readPtr >= m_buff<end set m_readptr to m_startPtr + (m_readPtr - m_buffEnd)
 //
-//  m_startPtr                      m_writePtr                 m_readPtr                                      m_endPtr
+//
+//
+//  m_bufferBegin                  m_writePtr                 m_readPtr
 //   |                                 |<-------writeSpace------>|<---------------maxAvailableBytes-------------->|
 //   ▼                                 ▼                         ▼                ▼                               ▼
 //   ---------------------------------------------------------------------------------------------------------------
 //   |                        <--m_mainBuffSize-->                                |      <--m_resBuffSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
-//   |<------------filled------------->|<-------freeSpace------->|<----filled---->▲
-//                                                                                |
-//                                                                             m_buffEnd
+//   |<------------filled------------->|<-------freeSpace------->|<----filled---->|
+//
 //
 
-AudioBuffer::AudioBuffer() {
-    m_mainBuffSize = UINT16_MAX * 10;
-    m_resBuffSize = UINT16_MAX;
-}
-
-AudioBuffer::~AudioBuffer() {
-    ;
-}
-
-size_t AudioBuffer::getBufsize() {
-    return m_mainBuffSize;
-}
-
+AudioBuffer::AudioBuffer() : AudioBuffer(DEFAULT_MAIN_BUFFER_SIZE, DEFAULT_RESERVE_BUFFER_SIZE) {}
+AudioBuffer::AudioBuffer(size_t mainSize, size_t reserveSize) : m_mainSize(mainSize), m_reserveSize(reserveSize), m_totalSize(mainSize + reserveSize) {}
+AudioBuffer::~AudioBuffer() {}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::init() {
-    m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
-    m_log.set_name("\nAudiobuffer_Log");
+    if (m_initialized) return m_mainSize;
+    m_buffer.alloc(m_totalSize, "AudioBuffer");
+    if (!m_buffer) return 0;
     m_mutex = xSemaphoreCreateBinary();
+    if (!m_mutex) {
+        m_buffer.reset();
+        return 0;
+    }
     xSemaphoreGive(m_mutex);
-    m_init = true;
-    m_startPtr = m_buffer.get();
-    m_endPtr = m_buffer.get() + m_mainBuffSize;
-    m_buffEnd = m_endPtr + m_resBuffSize;
+    m_log.set_name("\nAudioBuffer_Log");
+    m_bufferBegin = m_buffer.get();
+    m_mainEnd = m_bufferBegin + m_mainSize;
+    m_bufferEnd = m_bufferBegin + m_totalSize;
     reset();
-    return m_mainBuffSize;
-}
-
-void AudioBuffer::setMaxBlocksize(uint32_t mbs) {
-    m_maxBlockSize = mbs;
-}
-
-size_t AudioBuffer::getMaxBlockSize() {
-    return m_maxBlockSize;
+    m_initialized = true;
+    return m_mainSize;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-size_t AudioBuffer::freeSpace() {
-    if (!m_init) return 0;
-    if (m_readPtr == m_writePtr) {
-        if (m_isEmpty) { return m_mainBuffSize; }
-        if (m_isFull) { return 0; }
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-        m_log.println();
-    }
-    if (m_readPtr < m_writePtr) {
-        if (m_writePtr > m_endPtr) {
-            return (m_readPtr - m_startPtr);
-        } else {
-            return (m_endPtr - m_writePtr) + (m_readPtr - m_startPtr);
-        }
-    }
-    return m_readPtr - m_writePtr;
+void AudioBuffer::reset() {
+
+    m_readPtr = m_bufferBegin;
+    m_writePtr = m_bufferBegin;
+
+    m_isEmpty = true;
+    m_isFull = false;
+
+    m_readSpace = 0;
+    m_writeSpace = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void AudioBuffer::setMaxBlocksize(size_t size) {
+    m_maxBlockSize = size;
+}
+
+size_t AudioBuffer::getMaxBlockSize() const {
+    return m_maxBlockSize;
+}
+
+size_t AudioBuffer::getBufsize() const {
+    return m_mainSize;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::bufferFilled() {
-    if (!m_init) return 0;
+    if (!m_initialized) return 0;
+
     xSemaphoreTake(m_mutex, portMAX_DELAY);
-    size_t bufferFilled = 0;
+    size_t filled = 0;
+
     if (m_readPtr == m_writePtr) {
+
         if (m_isEmpty) {
-            bufferFilled = 0;
-            goto end;
+            filled = 0;
+            goto exit;
         }
+
         if (m_isFull) {
-            bufferFilled = m_mainBuffSize;
-            goto end;
+            filled = m_mainSize;
+            goto exit;
         }
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+
+        // should never happen
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
         m_log.println();
-    }
-    if (m_readPtr < m_writePtr) {
-        bufferFilled = (size_t)(m_writePtr - m_readPtr);
-        goto end;
-    }
-    bufferFilled = (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
-end:
-    xSemaphoreGive(m_mutex);
-    return bufferFilled;
-}
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-size_t AudioBuffer::writeSpace() {
-    if (!m_init) return 0;
-    xSemaphoreTake(m_mutex, portMAX_DELAY);
-    m_writeSpace = 0;
-
-    // Check whether a complete block still fits in at the end
-    size_t spaceToEnd = m_buffEnd - m_writePtr;
-
-    if (m_isFull) {
-        m_writeSpace = 0;
-        goto end;
+        goto exit;
     }
 
-    if (m_isEmpty) {
-        m_writeSpace = min(m_maxRet, spaceToEnd);
-        goto end;
-    }
-
-    if (spaceToEnd == 0) { // be sure that the resBuff is full
-        // Only copy if the read pointer is not in the way
-        if (m_readPtr > m_startPtr + m_resBuffSize) {
-            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
-            m_writePtr = m_startPtr + m_resBuffSize;
-        }
-    }
-
-    if (m_writePtr < m_readPtr) {
-        if (m_readPtr >= m_endPtr) {                                       // readPtr is in resBuff?
-            m_writeSpace = min(m_maxRet, (size_t)(m_endPtr - m_writePtr)); // writePtr does not enter resbuff, wait for copy im readspace
-        } else {
-            m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr));
-        }
-        goto end;
-    }
     if (m_writePtr > m_readPtr) {
-        m_writeSpace = min(m_maxRet, spaceToEnd);
-        goto end;
+        filled = m_writePtr - m_readPtr;
+    } else {
+        filled = (m_mainEnd - m_readPtr) + (m_writePtr - m_bufferBegin);
     }
-    m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    m_log.println();
 
-end:
+exit:
+
     xSemaphoreGive(m_mutex);
-    return m_writeSpace;
+
+    return filled;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-void AudioBuffer::bytesWritten(size_t bw) {
-    if (!m_init) return;
-    xSemaphoreTake(m_mutex, portMAX_DELAY);
-    if (!bw) goto end;
+size_t AudioBuffer::freeSpace() {
+    if (!m_initialized) return 0;
 
-    if (bw > m_writeSpace) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writeSpace < bw, writeSpace {}, bw {}", __FILE__, __LINE__, m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
-        m_log.println();
-    }
-    if (m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr overrruns readPtr, writePtr {}, readPtr {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
-        m_log.println();
-        m_writePtr = m_readPtr;
-        goto end;
-    }
-    if (m_writePtr + bw > m_buffEnd) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr overrruns buffEnd, writePtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
-        m_log.println();
-        m_writePtr = m_buffEnd;
-        goto end;
-    }
-
-    m_writePtr += bw;
-    if (bw) {
-        if (m_writePtr == m_readPtr) m_isFull = true;
-        m_isEmpty = false;
-    }
-
-end:
-    xSemaphoreGive(m_mutex);
-    return;
-}
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-size_t AudioBuffer::readSpace() {
-    if (!m_init) return 0;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
-    if (m_readPtr >= m_endPtr && m_writePtr <= m_endPtr) {
-        size_t len = m_readPtr - m_endPtr;
-        if (m_writePtr > m_startPtr + len) {
-            // set new readptr
-            m_readPtr = m_startPtr + len;
+    size_t free = 0;
+
+    if (m_readPtr == m_writePtr) {
+
+        if (m_isEmpty) {
+            free = m_mainSize;
+            goto exit;
         }
-    }
 
-    m_readSpace = 0;
-    if (m_isEmpty) { goto end; }
+        if (m_isFull) {
+            free = 0;
+            goto exit;
+        }
 
-    if (m_isFull) {
-        m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
-        goto end;
-    }
-
-    if (m_readPtr < m_writePtr) {
-        m_readSpace = min(m_maxRet, (size_t)(m_writePtr - m_readPtr));
-        goto end;
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
+        m_log.println();
+        goto exit;
     }
 
     if (m_readPtr > m_writePtr) {
-        m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
-        goto end;
+        free = m_readPtr - m_writePtr;
+    } else {
+        free = (m_mainEnd - m_writePtr) + (m_readPtr - m_bufferBegin);
     }
-    m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    m_log.println();
-end:
+
+exit:
+    xSemaphoreGive(m_mutex);
+    return free;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t AudioBuffer::writeSpace() {
+    if (!m_initialized) return 0;
+
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+
+    //------------------------------------------------------------
+    // Space until physical buffer end
+    //------------------------------------------------------------
+
+    size_t spaceToEnd = m_bufferEnd - m_writePtr;
+
+    //------------------------------------------------------------
+    // Buffer full?
+    //------------------------------------------------------------
+
+    if (m_isFull) goto exit;
+
+    //------------------------------------------------------------
+    // Empty buffer
+    //------------------------------------------------------------
+
+    if (m_isEmpty) {
+        m_writeSpace = std::min(MAX_TRANSFER_SIZE, spaceToEnd);
+        goto exit;
+    }
+
+    //------------------------------------------------------------
+    // Reserve buffer completely written?
+    //------------------------------------------------------------
+
+    if (spaceToEnd == 0) {
+        // Copy reserve area to beginning only if the reader
+        // has already released these bytes.
+
+        if (m_readPtr > (m_bufferBegin + m_reserveSize)) {
+            memcpy(m_bufferBegin, m_mainEnd, m_reserveSize);
+            m_writePtr = m_bufferBegin + m_reserveSize;
+        }
+        spaceToEnd = m_bufferEnd - m_writePtr;
+    }
+
+    //------------------------------------------------------------
+    // Writer before reader
+    //------------------------------------------------------------
+
+    if (m_writePtr < m_readPtr) {
+
+        // Reader is still inside reserve area.
+        // Writer must not enter reserve.
+
+        if (m_readPtr >= m_mainEnd) {
+            m_writeSpace = std::min(MAX_TRANSFER_SIZE, (size_t)(m_mainEnd - m_writePtr));
+        } else {
+            m_writeSpace = std::min(MAX_TRANSFER_SIZE, (size_t)(m_readPtr - m_writePtr));
+        }
+        goto exit;
+    }
+
+    //------------------------------------------------------------
+    // Writer behind reader
+    //------------------------------------------------------------
+
+    m_writeSpace = std::min(MAX_TRANSFER_SIZE, spaceToEnd);
+exit:
+    xSemaphoreGive(m_mutex);
+    return m_writeSpace;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void AudioBuffer::bytesWritten(size_t bytes) {
+    if (!m_initialized) return;
+
+    if (!bytes) return;
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+
+    //------------------------------------------------------------
+    // The caller must never report more bytes than previously
+    // returned by writeSpace().
+    //------------------------------------------------------------
+
+    if (bytes > m_writeSpace) {
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] writeSpace {}, bytes {}", __FILE__, __LINE__, m_writeSpace, bytes);
+        m_log.println();
+        bytes = m_writeSpace;
+    }
+
+    //------------------------------------------------------------
+    // Prevent writer from overtaking reader.
+    //------------------------------------------------------------
+
+    if (m_writePtr < m_readPtr) {
+        if (m_writePtr + bytes > m_readPtr) {
+            m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr overruns readPtr "
+                          "(write {}, read {}, bytes {})",
+                          __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_readPtr - m_bufferBegin, bytes);
+            m_log.println();
+            bytes = m_readPtr - m_writePtr;
+        }
+    }
+
+    //------------------------------------------------------------
+    // Never write behind the physical buffer.
+    //------------------------------------------------------------
+
+    if (m_writePtr + bytes > m_bufferEnd) {
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] writePtr overruns bufferEnd "
+                      "(write {}, end {}, bytes {})",
+                      __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
+
+        m_log.println();
+        bytes = m_bufferEnd - m_writePtr;
+    }
+
+    //------------------------------------------------------------
+    // Advance write pointer.
+    //------------------------------------------------------------
+
+    m_writePtr += bytes;
+
+    //------------------------------------------------------------
+    // Update state flags.
+    //------------------------------------------------------------
+
+    m_isEmpty = false;
+    if (m_writePtr == m_readPtr) m_isFull = true;
+    xSemaphoreGive(m_mutex);
+
+#ifdef DEBUG
+    sanityCheck();
+#endif
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t AudioBuffer::readSpace() {
+    if (!m_initialized) return 0;
+
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+
+    //------------------------------------------------------------
+    // Reader reached reserve area?
+    // Move it back into the beginning of the main buffer.
+    //------------------------------------------------------------
+
+    if (m_readPtr >= m_mainEnd && m_writePtr <= m_mainEnd) {
+        const size_t offset = m_readPtr - m_mainEnd;
+
+        if (m_writePtr > (m_bufferBegin + offset)) { m_readPtr = m_bufferBegin + offset; }
+    }
+
+    m_readSpace = 0;
+
+    //------------------------------------------------------------
+    // Empty buffer?
+    //------------------------------------------------------------
+
+    if (m_isEmpty) goto exit;
+
+    //------------------------------------------------------------
+    // Buffer completely full.
+    //------------------------------------------------------------
+
+    if (m_isFull) {
+        m_readSpace = std::min(MAX_TRANSFER_SIZE, (size_t)(m_bufferEnd - m_readPtr));
+        goto exit;
+    }
+
+    //------------------------------------------------------------
+    // Writer is ahead.
+    //------------------------------------------------------------
+
+    if (m_writePtr > m_readPtr) {
+        m_readSpace = std::min(MAX_TRANSFER_SIZE, (size_t)(m_writePtr - m_readPtr));
+        goto exit;
+    }
+
+    //------------------------------------------------------------
+    // Writer wrapped around.
+    //------------------------------------------------------------
+
+    m_readSpace = std::min(MAX_TRANSFER_SIZE, (size_t)(m_bufferEnd - m_readPtr));
+
+exit:
     xSemaphoreGive(m_mutex);
     return m_readSpace;
 }
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-void AudioBuffer::bytesWasRead(size_t br) {
-    if (!m_init) return;
+void AudioBuffer::bytesWasRead(size_t bytes) {
+    if (!m_initialized) return;
+
+    if (!bytes) return;
+
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
-    if (!br) goto end;
+    //------------------------------------------------------------
+    // The caller must never report more bytes than previously
+    // m_readSpace contains.
+    //------------------------------------------------------------
 
-    if (m_readSpace < br) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__, m_readSpace, br); // br must not be larger than the queried m_readSpace
+    if (bytes > m_readSpace) {
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] readSpace {}, bytes {}", __FILE__, __LINE__, m_readSpace, bytes);
         m_log.println();
-        vTaskDelay(100);
-        goto end;
+        bytes = m_readSpace;
     }
 
-    if (m_readPtr < m_writePtr && m_readPtr + br > m_writePtr) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readPtr overrruns writePtr, readPtr {}, writePtr {}, br {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
-        m_log.println();
-        m_readPtr = m_writePtr;
-        vTaskDelay(100);
-        goto end;
-    }
-    if (m_readPtr + br > m_buffEnd) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readPtr overrruns buffEnd, readPtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
-        m_log.println();
-        m_readPtr = m_buffEnd;
-        vTaskDelay(100);
-        goto end;
-    }
+    //------------------------------------------------------------
+    // Prevent reader from overtaking writer.
+    //------------------------------------------------------------
 
-    m_readPtr += br;
+    if (m_readPtr < m_writePtr) {
+        if (m_readPtr + bytes > m_writePtr) {
+            m_log.assignf( ANSI_ESC_RED "[{}:{}] readPtr overruns writePtr "
+                          "(read {}, write {}, bytes {})",
+                          __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_writePtr - m_bufferBegin, bytes);
 
-    if (br) {
-        if (m_readPtr == m_writePtr) {
-            m_isEmpty = true;
-            // m_log.assignf("readPtr {}, writePtr {}, br {}", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br); m_log.println();
+            m_log.println();
+            bytes = m_writePtr - m_readPtr;
         }
-        m_isFull = false;
     }
 
-end:
-    xSemaphoreGive(m_mutex);
-    return;
-}
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-uint8_t* AudioBuffer::getWritePtr() {
-    return m_writePtr;
-}
+    //------------------------------------------------------------
+    // Never read behind the physical buffer.
+    //------------------------------------------------------------
 
-uint8_t* AudioBuffer::getReadPtr() {
-    return m_readPtr;
-}
+    if (m_readPtr + bytes > m_bufferEnd) {
 
-void AudioBuffer::reset() {
-    m_writePtr = m_buffer.get();
-    m_readPtr = m_buffer.get();
-    m_isEmpty = true;
+        m_log.assignf( ANSI_ESC_RED "[{}:{}] readPtr overruns bufferEnd "
+                      "(read {}, end {}, bytes {})",
+                      __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
+
+        m_log.println();
+        bytes = m_bufferEnd - m_readPtr;
+    }
+
+    //------------------------------------------------------------
+    // Advance read pointer.
+    //------------------------------------------------------------
+
+    m_readPtr += bytes;
+
+    //------------------------------------------------------------
+    // Update state flags.
+    //------------------------------------------------------------
+
     m_isFull = false;
-    m_readSpace = 0;
-    m_writeSpace = min(m_maxRet, (size_t)(m_buffEnd - m_writePtr));
+    if (m_readPtr == m_writePtr) m_isEmpty = true;
+    xSemaphoreGive(m_mutex);
+
+#ifdef DEBUG
+    sanityCheck();
+#endif
 }
 
 void AudioBuffer::showStatus() {
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
     m_log.assignf("\nfilled {}, free {}\n", bufferFilled(), freeSpace());
     m_log.appendf("writeSpace {}, readSpace {}\n", writeSpace(), readSpace());
-    m_log.appendf("writePtr {}, readPtr {}\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.appendf("writePtr {}, readPtr {}\n", m_writePtr - m_bufferBegin, m_readPtr - m_bufferBegin);
     m_log.appendf("isEmpty {}, isFull {}\n\n", m_isEmpty, m_isFull);
     m_log.print();
+    xSemaphoreGive(m_mutex);
+}
+
+void AudioBuffer::sanityCheck() {
+    assert(m_bufferBegin);
+    assert(m_mainEnd == m_bufferBegin + m_mainSize);
+    assert(m_bufferEnd == m_mainEnd + m_reserveSize);
+    assert(m_readPtr >= m_bufferBegin);
+    assert(m_readPtr <= m_bufferEnd);
+    assert(m_writePtr >= m_bufferBegin);
+    assert(m_writePtr <= m_bufferEnd);
+    assert(!(m_isEmpty && m_isFull));
+    assert(m_readSpace <= MAX_TRANSFER_SIZE);
+    assert(m_writeSpace <= MAX_TRANSFER_SIZE);
+    if (m_readPtr == m_writePtr) { assert(m_isEmpty || m_isFull); }
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -582,13 +725,11 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     String post_body = "{"
                        "\"model\": \"" +
                        model + "\"," + "\"stream\": true," + // add
-                       "\"input\": \"" + input_clean + "\"," + "\"instructions\": \"" + instructions_clean + "\"," + "\"voice\": \"" + voice + "\"," + "\"response_format\": \"" + response_format +
-                       "\"," + "\"speed\": " + speed + "}";
+                       "\"input\": \"" + input_clean + "\"," + "\"instructions\": \"" + instructions_clean + "\"," + "\"voice\": \"" + voice + "\"," + "\"response_format\": \"" + response_format + "\"," + "\"speed\": " + speed + "}";
 
     String http_request =
         //  "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
-        "POST " + String(path) + " HTTP/1.1\r\n" + "Host: " + host.get() + "\r\n" + "Authorization: Bearer " + api_key + "\r\n" + "Accept-Encoding: identity;q=1,*;q=0\r\n" +
-        "User-Agent: nArija/1.0\r\n" + "Content-Type: application/json; charset=utf-8\r\n" + "Content-Length: " + post_body.length() +
+        "POST " + String(path) + " HTTP/1.1\r\n" + "Host: " + host.get() + "\r\n" + "Authorization: Bearer " + api_key + "\r\n" + "Accept-Encoding: identity;q=1,*;q=0\r\n" + "User-Agent: nArija/1.0\r\n" + "Content-Type: application/json; charset=utf-8\r\n" + "Content-Length: " + post_body.length() +
         "\r\n"
         //  + "Connection: close\r\n" + "\r\n"
         + "\r\n" + post_body + "\r\n";
@@ -2269,11 +2410,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
-                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}",
-                     m_ID3Hdr.SYLT.text_encoding == 0   ? "ASCII"
-                     : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8"
-                                                        : "?",
-                     m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
                 m_ID3Hdr.SYLT.content_type = syltBuff[5];
 
@@ -2505,9 +2642,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if (!m_m4aHdr.progressive) {
                 m_m4aHdr.mdat_startPos = m_m4aHdr.headerSize + 8;
                 m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16);
-                if (atom_struct) {
-                    AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat);
-                }
+                if (atom_struct) { AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat); }
                 info(*this, evt_info, "Audiofile is non progressive");
                 m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
                 m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
@@ -2990,13 +3125,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const TagInfo tags[] = {
             // List of all usual tags
-            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},      {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},           {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},
-            {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},      {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},          {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},
-            {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},   {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},      {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"},
-            {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},       {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
-            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},      {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"},        {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},
-            {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},   {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},        {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},
-            {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"}, {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
+            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},        {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},    {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},           {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},
+            {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},      {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},   {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},         {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},
+            {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"}, {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},      {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
+            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},        {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"}, {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},      {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},
+            {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},    {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},  {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"},       {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
@@ -3425,7 +3558,7 @@ void IRAM_ATTR Audio::playChunk() {
 i2swrite:
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
-    } else { // without resampler
+    } else {                                                                                                                                                   // without resampler
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
     }
 
@@ -3452,7 +3585,7 @@ i2swrite:
         m_validSamples = 0;
     }
 
-    if(m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
+    if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
 
     m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
 
@@ -5897,8 +6030,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_metadataBuff.alloc(4096 + 1, "m_metadataBuff");   // max 4096 + 1 for null terminator, just to make library code 'safe'
     m_httpRespHdrBuff.alloc(4096, "m_httpRespHdrBuff"); // enough space to store http response header
 
-    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_resamplesBuff.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
-        !m_fft_items.work.valid()) {
+    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_resamplesBuff.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() || !m_fft_items.work.valid()) {
         result = false;
         goto exit;
     }
@@ -6700,10 +6832,9 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_peakingEQ_f32(m_audio_items.coeffs[PEAKINGEQ], normFreqPEQ, m_audio_items.gain_peq_db, QS); // my own calc.
     dsps_biquad_gen_highShelf_f32(m_audio_items.coeffs[HIFGSHELF], normFreqHS, m_audio_items.gain_hs_db, QS);
 
-    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
-                    m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3], m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1],
-                    m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2],
-                    m_audio_items.coeffs[2][3], m_audio_items.coeffs[2][4]);
+    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0], m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3],
+                    m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1], m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2], m_audio_items.coeffs[2][3],
+                    m_audio_items.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
     memset(m_audio_items.state_biquad, 0, sizeof(m_audio_items.state_biquad));
 }
@@ -7829,7 +7960,7 @@ void Audio::performAudioTask() {
         gain_ramp();
         return;
     } else {
-        if(m_validSamples) playChunk(); // empty I2S DMA
+        if (m_validSamples) playChunk(); // empty I2S DMA
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
