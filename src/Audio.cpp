@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7a                                                                                                                            ";
+    Version 3.4.7b                                                                                                                            ";
 /*  Updated on: Jul 08, 2026
 
     Author: Wolle (schreibfaul1)
@@ -208,6 +208,7 @@ exit:
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::writeSpace() {
     if (!m_initialized) return 0;
+    m_writeSpace = 0;
 
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
