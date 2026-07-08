@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7 rc1a                                                                                                                            ";
-/*  Updated on: Jul 06, 2026
+    Version 3.4.7                                                                                                                            ";
+/*  Updated on: Jul 08, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -478,7 +478,6 @@ void Audio::setDefaults() {
     m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_audioFileSize = 0;
-    m_audioDataReadPtr = 0;
     m_avr_bitrate = 0;
     m_nominal_bitrate = 0;
     m_bytesNotConsumed = 0; // counts all not decodable bytes
@@ -3398,7 +3397,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    int BYTES_PER_FRAME = (m_f_output16Bit)? 2 * sizeof(int16_t) : 2 * sizeof(int32_t);
+    int BYTES_PER_SAMPLE = (m_f_output16Bit)? sizeof(int16_t) : sizeof(int32_t);
+    int BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3432,17 +3432,9 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
     } else { // without resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
-    }
-
-    if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
-    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_FRAME;
-    m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
-    if (m_validSamples <= 0) {
-        m_validSamples = 0;
-        m_plCh.count = 0;
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
     }
 
     // ---- statistics, bytes written to I2S (every 10s)
@@ -3457,18 +3449,24 @@ i2swrite:
     // cnt+= i2s_bytesConsumed;
     //-------------------------------------------
 
+    if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
+    // if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
+    if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
+
+    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_STEREOFRAME;
+
+    if (m_validSamples < 0) {
+        AUDIO_LOG_ERROR("valid samples counter is negative: {}", m_validSamples);
+        m_validSamples = 0;
+    }
+
+    if(m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
+
+    m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+
+    if (m_validSamples == 0) { m_plCh.count = 0; }
+
     return;
-exit:
-    if (m_plCh.err == ESP_OK)
-        return;
-    else if (m_plCh.err == ESP_ERR_INVALID_ARG)
-        AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
-    else if (m_plCh.err == ESP_ERR_TIMEOUT)
-        AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
-    else if (m_plCh.err == ESP_ERR_INVALID_STATE)
-        AUDIO_LOG_ERROR("I2S is not ready to write");
-    else
-        AUDIO_LOG_ERROR("i2s err {}", m_plCh.err);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
@@ -4109,7 +4107,6 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
         m_audioFilePosition = 0;
-        m_audioDataReadPtr = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
@@ -4120,7 +4117,6 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
-        m_audioDataReadPtr = m_prlf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4277,7 +4273,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (((InBuff.bufferFilled() > m_pwst.maxFrameSize * 2) || (m_f_allDataReceived)) && !m_f_stream) { // waiting for buffer filled
+    if (((InBuff.bufferFilled() > m_pwst.maxFrameSize) || (m_f_allDataReceived)) && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
@@ -4308,7 +4304,6 @@ void Audio::processWebFile() {
         m_audioFilePosition = 0;
         m_audioDataSize = 0;
         m_audioDataStart = 0;
-        m_audioDataReadPtr = 0;
         m_f_allDataReceived = false;
         m_pwf.timeout = 8000; // ms
         if (!initializeDecoder()) return;
@@ -4319,7 +4314,6 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
-        m_audioDataReadPtr = m_pwf.newFilePos - m_audioDataStart;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4413,6 +4407,7 @@ void Audio::processWebStreamTS() {
 
     m_pwsst.ts_packetStart = 0;
     m_pwsst.ts_packetLength = 0;
+nextRound:
     uint32_t availableBytes = m_client->available(); // available bytes in stream
 
     if (availableBytes) {
@@ -4509,7 +4504,7 @@ void Audio::processWebStreamTS() {
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4520,7 +4515,7 @@ void Audio::processWebStreamTS() {
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4542,7 +4537,7 @@ chunkFinished:
             info(*this, evt_info, "buffer filled in {} ms", filltime);
         }
     }
-
+    if (m_pwsst.f_nextRound) { goto nextRound; }
 exit:
     return;
 }
@@ -4651,7 +4646,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if (m_pwsHLS.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS * 2) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -4676,6 +4671,7 @@ void Audio::playAudioData() {
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
     if (m_validSamples) {
+        vTaskDelay(5);
         playChunk();
         return;
     } // guard, play samples first
@@ -4686,6 +4682,7 @@ void Audio::playAudioData() {
 
     if (m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
+        m_audioDataReadPtr = 0;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
         m_bytesNotConsumed = 0;
@@ -6261,7 +6258,7 @@ uint32_t Audio::getBitRate() {
 uint64_t Audio::getLastGranulePosition(uint8_t codec) {
     if (codec != CODEC_OPUS && codec != CODEC_VORBIS) return 0; // only opus or vorbis
     if (m_audioFileSize == 0) { return 0; }                     // only files
-
+    uint32_t     afp = m_audioFilePosition;
     uint64_t     granulePos = 0;
     ps_ptr<char> buff;
     buff.alloc(UINT16_MAX, "buff");
@@ -6275,8 +6272,7 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
         for (int j = 0; j < 8; j++) { granulePos |= ((uint64_t)buff[pos + 6 + j] << (j * 8)); }
     }
     AUDIO_LOG_DEBUG("granulePos {}", granulePos);
-
-    m_resumeFilePos = 0;
+    audioFileSeek(afp); // restore
     return granulePos;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7206,16 +7202,21 @@ bool Audio::readID3V1Tag() {
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
     if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
-        AUDIO_LOG_WARN("timeOffset not possible");
-        return 0;
+        AUDIO_LOG_WARN("timeOffset not possible (1)");
+        return -1;
     }
 
     // keep resumeFilePos within the audio data
     if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
 
-    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataSize - resumeFilePos, UINT16_MAX);
+    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataStart + m_audioDataSize - resumeFilePos, UINT16_MAX);
 
-    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}", m_resumeFilePos, m_audioDataStart);
+    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}, buffFillValue {}", m_resumeFilePos, m_audioDataStart, buffFillValue);
+
+    if (buffFillValue < InBuff.getMaxBlockSize()) {
+        AUDIO_LOG_WARN("timeOffset not possible (2)");
+        return -1;
+    }
 
     // --- enter critical area ------------------------------------------
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
@@ -7239,7 +7240,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     // ---------------------------------------------------------------------------
 
     auto fail = [&]() {
-        AUDIO_LOG_ERROR("can't set newFilePos");
+        AUDIO_LOG_ERROR("timeOffset not possible (3)");
         InBuff.bytesWasRead(0);
         m_f_lockInBuffer = false;
         xSemaphoreGive(mutex_audioTaskIsDecoding);
@@ -7288,6 +7289,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
     // --- leaf critical area ----------------------------------------------
     InBuff.bytesWasRead(offset);
+    m_audioDataReadPtr = (resumeFilePos + offset) - m_audioDataStart;
     m_f_lockInBuffer = false;
     xSemaphoreGive(mutex_audioTaskIsDecoding);
 
@@ -7380,9 +7382,9 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     return pos - m_resumeFilePos; // return the number of bytes to jump
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-uint32_t Audio::ogg_correctResumeFilePos() {
+int32_t Audio::ogg_correctResumeFilePos() {
     // The starting point is the next OggS magic word
-    if (InBuff.bufferFilled() < 0xFFFF) return 0;
+    if (InBuff.bufferFilled() < UINT16_MAX) return -1;
     vTaskDelay(1);
     // // AUDIO_LOG_INFO("in_resumeFilePos {}", resumeFilePos);
 
@@ -7534,8 +7536,9 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
             idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
             if (idx >= 28) { res = CODEC_VORBIS; }
 
-            m_lastGranulePosition = getLastGranulePosition(res); // VORBIS or OPUS only
-            audioFileSeek(0);                                    // if isFile?
+            if (m_streamType == ST_WEBFILE || m_dataMode == AUDIO_LOCALFILE) { // is file?
+                m_lastGranulePosition = getLastGranulePosition(res);           // VORBIS or OPUS only
+            }
             AUDIO_LOG_DEBUG("lastGranulePosition {}", m_lastGranulePosition);
         }
         return res;
@@ -7846,15 +7849,12 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
-        while (m_validSamples) {
-            vTaskDelay(20 / portTICK_PERIOD_MS);
-            playChunk();
-        } // I2S buffer full
         playAudioData();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
         return;
     } else {
+        if(m_validSamples) playChunk(); // empty I2S DMA
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
