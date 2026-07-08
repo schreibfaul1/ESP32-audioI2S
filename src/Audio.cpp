@@ -616,7 +616,6 @@ void Audio::setDefaults() {
     m_playlistFormat = FORMAT_NONE;
     m_m3u8Codec = CODEC_AAC;
 
-    m_validSamples = 0;
     m_audioCurrentTime = 0;
     m_audioFileDuration = 0;
     m_resumeFilePos = -1;
@@ -633,12 +632,10 @@ void Audio::setDefaults() {
     m_channels = 2;       // assume stereo #209
     m_ID3Size = 0;
     m_haveNewFilePos = 0;
-    m_validSamples = 0;
     m_M4A_chConfig = 0;
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_lastGranulePosition = 0;
-    m_validSamples = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
