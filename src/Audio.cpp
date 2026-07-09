@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7c                                                                                                                            ";
+    Version 3.4.7d                                                                                                                            ";
 /*  Updated on: Jul 09, 2026
 
     Author: Wolle (schreibfaul1)
@@ -71,7 +71,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //   |                  |<------maxAvailableBytes----->|<--------------------- writeSpace ----------------------->|
 //   ▼                  ▼                              ▼                                                          ▼
 //   ---------------------------------------------------------------------------------------------------------------
-//   |                         <--m_mainBuffSize-->                               |      <--m_resBuffSize -->     |
+//   |                           <--m_mainSize-->                                 |      <--m_resBuffSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
 //
@@ -81,7 +81,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //   |                                 |<-------writeSpace------>|<---------------maxAvailableBytes-------------->|
 //   ▼                                 ▼                         ▼                ▼                               ▼
 //   ---------------------------------------------------------------------------------------------------------------
-//   |                        <--m_mainBuffSize-->                                |      <--m_resBuffSize -->     |
+//   |                          <--m_mainSize-->                                  |      <--m_resBuffSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<------------filled------------->|<-------freeSpace------->|<----filled---->|
 //
@@ -119,7 +119,7 @@ void AudioBuffer::reset() {
     m_isFull = false;
 
     m_readSpace = 0;
-    m_writeSpace = 0;
+    m_writeSpace = std::min(MAX_TRANSFER_SIZE, m_mainSize);
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::setMaxBlocksize(size_t size) {
