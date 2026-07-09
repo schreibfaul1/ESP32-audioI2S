@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7b                                                                                                                            ";
-/*  Updated on: Jul 08, 2026
+    Version 3.4.7c                                                                                                                            ";
+/*  Updated on: Jul 09, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -490,6 +490,7 @@ Audio::Audio(uint8_t i2sPort) {
 
     m_f_I2S_init = false;
     mutex_playAudioData = xSemaphoreCreateMutex();
+    mutex_playChunk = xSemaphoreCreateMutex();
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
 
@@ -505,6 +506,7 @@ Audio::~Audio() {
     i2s_del_channel(m_i2s_tx_handle);
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
+    vSemaphoreDelete(mutex_playChunk);
     vSemaphoreDelete(mutex_audioTask);
     vSemaphoreDelete(mutex_audioTaskIsDecoding);
 }
@@ -636,6 +638,7 @@ void Audio::setDefaults() {
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_lastGranulePosition = 0;
+    m_validSamples = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -3376,6 +3379,10 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
+        while (m_validSamples) {
+            AUDIO_LOG_DEBUG("vs {}", m_validSamples);
+            playChunk();
+        } // empty I2S DMA
         destroy_decoder();
         m_f_lockInBuffer = false;
     }
@@ -3519,6 +3526,8 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
+    xSemaphoreTake(mutex_playChunk, 1 * configTICK_RATE_HZ);
+
     if (m_isFirstChunkCall) {
         m_isFirstChunkCall = false;
         m_plCh.count = 0;
@@ -3555,7 +3564,7 @@ void IRAM_ATTR Audio::playChunk() {
     if (!continueI2S) {
         m_validSamples = 0;
         m_plCh.count = 0;
-        return;
+        goto exit;
     }
     //------------------------------------------------------------------------------------------------------
 
@@ -3595,6 +3604,8 @@ i2swrite:
 
     if (m_validSamples == 0) { m_plCh.count = 0; }
 
+exit:
+    xSemaphoreGive(mutex_playChunk);
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7966,7 +7977,6 @@ void Audio::performAudioTask() {
         gain_ramp();
         return;
     } else {
-        if (m_validSamples) playChunk(); // empty I2S DMA
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
