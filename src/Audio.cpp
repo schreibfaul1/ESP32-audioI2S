@@ -6344,8 +6344,10 @@ bool Audio::setSampleRate(uint32_t sampRate) {
         AUDIO_LOG_WARN("Sample rate must not be smaller than 8kHz, found: {}", sampRate);
         return false;
     }
-    m_i2s_items.sampleRate = sampRate;
-    reconfigI2S();
+    if (m_i2s_items.sampleRate != sampRate) {
+        m_i2s_items.sampleRate = sampRate;
+        reconfigI2S();
+    }
     IIR_calculateCoefficients();
     return true;
 }
