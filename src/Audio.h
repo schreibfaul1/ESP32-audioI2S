@@ -473,7 +473,6 @@ class Audio {
     NetworkClientSecure clientsecure;
     NetworkClient*      m_client = nullptr;
 
-    SemaphoreHandle_t mutex_playAudioData;
     SemaphoreHandle_t mutex_playChunk;
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;
