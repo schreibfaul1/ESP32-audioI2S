@@ -489,7 +489,6 @@ void AudioBuffer::sanityCheck() {
 Audio::Audio(uint8_t i2sPort) {
 
     m_f_I2S_init = false;
-    mutex_playAudioData = xSemaphoreCreateMutex();
     mutex_playChunk = xSemaphoreCreateMutex();
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
@@ -505,7 +504,6 @@ Audio::~Audio() {
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
     stopAudioTask();
-    vSemaphoreDelete(mutex_playAudioData);
     vSemaphoreDelete(mutex_playChunk);
     vSemaphoreDelete(mutex_audioTask);
     vSemaphoreDelete(mutex_audioTaskIsDecoding);
@@ -671,7 +669,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         stopSong();
         return false;
     }
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     m_f_ssl = true;
@@ -766,7 +763,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     } else {
         AUDIO_LOG_WARN("Request {} failed!", host.get());
     }
-    xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -862,8 +858,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     ps_ptr<char> path;         // extension + '?' + parameter
     ps_ptr<char> rqh;          // request header
 
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
-
     auto dismantledHost = dismantle_host(c_host.get());
 
     //  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
@@ -956,7 +950,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_LOG_ERROR("Request \"{}\" failed!", c_host.get());
         m_f_running = false;
     }
-    xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1166,7 +1159,6 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
 
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     ps_ptr<char> c_path;
     ps_ptr<char> audioPath;
     bool         res = false;
@@ -1215,12 +1207,10 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
     res = true;
 
 exit:
-    xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::connecttospeech(const char* speech, const char* lang) {
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
@@ -1249,7 +1239,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     info(*this, evt_info, "connect to \"{}\"", host);
     if (!m_client->connect(host, 80)) {
         AUDIO_LOG_ERROR("Connection failed");
-        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
     m_client->print(req.get());
@@ -1260,7 +1249,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     m_dataMode = HTTP_RESPONSE_HEADER;
     m_lastHost.assign(host);
     m_currentHost.copy_from(host);
-    xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7323,100 +7311,68 @@ bool Audio::readID3V1Tag() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
+    int32_t  offset;
+    int32_t  bw;
+    uint32_t buffFillValue;
 
-    if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
+    if (m_controlCounter != 100) {
         AUDIO_LOG_WARN("timeOffset not possible (1)");
         return -1;
     }
-
-    // keep resumeFilePos within the audio data
-    if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
-
-    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataStart + m_audioDataSize - resumeFilePos, UINT16_MAX);
-
-    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}, buffFillValue {}", m_resumeFilePos, m_audioDataStart, buffFillValue);
-
-    if (buffFillValue < InBuff.getMaxBlockSize()) {
+    if (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {
         AUDIO_LOG_WARN("timeOffset not possible (2)");
+        return -1;
+    }
+    if ((m_codec == CODEC_M4A) && !m_stsz_position) {
+        AUDIO_LOG_WARN("timeOffset not possible (3)");
+        return -1;
+    }
+
+    if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart; // keep resumeFilePos within the audio data
+    buffFillValue = std::min<uint32_t>(m_audioDataStart + m_audioDataSize - resumeFilePos, UINT16_MAX);
+    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}, buffFillValue {}", m_resumeFilePos, m_audioDataStart, buffFillValue);
+    if (buffFillValue < InBuff.getMaxBlockSize()) {
+        AUDIO_LOG_WARN("timeOffset not possible (4)");
         return -1;
     }
 
     // --- enter critical area ------------------------------------------
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     m_f_lockInBuffer = true;
-
-    // ------- prepare InBuff ------
-    m_f_allDataReceived = false;
+    m_f_allDataReceived = false; // ------- prepare InBuff ------
     audioFileSeek(resumeFilePos);
     InBuff.reset();
-    int32_t bw = audioFileRead(InBuff.getWritePtr(), buffFillValue, 3000);
-    if (bw == buffFillValue)
-        InBuff.bytesWritten(bw);
-    else
-        return -1;
 
-    int32_t offset = 0;
-    int32_t newFilePos = resumeFilePos;
+    bw = audioFileRead(InBuff.getWritePtr(), buffFillValue, 3000);
+    if (bw != buffFillValue) goto fail;
 
-    // ---------------------------------------------------------------------------
-    // codec specific handling
-    // ---------------------------------------------------------------------------
-
-    auto fail = [&]() {
-        AUDIO_LOG_ERROR("timeOffset not possible (3)");
-        InBuff.bytesWasRead(0);
-        m_f_lockInBuffer = false;
-        xSemaphoreGive(mutex_audioTaskIsDecoding);
-        stopSong();
-        return -1;
-    };
+    InBuff.bytesWritten(bw);
 
     switch (m_codec) {
-        case CODEC_M4A:
-            offset = m4a_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
+        case CODEC_M4A: offset = m4a_correctResumeFilePos(); break;    //
+        case CODEC_WAV: offset = wav_correctResumeFilePos(); break;    // WAV have 4-Byte-Boundaries
+        case CODEC_MP3: offset = mp3_correctResumeFilePos(); break;    //
+        case CODEC_FLAC: offset = flac_correctResumeFilePos(); break;  //
+        case CODEC_VORBIS: offset = ogg_correctResumeFilePos(); break; // next OggS
+        case CODEC_OPUS: offset = ogg_correctResumeFilePos(); break;   // next OggS
+        default: offset = -1; break;                                   // unknoen coec
+    }
+    AUDIO_LOG_DEBUG("offset {}, readSpace {}", offset, InBuff.readSpace());
 
-        case CODEC_WAV:
-            // WAV have 4-Byte-Boundaries
-            offset = wav_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_MP3:
-            offset = mp3_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_FLAC:
-            offset = flac_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_VORBIS:
-            offset = ogg_correctResumeFilePos(); // next OggS
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_OPUS:
-            offset = ogg_correctResumeFilePos(); // next OggS
-            if (offset < 0) return fail();
-            break;
-
-        default: return fail();
+    if (offset >= 0) {
+        m_decoder->clear();
+        InBuff.bytesWasRead(offset);
+        m_audioDataReadPtr = (resumeFilePos + offset) - m_audioDataStart;
+        m_f_lockInBuffer = false;
+        xSemaphoreGive(mutex_audioTaskIsDecoding);
+        return resumeFilePos + offset;
     }
 
-    AUDIO_LOG_DEBUG("offset {}, readSpace {}", offset, InBuff.readSpace());
-    newFilePos += offset;
-    m_decoder->clear();
-
-    // --- leaf critical area ----------------------------------------------
-    InBuff.bytesWasRead(offset);
-    m_audioDataReadPtr = (resumeFilePos + offset) - m_audioDataStart;
-    m_f_lockInBuffer = false;
+fail:
+    AUDIO_LOG_ERROR("timeOffset not possible (3)");
     xSemaphoreGive(mutex_audioTaskIsDecoding);
-
-    return newFilePos;
+    stopSong();
+    return -1;
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
