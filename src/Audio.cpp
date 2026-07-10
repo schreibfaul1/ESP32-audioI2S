@@ -3048,8 +3048,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_controlCounter == M4A_ESDS) {                           // Elementary Stream Descriptor
-        ps_ptr<char> esds_buffer;                                 // read ESDS content in a buffer
+    if (m_controlCounter == M4A_ESDS) {                    // Elementary Stream Descriptor
+        ps_ptr<char> esds_buffer;                          // read ESDS content in a buffer
         esds_buffer.copy_from(data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
@@ -3915,43 +3915,91 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
-    uint8_t lines = m_playlistContent.size();
-    bool    f_entry = false;
-    int     pos = 0;
-    char*   host = nullptr;
+    /*
+        <asx version="3.0">
+            <title>Meine Wiedergabeliste</title>
+            <entry>
+                <title>Lied 1</title>
+                <author>Künstler 1</author>
+                <ref href="http://example.com/stream1.wma" />
+            </entry>
+            <entry>
+                <title>Lied 2</title>
+                <author>Künstler 2</author>
+                <ref href="http://example.com/stream2.wmv" />
+            </entry>
+        </asx>
+    */
+
+    struct ASXEntry {
+        ps_ptr<char> title;
+        ps_ptr<char> author;
+        ps_ptr<char> url;
+    };
+    std::deque<ASXEntry> entries;
+    bool                 inASX = false;
+    bool                 inEntry = false;
+    uint16_t             lines = m_playlistContent.size();
 
     for (int i = 0; i < lines; i++) {
-        int p1 = m_playlistContent[i].index_of("<", 0);
-        int p2 = m_playlistContent[i].index_of(">", 1);
-        if (p1 >= 0 && p2 > p1) { // #196 set all between "< ...> to lowercase
-            for (uint8_t j = p1; j < p2; j++) { m_playlistContent[i][j] = toLowerCase(m_playlistContent[i][j]); }
-        }
-        if (m_playlistContent[i].contains("<entry>")) f_entry = true; // found entry tag (returns -1 if not found)
-        if (f_entry) {
-            if (m_playlistContent[i].contains("ref href")) { //  <ref href="http://87.98.217.63:24112/stream" />
-                pos = m_playlistContent[i].index_of("http", 0);
-                if (pos > 0) {
-                    host = (m_playlistContent[i].get() + pos); // http://87.98.217.63:24112/stream" />
-                    int pos1 = indexOf(host, "\"", 0);         // http://87.98.217.63:24112/stream
-                    if (pos1 > 0) host[pos1] = '\0';           // Now we have an URL for a stream in host.
-                }
-            }
-        }
-        pos = m_playlistContent[i].index_of("<title>", 0);
-        if (pos >= 0) {
-            char* plsStationName = (m_playlistContent[i].get() + pos + 7); // remove <Title>
-            pos = indexOf(plsStationName, "</", 0);
-            if (pos >= 0) {
-                *(plsStationName + pos) = 0; // remove </Title>
-            }
-            info(*this, evt_name, "{}", plsStationName);
+        auto& line = m_playlistContent[i];
+        if (line.index_of_icase("<asx") >= 0) {
+            inASX = true;
+            continue;
         }
 
-        if (m_playlistContent[i].starts_with("http") && !f_entry) { // url only in asx
-            host = m_playlistContent[i].get();
+        if (line.index_of_icase("</asx") >= 0) {
+            inASX = false;
+            break;
+        }
+
+        if (!inASX) continue;
+
+        if (line.index_of_icase("<entry") >= 0) {
+            entries.emplace_back();
+            inEntry = true;
+            continue;
+        }
+
+        if (line.index_of_icase("</entry") >= 0) {
+            inEntry = false;
+            continue;
+        }
+
+        if (!inEntry) continue;
+
+        if (line.index_of_icase("<title") >= 0) {
+            int begin = line.index_of(">") + 1;
+            int len = line.last_index_of("<") - begin;
+            if (len > 0) entries.back().title = line.substr(begin, len);
+        }
+
+        if (line.index_of_icase("<author") >= 0) {
+            int begin = line.index_of_icase("<author") + 8;
+            int len = line.index_of_icase("</author") - begin;
+            if (len > 0) entries.back().author = line.substr(begin, len);
+        }
+
+        if (line.index_of_icase("<ref") >= 0) {
+            int begin = line.index_of("\"") + 1;
+            int len = line.last_index_of("\"") - begin;
+            if (len > 0) entries.back().url = line.substr(begin, len);
         }
     }
-    return host;
+
+    for (int i = 0; i < entries.size(); i++) {
+        AUDIO_LOG_INFO("title: {}", entries[i].title);
+        AUDIO_LOG_INFO("author: {}", entries[i].author);
+        AUDIO_LOG_INFO("url: {}", entries[i].url);
+    }
+
+    for (int i = 0; i < entries.size(); i++) {
+        if(entries[i].url.valid()){
+            info(*this, evt_name, "{}", entries[i].title);
+            return entries[i].url.c_get();
+        }
+    }
+    return "";
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
@@ -5319,6 +5367,8 @@ bool Audio::parseContentType(ps_ptr<char> ct) {
         {"application/hls+xml", CT_M3U8},
         {"application/x-mpegurl", CT_M3U8},
         {"application/octet-stream", CT_TXT},
+        {"application/asx", CT_TXT},
+        {"video/asf", CT_TXT},
         {"text/html", CT_TXT},
         {"text/plain", CT_TXT},
         {"application/json", CT_TXT},
