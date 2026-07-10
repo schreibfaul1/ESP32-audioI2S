@@ -57,7 +57,8 @@ class Decoder; // prototype
 // ——————————————————————————————————————————————————————————————————————————————
 
 class AudioBuffer {
-
+#define ANSI_ESC_RED   "\033[31m"
+#define ANSI_ESC_RESET "\033[0m"
   public:
     // ------------------------------------------------------------
     // Configuration
@@ -176,8 +177,6 @@ class AudioBuffer {
     // Internal helper
     //-------------------------------------------------------------
     void sanityCheck();
-
-#define ANSI_ESC_RED "\033[31m"
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -473,7 +472,7 @@ class Audio {
     NetworkClientSecure clientsecure;
     NetworkClient*      m_client = nullptr;
 
-    SemaphoreHandle_t mutex_playAudioData;
+    SemaphoreHandle_t mutex_playChunk;
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;
     TaskHandle_t      m_audioTaskHandle = nullptr;
@@ -562,6 +561,7 @@ class Audio {
     bool           m_f_firstCall = false;           // InitSequence for processWebstream and processLokalFile
     bool           m_f_firstLoop = false;           // InitSequence in loop()
     bool           m_f_firstPlayCall = false;       // InitSequence for playAudioData
+    bool           m_isFirstChunkCall = false;      // InitSequence for playChunk
     bool           m_f_ID3v1TagFound = false;       // ID3v1 tag found
     bool           m_f_chunked = false;             // Station provides chunked transfer
     bool           m_f_firstmetabyte = false;       // True if first metabyte (counter)
