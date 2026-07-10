@@ -4,7 +4,6 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-<<<<<< test
     Version 3.4.7e                                                                                                                            ";
 /*  Updated on: Jul 10, 2026
 
