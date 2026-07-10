@@ -3543,8 +3543,11 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    int BYTES_PER_SAMPLE = (m_f_output16Bit)? sizeof(int16_t) : sizeof(int32_t);
-    int BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
+    size_t BYTES_PER_SAMPLE = m_f_output16Bit ? sizeof(int16_t) : sizeof(int32_t);
+    size_t BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
+
+    void* writeBuffer = nullptr;
+    uint8_t* writePtr = nullptr;
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3577,10 +3580,13 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
+    writeBuffer = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? static_cast<void*>(m_resamplesBuff.get()) : static_cast<void*>(m_outBuff.get());
+    writePtr = static_cast<uint8_t*>(writeBuffer) + m_plCh.count;
+
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, writePtr, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
     } else {                                                                                                                                                   // without resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, writePtr, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
     }
 
     // ---- statistics, bytes written to I2S (every 10s)
@@ -3608,7 +3614,7 @@ i2swrite:
 
     if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
 
-    m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+    m_plCh.count += m_plCh.i2s_bytesConsumed;
 
     if (m_validSamples == 0) { m_plCh.count = 0; }
 
