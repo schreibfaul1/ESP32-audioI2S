@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7d                                                                                                                            ";
-/*  Updated on: Jul 09, 2026
+    Version 3.4.7e                                                                                                                            ";
+/*  Updated on: Jul 10, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -71,7 +71,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //   |                  |<------maxAvailableBytes----->|<--------------------- writeSpace ----------------------->|
 //   ▼                  ▼                              ▼                                                          ▼
 //   ---------------------------------------------------------------------------------------------------------------
-//   |                           <--m_mainSize-->                                 |      <--m_resBuffSize -->     |
+//   |                           <--m_mainSize-->                                 |      <--m_reserveSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
 //
@@ -81,7 +81,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //   |                                 |<-------writeSpace------>|<---------------maxAvailableBytes-------------->|
 //   ▼                                 ▼                         ▼                ▼                               ▼
 //   ---------------------------------------------------------------------------------------------------------------
-//   |                          <--m_mainSize-->                                  |      <--m_resBuffSize -->     |
+//   |                          <--m_mainSize-->                                  |      <--m_reserveSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<------------filled------------->|<-------freeSpace------->|<----filled---->|
 //
@@ -153,7 +153,7 @@ size_t AudioBuffer::bufferFilled() {
         }
 
         // should never happen
-        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state" ANSI_ESC_RESET, __FILE__, __LINE__);
         m_log.println();
         goto exit;
     }
@@ -190,7 +190,7 @@ size_t AudioBuffer::freeSpace() {
             goto exit;
         }
 
-        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state", __FILE__, __LINE__);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr == readPtr, invalid state" ANSI_ESC_RESET, __FILE__, __LINE__);
         m_log.println();
         goto exit;
     }
@@ -288,7 +288,7 @@ void AudioBuffer::bytesWritten(size_t bytes) {
     //------------------------------------------------------------
 
     if (bytes > m_writeSpace) {
-        m_log.assignf(ANSI_ESC_RED "[{}:{}] writeSpace {}, bytes {}", __FILE__, __LINE__, m_writeSpace, bytes);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] writeSpace {}, bytes {}" ANSI_ESC_RESET, __FILE__, __LINE__, m_writeSpace, bytes);
         m_log.println();
         bytes = m_writeSpace;
     }
@@ -300,7 +300,7 @@ void AudioBuffer::bytesWritten(size_t bytes) {
     if (m_writePtr < m_readPtr) {
         if (m_writePtr + bytes > m_readPtr) {
             m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr overruns readPtr "
-                                       "(write {}, read {}, bytes {})",
+                                       "(write {}, read {}, bytes {})" ANSI_ESC_RESET,
                           __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_readPtr - m_bufferBegin, bytes);
             m_log.println();
             bytes = m_readPtr - m_writePtr;
@@ -313,7 +313,7 @@ void AudioBuffer::bytesWritten(size_t bytes) {
 
     if (m_writePtr + bytes > m_bufferEnd) {
         m_log.assignf(ANSI_ESC_RED "[{}:{}] writePtr overruns bufferEnd "
-                                   "(write {}, end {}, bytes {})",
+                                   "(write {}, end {}, bytes {})" ANSI_ESC_RESET,
                       __FILE__, __LINE__, m_writePtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
 
         m_log.println();
@@ -406,7 +406,7 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
     //------------------------------------------------------------
 
     if (bytes > m_readSpace) {
-        m_log.assignf(ANSI_ESC_RED "[{}:{}] readSpace {}, bytes {}", __FILE__, __LINE__, m_readSpace, bytes);
+        m_log.assignf(ANSI_ESC_RED "[{}:{}] readSpace {}, bytes {}" ANSI_ESC_RESET, __FILE__, __LINE__, m_readSpace, bytes);
         m_log.println();
         bytes = m_readSpace;
     }
@@ -418,7 +418,7 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
     if (m_readPtr < m_writePtr) {
         if (m_readPtr + bytes > m_writePtr) {
             m_log.assignf(ANSI_ESC_RED "[{}:{}] readPtr overruns writePtr "
-                                       "(read {}, write {}, bytes {})",
+                                       "(read {}, write {}, bytes {})" ANSI_ESC_RESET,
                           __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_writePtr - m_bufferBegin, bytes);
 
             m_log.println();
@@ -433,7 +433,7 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
     if (m_readPtr + bytes > m_bufferEnd) {
 
         m_log.assignf(ANSI_ESC_RED "[{}:{}] readPtr overruns bufferEnd "
-                                   "(read {}, end {}, bytes {})",
+                                   "(read {}, end {}, bytes {})" ANSI_ESC_RESET,
                       __FILE__, __LINE__, m_readPtr - m_bufferBegin, m_bufferEnd - m_bufferBegin, bytes);
 
         m_log.println();
@@ -2255,21 +2255,21 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
             uint16_t cd_len = 0;
             if (textEncodingByte == 0)
-                cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx)); // iso8859_1
+                cd_len = 1 + content_descriptor.copy_from_iso8859_1(m_ID3Hdr.iBuff.get() + idx); // iso8859_1
             else if (textEncodingByte == 3)
-                cd_len = 1 + content_descriptor.copy_from((const char*)(m_ID3Hdr.iBuff.get() + idx)); // utf-8
+                cd_len = 1 + content_descriptor.copy_from(m_ID3Hdr.iBuff.get() + idx); // utf-8
             else
-                cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), isBigEndian); // utf-16
+                cd_len = 2 + content_descriptor.copy_from_utf16(m_ID3Hdr.iBuff.get() + idx, isBigEndian); // utf-16
             if (cd_len > 2) info(*this, evt_info, "Comment: text encoding; {}, language {}, content_descriptor: {}", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
 
             idx += cd_len;
             // AUDIO_LOG_INFO("Tag: {}, Length: {}, Format: {}", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
         } else {
             if (textEncodingByte == 0) {
-                tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx);
+                tmp.copy_from_iso8859_1(m_ID3Hdr.iBuff.get() + idx);
             } // ISO-8859-1
             else if (textEncodingByte == 1 || textEncodingByte == 2) {
-                tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian);
+                tmp.copy_from_utf16(m_ID3Hdr.iBuff.get() + idx, isBigEndian);
             } // UTF-16LE oder UTF-16BE
             else if (textEncodingByte == 3) {
                 tmp.copy_from(m_ID3Hdr.iBuff.get() + idx);
@@ -2292,7 +2292,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
             if (m_ID3Hdr.SYLT.size < len) return 0;
-            syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
+            syltBuff.copy_from(data, m_ID3Hdr.SYLT.size);
             m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
             if (m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
             if (m_ID3Hdr.SYLT.text_encoding > 3) {
@@ -2308,21 +2308,21 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             idx = 6;
             uint16_t cd_len = 0;
             if (m_ID3Hdr.SYLT.text_encoding == 0)
-                cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx)); // iso8859_1
+                cd_len = 1 + content_descriptor.copy_from_iso8859_1(syltBuff.get() + idx); // iso8859_1
             else if (m_ID3Hdr.SYLT.text_encoding == 3)
-                cd_len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx)); // utf-8
+                cd_len = 1 + content_descriptor.copy_from(syltBuff.get() + idx); // utf-8
             else
-                cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // utf-16
+                cd_len = 2 + content_descriptor.copy_from_utf16(syltBuff.get() + idx, isBigEndian); // utf-16
             if (cd_len > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
 
             idx += cd_len;
             while (idx < m_ID3Hdr.SYLT.size) {
                 if (m_ID3Hdr.SYLT.text_encoding == 0)
-                    idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx); // ISO8859_1
+                    idx += 1 + tmp.copy_from_iso8859_1(syltBuff.get() + idx); // ISO8859_1
                 else if (m_ID3Hdr.SYLT.text_encoding == 3)
-                    idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx); // UTF-8
+                    idx += 1 + tmp.copy_from(syltBuff.get() + idx); // UTF-8
                 else
-                    idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // UTF-16LE, UTF-16BE
+                    idx += 2 + tmp.copy_from_utf16(syltBuff.get() + idx, isBigEndian); // UTF-16LE, UTF-16BE
 
                 if (idx + 4 <= m_ID3Hdr.SYLT.size) {
                     if (tmp.starts_with("\n")) { tmp.remove_before(1); }
@@ -2373,9 +2373,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.remainingHeaderBytes = 0;
             return padding;
         }
-        tag.copy_from((const char*)data, 3);
+        tag.copy_from(data, 3);
         m_ID3Hdr.v22_tag_length = bigEndian(data + 3, 3) + 6;
-        value.copy_from((const char*)data + 7, min(m_ID3Hdr.v22_tag_length - 7, (size_t)1024));
+        value.copy_from(data + 7, min(m_ID3Hdr.v22_tag_length - 7, (size_t)1024));
 
         if (tag.starts_with("PIC")) { // image embedded in header
             size_t   pic_len = bigEndian(data + 3, 3);
@@ -2396,7 +2396,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.v22_tag_length;
                 if (m_ID3Hdr.SYLT.size < len) return 0;
-                syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
+                syltBuff.copy_from(data, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
@@ -2407,9 +2407,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 idx = 6;
 
                 if (m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3) { // utf-8
-                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx));
+                    len = content_descriptor.copy_from(syltBuff.get() + idx);
                 } else { // utf-16
-                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
+                    len = content_descriptor.copy_from_utf16(syltBuff.get() + idx, isBigEndian);
                 }
                 if (len > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
                 idx += len;
@@ -2417,10 +2417,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 while (idx < m_ID3Hdr.SYLT.size) {
                     // UTF-16LE, UTF-16BE
                     if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
+                        idx += tmp.copy_from_utf16(syltBuff.get() + idx, isBigEndian);
                     } else {
                         // ISO-8859-1 / UTF-8
-                        idx += tmp.copy_from((const char*)syltBuff.get() + idx);
+                        idx += tmp.copy_from(syltBuff.get() + idx);
                     }
                     if (idx + 4 <= m_ID3Hdr.SYLT.size) {
                         if (tmp.starts_with("\n")) tmp.remove_before(1);
@@ -2580,7 +2580,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         memset(&m_m4aHdr, 0, sizeof(audiolib::m4aHdr_t));
 
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
 
         if (atom_name.equals("ftyp")) {
             if (atom_struct) {
@@ -2615,7 +2615,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == M4A_CHK) { /* check  Tag */
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
 
         if (atom_name.equals("moov")) {
             if (!m_m4aHdr.mdat_seen) m_m4aHdr.progressive = true; // moov before mdat
@@ -2672,7 +2672,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         atom_size.big_endian(data, 4);
         m_m4aHdr.sizeof_moov -= atom_size.to_uint32(16);
 
@@ -2707,7 +2707,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         atom_size.big_endian(data, 4);
         m_m4aHdr.sizeof_trak -= atom_size.to_uint32(16);
 
@@ -2733,7 +2733,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         atom_size.big_endian(data, 4);
         m_m4aHdr.sizeof_mdia -= atom_size.to_uint32(16);
 
@@ -2768,7 +2768,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         atom_size.big_endian(data, 4);
         m_m4aHdr.sizeof_minf -= atom_size.to_uint32(16);
 
@@ -2794,17 +2794,17 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        ps_ptr<char> mdhd_buffer;                                 // read ESDS content in a buffer
-        mdhd_buffer.copy_from((char*)data, m_m4aHdr.sizeof_mdhd); // read MDHD content (without header)
-                                                                  //    mdhd_buffer.hex_dump(m_m4aHdr.sizeof_mdhd);
-                                                                  /* version;           1 Byte  offset 0   0 -> 32 bit, 1 -> 64 bit
-                                                                     flags[3];          3 Bytes offset 1
-                                                                     creation_time;     4 Bytes offset 4
-                                                                     modification_time; 4 Bytes offset 8
-                                                                     timescale;         4 Bytes offset 12
-                                                                     duration;          4 Bytes offset 16
-                                                                     language;          2 Bytes offset 20
-                                                                     pre_defined;       2 Bytes offset 22 */
+        ps_ptr<char> mdhd_buffer;                          // read ESDS content in a buffer
+        mdhd_buffer.copy_from(data, m_m4aHdr.sizeof_mdhd); // read MDHD content (without header)
+                                                           //    mdhd_buffer.hex_dump(m_m4aHdr.sizeof_mdhd);
+                                                           /* version;           1 Byte  offset 0   0 -> 32 bit, 1 -> 64 bit
+                                                              flags[3];          3 Bytes offset 1
+                                                              creation_time;     4 Bytes offset 4
+                                                              modification_time; 4 Bytes offset 8
+                                                              timescale;         4 Bytes offset 12
+                                                              duration;          4 Bytes offset 16
+                                                              language;          2 Bytes offset 20
+                                                              pre_defined;       2 Bytes offset 22 */
         m_m4aHdr.timescale = bigEndian((uint8_t*)mdhd_buffer.get() + 12, 4);
         m_m4aHdr.duration = bigEndian((uint8_t*)mdhd_buffer.get() + 16, 4);
         if (m_m4aHdr.timescale) {
@@ -2825,7 +2825,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         } // go back
 
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         m_m4aHdr.sizeof_stbl -= atom_size.to_uint32(16);
 
         if (atom_name.equals("stsd")) {
@@ -2862,7 +2862,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         } // go back
 
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         m_m4aHdr.sizeof_stsd -= atom_size.to_uint32(16);
 
         if (atom_name.equals("mp4a")) {
@@ -2923,7 +2923,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         uint32_t nr_of_chapters = bigEndian(data + 5, 4); // Number of chapters
         // data[9] uint64 timestamp
         uint8_t title_length = data[17];
-        title_name.copy_from((char*)data + 18, title_length);
+        title_name.copy_from(data + 18, title_length);
 
         info(*this, evt_info, "Number of chapters: {}", nr_of_chapters);
         info(*this, evt_info, "Chapter name: {}", title_name.c_get());
@@ -2960,7 +2960,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         }
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         m_m4aHdr.sizeof_mp4a -= atom_size.to_uint32(16);
 
         if (atom_name.equals("esds")) {
@@ -2986,7 +2986,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         } // go back
 
         atom_size.big_endian(data, 4);
-        atom_name.copy_from((const char*)data + 4, 4);
+        atom_name.copy_from(data + 4, 4);
         m_m4aHdr.sizeof_udta -= atom_size.to_uint32(16);
 
         if (atom_name.equals("meta")) {
@@ -3030,7 +3030,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             idx += 4;
         }
         atom_size.big_endian(data + idx, 4);
-        atom_name.copy_from((const char*)data + 4 + idx, 4);
+        atom_name.copy_from(data + 4 + idx, 4);
         m_m4aHdr.sizeof_meta -= atom_size.to_uint32(16);
 
         if (atom_name.equals("ilst")) {
@@ -3050,7 +3050,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == M4A_ESDS) {                           // Elementary Stream Descriptor
         ps_ptr<char> esds_buffer;                                 // read ESDS content in a buffer
-        esds_buffer.copy_from((char*)data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
+        esds_buffer.copy_from(data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
         // search for decoderConfigDescriptor (tag 0x04)
@@ -3129,7 +3129,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         uint32_t     consumed = 0;
         while (true) {
             atom_size.big_endian(data + consumed, 4);
-            atom_name.copy_from((const char*)data + 4 + consumed, 4);
+            atom_name.copy_from(data + 4 + consumed, 4);
             uint32_t as = atom_size.to_uint32(16);
             AUDIO_LOG_DEBUG("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), pos, as, pos + as);
             m_m4aHdr.ilst_pos += as;
@@ -3140,7 +3140,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             //     sub atom length   |   ©    d     a     y  |  sub sub atom length  |  d     a     t     a  | data type   1->UTF-8  |   reserved            |  2     0     2     2
 
             ps_ptr<char> sa; // sub atom
-            sa.copy_from((const char*)data + consumed - as, min(as, (uint32_t)1024));
+            sa.copy_from(data + consumed - as, min(as, (uint32_t)1024));
 
             char san[5] = {0};  // sub atom name
             char ssan[5] = {0}; // sub sub atom name (should be 'data')
@@ -3253,7 +3253,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     uint8_t extLen = 0;
     if (m_controlCounter == M4A_MDAT) { // mdat
         // ps_ptr<char> hd;
-        // hd.copy_from((const char*)data, 30);
+        // hd.copy_from(data, 30);
         // hd.hex_dump(30);
         m_audioDataSize = m_m4aHdr.sizeof_mdat; // length of this atom
 
