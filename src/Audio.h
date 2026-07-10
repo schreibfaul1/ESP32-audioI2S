@@ -57,7 +57,8 @@ class Decoder; // prototype
 // ——————————————————————————————————————————————————————————————————————————————
 
 class AudioBuffer {
-
+#define ANSI_ESC_RED   "\033[31m"
+#define ANSI_ESC_RESET "\033[0m"
   public:
     // ------------------------------------------------------------
     // Configuration
@@ -176,8 +177,6 @@ class AudioBuffer {
     // Internal helper
     //-------------------------------------------------------------
     void sanityCheck();
-
-#define ANSI_ESC_RED "\033[31m"
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -474,7 +473,6 @@ class Audio {
     NetworkClientSecure clientsecure;
     NetworkClient*      m_client = nullptr;
 
-    SemaphoreHandle_t mutex_playAudioData;
     SemaphoreHandle_t mutex_playChunk;
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;
