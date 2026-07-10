@@ -4,8 +4,10 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
+<<<<<< test
     Version 3.4.7e                                                                                                                            ";
 /*  Updated on: Jul 10, 2026
+
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -72,6 +74,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //   ▼                  ▼                              ▼                                                          ▼
 //   ---------------------------------------------------------------------------------------------------------------
 //   |                           <--m_mainSize-->                                 |      <--m_reserveSize -->     |
+
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
 //
