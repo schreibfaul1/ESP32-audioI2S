@@ -3690,19 +3690,17 @@ bool Audio::readPlayListData() {
 
     int32_t      chunkLen = 0;
     uint16_t     readedBytes = 0;
+    uint16_t     count = 0;
     ps_ptr<char> pl;
     uint32_t     ctl = 0;
     size_t       plSize = 0;
+    uint32_t     t = millis();
 
-    auto detectTimeout = [&]() -> bool {
-        uint32_t t = millis();
-        while (!m_client->available()) {
-            vTaskDelay(2);
-            if (t + 2000 < millis()) {
-                AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
-                if (m_f_chunked) getChunkSize(0, true);
-                return true;
-            }
+    auto detectTimeout = [&](uint32_t t, ps_ptr<char> l) -> bool {
+        if (t + 2000 < millis()) {
+            AUDIO_LOG_WARN("Timeout while readPlayListData, {}", l);
+            if (m_f_chunked) getChunkSize(0, true);
+            return true;
         }
         return false;
     };
@@ -3712,6 +3710,12 @@ bool Audio::readPlayListData() {
         goto exit;
     }
 
+    t = millis();
+    while (!m_client->available()) {
+        vTaskDelay(2);
+        if(detectTimeout(t, "!m_client->available")) goto exit;
+    }
+
     if (m_f_chunked) {
         getChunkSize(0, true);
         chunkLen = getChunkSize(&readedBytes);
@@ -3719,33 +3723,33 @@ bool Audio::readPlayListData() {
             AUDIO_LOG_ERROR("chunked datatransfer but chunkLen is invalid");
             goto exit;
         }
-        plSize = chunkLen;
+        plSize = chunkLen; // chunkSize is known
+    } else if (plSize) {
+        plSize = m_audioFileSize; // fileSize is known
     } else {
-        plSize = m_audioFileSize;
-    }
-
-    if (!plSize) { // maybe playlist without contentLength or chunkSize
-        AUDIO_LOG_ERROR("file size is not given");
-        goto exit;
+        plSize = m_client->available(); // only avBytes is known
     }
 
     pl.alloc(2048, "pl");
     // delete all memory in m_playlistContent
-    if (m_playlistFormat == FORMAT_M3U8 && !psramFound()) { AUDIO_LOG_ERROR("m3u8 playlists requires PSRAM enabled!"); }
-    vector_clear_and_shrink(m_playlistContent);
+    m_playlistContent.clear();
 
-    while (true) { // outer while
-        uint32_t ctime = millis();
-        uint32_t timeout = 2000; // ms
-
+    t = millis();
+    while (true) {  // outer while
+        if (detectTimeout(t, "outer while")) goto exit;
         pl.clear(); // playlistLine
 
         while (true) { // inner while
+            if (detectTimeout(t, "inner while")) goto exit;
             uint16_t pos = 0;
             while (true) { // super inner while :-))
-                uint32_t t = millis();
+                if (detectTimeout(t, "super inner while")) goto exit;
+
                 if (ctl == plSize) break;
-                if (detectTimeout()) goto exit;
+                if (plSize == 0 && client.available() == 0) { // have no contentlength and no chunklen
+                    pl[pos] = '\0';
+                    break;
+                }
                 pl[pos] = audioFileRead();
                 ctl++;
                 if (pl[pos] == '\n') {
@@ -3773,7 +3777,6 @@ bool Audio::readPlayListData() {
                 break;
             }
             if (ctl == plSize) break;
-            if (detectTimeout()) goto exit;
         } // inner while
         AUDIO_LOG_DEBUG("PL: {}", pl.c_get());
         if (pl.starts_with_icase("<!DOCTYPE")) {
@@ -3835,46 +3838,81 @@ exit:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 const char* Audio::parsePlaylist_M3U() {
 
+    /*
+        #EXTM3U
+        #EXTINF:-1,DONAU 3 FM
+        https://edge64.streamonkey.net/donau3fm-live/stream/aacp?aggregator=smk-m3u-aac
+    or
+        #EXTM3U
+        #EXTINF:0,antenne 1
+        https://streams.antenne1.de/a1stg/mp3-128/m3u/
+    or
+        https://dispatcher.rndfnk.com/br/br1/franken/mp3/mid
+    or
+        http://user:password@server.com:8080/live/stream1.ts
+
+    */
+
+    bool         isM3U = false;
+    ps_ptr<char> host = {};
+
     uint8_t lines = m_playlistContent.size();
-    int     pos = 0;
-    char*   host = nullptr;
+
+    for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
 
     for (int i = 0; i < lines; i++) {
-        // m_playlistContent[i].println();
-        if (m_playlistContent[i].contains("#EXTINF:")) { // Info?
-            pos = m_playlistContent[i].index_of(",");    // Comma in this line?
-            if (pos > 0) {
-                // Show artist and title if present in metadata
-                info(*this, evt_id3data, "{}", m_playlistContent[i].get() + pos + 1);
+        if (m_playlistContent[i].contains("#EXTM3U")) {
+            isM3U = true;
+            continue;
+        }
+        if (isM3U) {
+            if (m_playlistContent[i].contains("#EXTINF:")) {
+                int16_t pos = m_playlistContent[i].index_of(","); // Comma in this line?
+                if (pos > 0) {
+                    // Show artist and title if present in metadata
+                    info(*this, evt_id3data, "{}", m_playlistContent[i].substr(pos + 1));
+                }
             }
-            continue;
-        }
-        if (m_playlistContent[i].starts_with("#")) { // Commentline?
-            continue;
-        }
-
-        pos = m_playlistContent[i].index_of("http://:@", 0); // ":@"??  remove that!
-        if (pos >= 0) {
-            AUDIO_LOG_INFO("Entry in playlist found: {}", (m_playlistContent[i].get() + pos + 9));
-            host = m_playlistContent[i].get() + pos + 9;
-            break;
-        }
-        // AUDIO_LOG_INFO("Entry in playlist found: {}", pl);
-        pos = m_playlistContent[i].index_of("http", 0); // Search for "http"
-        if (pos >= 0) {                                 // Does URL contain "http://"?
-                                                        //    AUDIO_LOG_ERROR("{} pos={}", m_playlistContent[i], pos);
-            host = m_playlistContent[i].get() + pos;    // Yes, set new host
-            break;
+            if (m_playlistContent[i].starts_with("#")) { // Commentline?
+                continue;
+            }
+            if (m_playlistContent[i].index_of("http") >= 0) {
+                host = m_playlistContent[i];
+                host.trim();
+                return host.c_get();
+            }
         }
     }
-    //    vector_clear_and_shrink(m_playlistContent);
-    return host;
+    return "";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 const char* Audio::parsePlaylist_PLS() {
+    /*
+        [playlist]
+        NumberOfEntries=2
+        Version=2
+
+        File1=D:\Eigene Musik\album.flac
+        Title1=Local Album
+        Length1=3487
+
+        File2=http://streamexample.com:80
+        Title2=My Favorite Online Radio
+        Length1=-1
+    */
+
+    // struct ASXEntry {
+    //     ps_ptr<char> title;
+    //     ps_ptr<char> file;
+    //     ps_ptr<char> lenght;
+    // };
+    // std::deque<ASXEntry> entries;
+
     uint8_t lines = m_playlistContent.size();
     int     pos = 0;
     char*   host = nullptr;
+
+    for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("PLS Line {}: {}", i, m_playlistContent[i]); }
 
     for (int i = 0; i < lines; i++) {
         if (i == 0) {
@@ -3994,7 +4032,7 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     }
 
     for (int i = 0; i < entries.size(); i++) {
-        if(entries[i].url.valid()){
+        if (entries[i].url.valid()) {
             info(*this, evt_name, "{}", entries[i].title);
             return entries[i].url.c_get();
         }
