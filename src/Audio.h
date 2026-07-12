@@ -309,9 +309,9 @@ class Audio {
     void                     processWebStreamHLS();
     void                     playAudioData();
     bool                     readPlayListData();
-    const char*              parsePlaylist_M3U();
-    const char*              parsePlaylist_PLS();
-    const char*              parsePlaylist_ASX();
+    ps_ptr<char>             parsePlaylist_M3U();
+    ps_ptr<char>             parsePlaylist_PLS();
+    ps_ptr<char>             parsePlaylist_ASX();
     ps_ptr<char>             parsePlaylist_M3U8();
     uint16_t                 accomplish_m3u8_url();
     int16_t                  prepare_first_m3u8_url(ps_ptr<char>& playlistBuff);
