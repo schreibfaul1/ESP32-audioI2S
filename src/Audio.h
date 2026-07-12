@@ -255,6 +255,7 @@ class Audio {
     uint32_t         stopSong();
     void             forceMono(bool m);
     void             setOutputSampleRate(OutputSR_t sr);
+    void             setOutput16Bit(bool f16);
     void             setBalance(float balance = 0.0f);
     void             setVolumeSteps(uint8_t steps);
     uint8_t          getVolumeSteps();
@@ -554,6 +555,7 @@ class Audio {
     uint32_t       m_haveNewFilePos = 0;            // user changed the file position
     bool           m_f_alt_user_agent = false;      // use default or alternative user agent
     bool           m_f_I2S_init = false;            //
+    bool           m_f_output16Bit = false;         // output 16 bit samples
     bool           m_f_unsync = false;              // set within ID3 tag but not used
     bool           m_f_exthdr = false;              // ID3 extended header
     bool           m_f_ssl = false;                 //
