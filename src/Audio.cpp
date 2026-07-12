@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7f                                                                                                                            ";
+    Version 3.4.7g                                                                                                                            ";
 /*  Updated on: Jul 12, 2026
 
     Author: Wolle (schreibfaul1)
@@ -514,7 +514,10 @@ size_t RingBuffer::getBufsize() const {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t RingBuffer::init() {
-    m_buffer.alloc_array(m_bufSize, "RingBuffer");
+    if (!m_buffer.alloc_array(m_bufSize, "RingBuffer")) {
+        m_init = false;
+        return 0;
+    }
     m_log.set_name("\nRingBuffer_Log");
     reset();
     m_init = true;
@@ -3638,7 +3641,7 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
-    if (m_validSamples == 0) return; // nothing to do
+    if (m_validSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
     xSemaphoreTake(mutex_playChunk, 1 * configTICK_RATE_HZ);
 
@@ -3655,7 +3658,7 @@ void IRAM_ATTR Audio::playChunk() {
     constexpr size_t BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
 
     int32_t* sourceBuff = nullptr;
-    size_t    sourceWords = 0;
+    size_t   sourceWords = 0;
 
     if (m_plCh.count == 0) {
         audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3688,32 +3691,30 @@ void IRAM_ATTR Audio::playChunk() {
         //------------------------------------------------------------------------------------------------------
     }
 
-    if (!sourceBuff) {
-        sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get();
-    }
+    if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
 
     sourceWords = (size_t)m_validSamples * 2;
 
     {
         const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
-        size_t       wordsToCopy = min(I2SBuff.writeSpace(), remainingWords);
+        size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
         wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
 
         if (wordsToCopy > 0) {
-        //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", I2SBuff.writeSpace(), m_validSamples, wordsToCopy);
+            //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
 
-            memcpy(I2SBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
-            I2SBuff.bytesWritten(wordsToCopy);
+            memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
+            SamplesBuff.bytesWritten(wordsToCopy);
             m_plCh.count += wordsToCopy;
         }
     }
 
-    if (I2SBuff.readSpace() > 0) {
-        size_t readWords = I2SBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
+    if (SamplesBuff.readSpace() > 0) {
+        size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
-            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, I2SBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
-        //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", I2SBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
-            I2SBuff.bytesRead(m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
+            //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            SamplesBuff.bytesRead(m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
         }
     }
 
@@ -3722,13 +3723,13 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
 
-    if (m_plCh.count >= sourceWords && I2SBuff.bufferFilled() == 0) {
+    if (m_plCh.count >= sourceWords) {
         m_plCh.count = 0;
         m_validSamples = 0;
     }
 
     if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
-AUDIO_LOG_WARN("buff filled {}", I2SBuff.bufferFilled());
+    //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
 exit:
     xSemaphoreGive(mutex_playChunk);
     return;
@@ -5038,11 +5039,11 @@ void Audio::playAudioData() {
         vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
-    if (m_validSamples) {
+    if (m_validSamples || SamplesBuff.bufferFilled()) {
         vTaskDelay(5);
         playChunk();
-        return;
     } // guard, play samples first
+    if (m_validSamples) return;
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
@@ -6265,8 +6266,12 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
 
-    I2SBuff.setBufsize(256000);
-    I2SBuff.init();
+    SamplesBuff.setBufsize(256000);
+    if (SamplesBuff.init() == 0) {
+        AUDIO_LOG_ERROR("RingBuffer allocation failed");
+        result = false;
+        goto exit;
+    }
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");

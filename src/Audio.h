@@ -217,7 +217,7 @@ class RingBuffer {
 class Audio {
   private:
     AudioBuffer InBuff; // instance of input buffer
-    RingBuffer  I2SBuff;
+    RingBuffer  SamplesBuff;
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -484,7 +484,7 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 32;                // number of I2S DMA buffer
+        uint16_t DMA_DESC_NUM = 16;                // number of I2S DMA buffer
         uint16_t DMA_FRAME_NUM = 256;              // number of frames in one DMA buffer
         uint16_t FREQ_LS_HZ = 500;                 // IIR Filter, lowshelf
         uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter, peakingEQ
