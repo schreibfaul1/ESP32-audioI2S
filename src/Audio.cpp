@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7e                                                                                                                            ";
-/*  Updated on: Jul 10, 2026
+    Version 3.4.7f                                                                                                                            ";
+/*  Updated on: Jul 12, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3622,9 +3622,9 @@ void Audio::loop() {
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
-                if (m_playlistFormat == FORMAT_M3U) httpPrint(parsePlaylist_M3U());
-                if (m_playlistFormat == FORMAT_PLS) httpPrint(parsePlaylist_PLS());
-                if (m_playlistFormat == FORMAT_ASX) httpPrint(parsePlaylist_ASX());
+                if (m_playlistFormat == FORMAT_M3U) httpPrint(parsePlaylist_M3U().c_get());
+                if (m_playlistFormat == FORMAT_PLS) httpPrint(parsePlaylist_PLS().c_get());
+                if (m_playlistFormat == FORMAT_ASX) httpPrint(parsePlaylist_ASX().c_get());
                 break;
             case AUDIO_DATA:
                 if (m_streamType == ST_WEBSTREAM) processWebStream();
@@ -3836,7 +3836,7 @@ exit:
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-const char* Audio::parsePlaylist_M3U() {
+ps_ptr<char> Audio::parsePlaylist_M3U() {
 
     /*
         #EXTM3U
@@ -3886,7 +3886,7 @@ const char* Audio::parsePlaylist_M3U() {
     return "";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-const char* Audio::parsePlaylist_PLS() {
+ps_ptr<char> Audio::parsePlaylist_PLS() {
     /*
         [playlist]
         NumberOfEntries=2
@@ -3963,13 +3963,13 @@ const char* Audio::parsePlaylist_PLS() {
 
         if (file.valid()) {
             if (entries[i].title.valid()) info(*this, evt_name, "{}", entries[i].title);
-            return entries[i].file.c_get();
+            return entries[i].file;
         }
     }
     return "";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
+ps_ptr<char> Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     /*
         <asx version="3.0">
             <title>Meine Wiedergabeliste</title>
