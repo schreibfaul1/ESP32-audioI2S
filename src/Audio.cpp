@@ -3655,9 +3655,11 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.err = ESP_OK;
 
     constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
+    constexpr size_t MIN_SECOND_ROUND_WORDS = 128; // Avoid extra round for tiny remainders
 
     int32_t* sourceBuff = nullptr;
     size_t   sourceWords = 0;
+    bool     secondRoundDone = false;
 
     if (m_plCh.count == 0) {
         audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3691,36 +3693,43 @@ void IRAM_ATTR Audio::playChunk() {
     }
 
     if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
-
     sourceWords = (size_t)m_validSamples * 2;
 
-    {
-        const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
-        size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
-        wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
-        if (wordsToCopy > 0) {
-            //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
+write_round: {
+    const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
+    size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
+    wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
+    if (wordsToCopy > 0) {
+        //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
 
-            memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
-            SamplesBuff.bytesWritten(wordsToCopy);
-            m_plCh.count += wordsToCopy;
-            
-        }
+        memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
+        SamplesBuff.bytesWritten(wordsToCopy);
+        m_plCh.count += wordsToCopy;
     }
+}
 
     if (SamplesBuff.readSpace() > 0) {
-    next:
+    read_round:                                                               //
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
             m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
             //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
-            SamplesBuff.bytesRead(m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
-            if (readWords == m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE) {
+            size_t consumedWords = m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+            SamplesBuff.bytesRead(consumedWords);
+            if (readWords == consumedWords) {
                 if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
                     // AUDIO_LOG_WARN("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
-                    goto next;
+                    goto read_round;
                 }
             }
+        }
+    }
+
+    if (!secondRoundDone && m_plCh.count < sourceWords && SamplesBuff.readSpace() < SamplesBuff.freeSpace()) {
+        size_t remainingWords = sourceWords - m_plCh.count;
+        if (remainingWords >= MIN_SECOND_ROUND_WORDS) {
+            secondRoundDone = true;
+            goto write_round;
         }
     }
 
@@ -3794,7 +3803,8 @@ void Audio::loop() {
             case AUDIO_PLAYLISTINIT:
                 if (readPlayListData())
                     break;
-                else { // readPlayListData == false means connect to m3u8 URL
+                else {           // readPlayListData == false means connect to m3u8 URL
+                    playChunk(); // fill the I2S-DMA before
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                     break;
@@ -3802,6 +3812,7 @@ void Audio::loop() {
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
                 if (host.valid()) { // host contains the next playlist URL
+                    playChunk();    // fill the I2S-DMA before
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
@@ -3810,6 +3821,7 @@ void Audio::loop() {
                         break;
                     }
                     if (m_f_stream) m_lVar.no_host_timer = millis() + 10000;
+                    playChunk(); // fill the I2S-DMA before
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
@@ -6272,7 +6284,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
 
-    SamplesBuff.setBufsize(25600);
+    SamplesBuff.setBufsize(32768);
     if (SamplesBuff.init() == 0) {
         AUDIO_LOG_ERROR("RingBuffer allocation failed");
         result = false;
