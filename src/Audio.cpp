@@ -484,6 +484,132 @@ void AudioBuffer::sanityCheck() {
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  R I N G B U F F E R  📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+// RingBuffer will be allocated in PSRAM
+//
+//  start            m_readPtr                    m_writePtr                                                     end
+//   |                  |<----------- m_used --------->|<--------------------- writeSpace ----------------------->|
+//   ▼                  ▼                              ▼                                                          ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                                           <--m_bufSize-->                                                   |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<---freeSpace---->|<------------filled---------->|<-----------------------freeSpace------------------------->|
+//
+//
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+RingBuffer::RingBuffer() {}
+
+RingBuffer::~RingBuffer() {
+    m_buffer.reset();
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::setBufsize(size_t size) {
+    m_bufSize = size;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::getBufsize() const {
+    return m_bufSize;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::init() {
+    m_buffer.alloc_array(m_bufSize, "RingBuffer");
+    m_log.set_name("\nRingBuffer_Log");
+    reset();
+    m_init = true;
+    return m_bufSize;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::reset() {
+    m_readIndex = 0;
+    m_writeIndex = 0;
+    m_used = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::freeSpace() const {
+    if (!m_init) return 0;
+    return m_bufSize - m_used;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::bufferFilled() const {
+    if (!m_init) return 0;
+    return m_used;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::writeSpace() const {
+    if (!m_init) {
+        log_e("Buffer is not initialized");
+        return 0;
+    }
+    if (m_used == m_bufSize) return 0;
+
+    if (m_writeIndex >= m_readIndex) {
+        size_t s = m_bufSize - m_writeIndex;
+        if (m_readIndex == 0) return std::min(s, freeSpace());
+        return s;
+    }
+    return m_readIndex - m_writeIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::readSpace() const {
+    if (!m_init) return 0;
+    if (m_used == 0) return 0;
+    if (m_readIndex < m_writeIndex) return m_writeIndex - m_readIndex;
+    return m_bufSize - m_readIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t* RingBuffer::getWritePtr() {
+    if (!m_init) return nullptr;
+    return m_buffer.get() + m_writeIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t* RingBuffer::getReadPtr() {
+    if (!m_init) return nullptr;
+    return m_buffer.get() + m_readIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+bool RingBuffer::bytesWritten(size_t bytes) {
+    if (!m_init) return false;
+    if (bytes > writeSpace()) {
+        m_log.assignf("bytesWritten({}) > writeSpace({})", bytes, writeSpace());
+        m_log.println();
+        return false;
+    }
+    m_writeIndex += bytes;
+    if (m_writeIndex == m_bufSize) m_writeIndex = 0;
+    m_used += bytes;
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+bool RingBuffer::bytesRead(size_t bytes) {
+    if (!m_init) return false;
+    if (bytes > readSpace()) {
+        m_log.assignf("bytesRead({}) > readSpace({})", bytes, readSpace());
+        m_log.println();
+        return false;
+    }
+    m_readIndex += bytes;
+    if (m_readIndex == m_bufSize) m_readIndex = 0;
+    m_used -= bytes;
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::showStatus() {
+    m_log.assignf("\n"
+                  "Initialized  : {}\n"
+                  "BufferSize   : {}\n"
+                  "Used         : {}\n"
+                  "Free         : {}\n"
+                  "ReadSpace    : {}\n"
+                  "WriteSpace   : {}\n"
+                  "ReadIndex    : {}\n"
+                  "WriteIndex   : {}\n\n",
+                  m_init, m_bufSize, m_used, freeSpace(), readSpace(), writeSpace(), m_readIndex, m_writeIndex);
+    m_log.print();
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O   📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::Audio(uint8_t i2sPort) {
@@ -3525,73 +3651,84 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr int BYTES_PER_SAMPLE = sizeof(int32_t);
-    constexpr int BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
+    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
+    constexpr size_t BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
 
-    if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
-    audio_process_raw_samples(m_outBuff.get(), m_validSamples);
-    //------------------------------------------------------------------------------------------
+    int32_t* sourceBuff = nullptr;
+    size_t    sourceWords = 0;
+
+    if (m_plCh.count == 0) {
+        audio_process_raw_samples(m_outBuff.get(), m_validSamples);
+        //------------------------------------------------------------------------------------------
+        {
+            const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
+            for (int i = 0; i < m_validSamples; i++) {
+                if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
+                if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
+                if (applyGain) Gain(&m_outBuff[i * 2]);
+            }
+        }
+        if (settings.SPECTRUM) processSpectrum();
+        if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
+        //------------------------------------------------------------------------------------------
+        if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
+            m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+            audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
+            sourceBuff = m_resamplesBuff.get();
+        } else {
+            audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+            sourceBuff = m_outBuff.get();
+        }
+        //------------------------------------------------------------------------------------------------------
+        if (!continueI2S) {
+            m_validSamples = 0;
+            m_plCh.count = 0;
+            goto exit;
+        }
+        //------------------------------------------------------------------------------------------------------
+    }
+
+    if (!sourceBuff) {
+        sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get();
+    }
+
+    sourceWords = (size_t)m_validSamples * 2;
+
     {
-        const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
-        for (int i = 0; i < m_validSamples; i++) {
-            if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
-            if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
-            if (applyGain) Gain(&m_outBuff[i * 2]);
+        const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
+        size_t       wordsToCopy = min(I2SBuff.writeSpace(), remainingWords);
+        wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
+
+        if (wordsToCopy > 0) {
+        //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", I2SBuff.writeSpace(), m_validSamples, wordsToCopy);
+
+            memcpy(I2SBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
+            I2SBuff.bytesWritten(wordsToCopy);
+            m_plCh.count += wordsToCopy;
         }
     }
-    if (settings.SPECTRUM) processSpectrum();
-    if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
-    //------------------------------------------------------------------------------------------
-    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
-        m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
-        audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
-    } else {
-        audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
-    }
-    //------------------------------------------------------------------------------------------------------
-    if (!continueI2S) {
-        m_validSamples = 0;
-        m_plCh.count = 0;
-        goto exit;
-    }
-    //------------------------------------------------------------------------------------------------------
 
-i2swrite:
-    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
-    } else {                                                                                                                                                   // without resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
+    if (I2SBuff.readSpace() > 0) {
+        size_t readWords = I2SBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
+        if (readWords > 0) {
+            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, I2SBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
+        //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", I2SBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            I2SBuff.bytesRead(m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+        }
     }
 
-    // ---- statistics, bytes written to I2S (every 10s)
-    // static int cnt = 0;
-    // static uint32_t t = millis();
-
-    // if(t + 10000 < millis()){
-    //     AUDIO_LOG_INFO("{}", cnt);
-    //     cnt = 0;
-    //     t = millis();
-    // }
-    // cnt+= i2s_bytesConsumed;
     //-------------------------------------------
 
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
-    // if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
 
-    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_STEREOFRAME;
-
-    if (m_validSamples < 0) {
-        AUDIO_LOG_ERROR("valid samples counter is negative: {}", m_validSamples);
+    if (m_plCh.count >= sourceWords && I2SBuff.bufferFilled() == 0) {
+        m_plCh.count = 0;
         m_validSamples = 0;
     }
 
     if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
-
-    m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
-
-    if (m_validSamples == 0) { m_plCh.count = 0; }
-
+AUDIO_LOG_WARN("buff filled {}", I2SBuff.bufferFilled());
 exit:
     xSemaphoreGive(mutex_playChunk);
     return;
@@ -6127,6 +6264,9 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         result = false;
         goto exit;
     }
+
+    I2SBuff.setBufsize(256000);
+    I2SBuff.init();
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");

@@ -181,9 +181,43 @@ class AudioBuffer {
 
 //----------------------------------------------------------------------------------------------------------------------
 
+class RingBuffer {
+
+  public:
+    RingBuffer();
+    ~RingBuffer();
+
+    void     setBufsize(size_t size);
+    size_t   getBufsize() const;
+    size_t   init();
+    bool     isInitialized() { return m_init; };
+    void     reset();
+    size_t   freeSpace() const;
+    size_t   bufferFilled() const;
+    size_t   writeSpace() const;
+    size_t   readSpace() const;
+    int32_t* getWritePtr();
+    int32_t* getReadPtr();
+    bool     bytesWritten(size_t bytes);
+    bool     bytesRead(size_t bytes);
+    void     showStatus();
+
+  private:
+    ps_ptr<int32_t>      m_buffer;
+    size_t               m_bufSize = 0;
+    size_t               m_readIndex = 0;
+    size_t               m_writeIndex = 0;
+    size_t               m_used = 0;
+    bool                 m_init = false;
+    mutable ps_ptr<char> m_log;
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
 class Audio {
   private:
     AudioBuffer InBuff; // instance of input buffer
+    RingBuffer  I2SBuff;
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
