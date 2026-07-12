@@ -3713,7 +3713,7 @@ bool Audio::readPlayListData() {
     t = millis();
     while (!m_client->available()) {
         vTaskDelay(2);
-        if(detectTimeout(t, "!m_client->available")) goto exit;
+        if (detectTimeout(t, "!m_client->available")) goto exit;
     }
 
     if (m_f_chunked) {
@@ -3735,7 +3735,7 @@ bool Audio::readPlayListData() {
     m_playlistContent.clear();
 
     t = millis();
-    while (true) {  // outer while
+    while (true) { // outer while
         if (detectTimeout(t, "outer while")) goto exit;
         pl.clear(); // playlistLine
 
@@ -3901,55 +3901,72 @@ const char* Audio::parsePlaylist_PLS() {
         Length1=-1
     */
 
-    // struct ASXEntry {
-    //     ps_ptr<char> title;
-    //     ps_ptr<char> file;
-    //     ps_ptr<char> lenght;
-    // };
-    // std::deque<ASXEntry> entries;
+    struct ASXEntry {
+        ps_ptr<char> title;
+        ps_ptr<char> file;
+        ps_ptr<char> length;
+        uint16_t     sequenceNr;
+    };
+    std::deque<ASXEntry> entries;
+    bool                 isPLS = false;
 
-    uint8_t lines = m_playlistContent.size();
-    int     pos = 0;
-    char*   host = nullptr;
+    uint16_t lines = m_playlistContent.size();
 
-    for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("PLS Line {}: {}", i, m_playlistContent[i]); }
+    for (int i = 0; i < lines; i++) { AUDIO_LOG_DEBUG("PLS Line {}: {}", i, m_playlistContent[i]); }
+
+    auto sequenceNr_to_entryNr = [&](uint16_t sequenceNr) -> uint16_t {
+        for (uint16_t i = 0; i < entries.size(); i++) {
+            if (sequenceNr == entries[i].sequenceNr) return i;
+        }
+        entries.emplace_back();
+        uint16_t s = entries.size() - 1;
+        entries[s].sequenceNr = sequenceNr;
+        return s;
+    };
 
     for (int i = 0; i < lines; i++) {
-        if (i == 0) {
-            if (m_playlistContent[0].strlen() == 0) goto exit;     // empty line
-            if (!m_playlistContent[0].starts_with("[playlist]")) { // first entry in valid pls
-                m_dataMode = HTTP_RESPONSE_HEADER;                 // pls is not valid
-                AUDIO_LOG_INFO("Playlist is not valid, switch to HTTP_RESPONSE_HEADER");
-                goto exit;
+        ps_ptr<char> seq_str = {};
+        ps_ptr<char> seqPart = {};
+        int32_t      seqNr = -1;
+        int16_t      pos = -1;
+        int16_t      entryNr = -1;
+
+        if (m_playlistContent[i].contains("[playlist]")) {
+            isPLS = true;
+            continue;
+        }
+        if (isPLS) {
+            if (m_playlistContent[i].starts_with_icase("File")) {
+                pos = m_playlistContent[i].index_of("=");
+                seq_str = m_playlistContent[i].substr(4, pos - 4);
+                seqNr = m_playlistContent[i].substr(4, pos - 4).to_int32();
+                entryNr = sequenceNr_to_entryNr(seqNr);
+                seqPart = m_playlistContent[i].substr(pos + 1);
+                entries[entryNr].file = m_playlistContent[i].substr(pos + 1);
+                continue;
             }
-            continue;
-        }
-        if (m_playlistContent[i].starts_with("File1")) {
-            if (host) continue;                             // we have already a url
-            pos = m_playlistContent[i].index_of("http", 0); // File1=http://streamplus30.leonex.de:14840/;
-            if (pos >= 0) {                                 // yes, URL contains "http"?
-                host = m_playlistContent[i].get() + pos;    // Now we have an URL for a stream in host.
+            if (m_playlistContent[i].starts_with_icase("Title")) {
+                pos = m_playlistContent[i].index_of("=");
+                seq_str = m_playlistContent[i].substr(5, pos - 5);
+                seqNr = m_playlistContent[i].substr(5, pos - 5).to_int32();
+                entryNr = sequenceNr_to_entryNr(seqNr);
+                seqPart = m_playlistContent[i].substr(pos + 1);
+                entries[entryNr].title = m_playlistContent[i].substr(pos + 1);
+                continue;
             }
-            continue;
-        }
-        if (m_playlistContent[i].starts_with("Title1")) { // Title1=Antenne Tirol
-            const char* plsStationName = (m_playlistContent[i].get() + 7);
-            info(*this, evt_name, "{}", plsStationName);
-            continue;
-        }
-        if (m_playlistContent[i].starts_with("Length1")) { continue; }
-        if (m_playlistContent[i].contains("Invalid username")) { // Unable to access account:
-            goto exit;                                           // Invalid username or password
         }
     }
-    return host;
 
-exit:
-    m_f_running = false;
-    stopSong();
-    vector_clear_and_shrink(m_playlistContent);
-    m_dataMode = AUDIO_NONE;
-    return nullptr;
+    for (int i = 0; i < entries.size(); i++) {
+        ps_ptr<char> title = entries[i].title;
+        ps_ptr<char> file = entries[i].file;
+
+        if (file.valid()) {
+            if (entries[i].title.valid()) info(*this, evt_name, "{}", entries[i].title);
+            return entries[i].file.c_get();
+        }
+    }
+    return "";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
