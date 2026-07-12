@@ -3655,7 +3655,6 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.err = ESP_OK;
 
     constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
-    constexpr size_t BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
 
     int32_t* sourceBuff = nullptr;
     size_t   sourceWords = 0;
@@ -3699,22 +3698,29 @@ void IRAM_ATTR Audio::playChunk() {
         const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
         size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
         wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
-
         if (wordsToCopy > 0) {
             //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
 
             memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
             SamplesBuff.bytesWritten(wordsToCopy);
             m_plCh.count += wordsToCopy;
+            
         }
     }
 
     if (SamplesBuff.readSpace() > 0) {
+    next:
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
             m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
             //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
             SamplesBuff.bytesRead(m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            if (readWords == m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE) {
+                if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
+                    // AUDIO_LOG_WARN("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
+                    goto next;
+                }
+            }
         }
     }
 
@@ -6266,7 +6272,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
 
-    SamplesBuff.setBufsize(256000);
+    SamplesBuff.setBufsize(25600);
     if (SamplesBuff.init() == 0) {
         AUDIO_LOG_ERROR("RingBuffer allocation failed");
         result = false;
