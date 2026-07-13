@@ -6435,6 +6435,13 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     int32_t  offset = oneSec * sec;     // bytes to be wind/rewind
     int32_t  pos = m_audioFilePosition - inBufferFilled();
     pos += offset;
+    // Rewinding by more seconds than have already elapsed (e.g. seeking backwards near the start
+    // of the track) can push pos below m_audioDataStart. Without this clamp, m_resumeFilePos ends
+    // up smaller than m_audioDataStart, and (m_resumeFilePos - m_audioDataStart) below underflows
+    // (int32_t - uint32_t promotes to unsigned) to a huge value that corrupts m_cat.sum_samples and,
+    // downstream, the reported playback position/duration. setAudioFilePosition() already guards
+    // against this same case; setTimeOffset() needs the same floor.
+    if (pos < (int32_t) m_audioDataStart) pos = m_audioDataStart;
     m_resumeFilePos = pos;
     m_cat.sum_samples = (float)m_cat.tota_samples * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
     return true;
