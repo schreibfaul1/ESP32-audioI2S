@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7i                                                                                                                            ";
+    Version 3.4.7j                                                                                                                            ";
 /*  Updated on: Jul 13, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3729,7 +3729,7 @@ write_round: {
     size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
     wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
     if (wordsToCopy > 0) {
-        AUDIO_LOG_DEBUG("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
+        AUDIO_LOG_DEBUG("sourceWords {}, bufferFilled {}",  sourceWords, SamplesBuff.bufferFilled());
         memcpy(SamplesBuff.getWritePtr(), sourceBuff + (*sourceWordsConsumed), wordsToCopy * BYTES_PER_SAMPLE);
         SamplesBuff.bytesWritten(wordsToCopy);
         *sourceWordsConsumed += wordsToCopy;
@@ -3740,9 +3740,9 @@ write_round: {
     read_round:                                                               //
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
-            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 0); // non blocking
+            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 5);
             m_plCh.i2s_bytesConsumed = bytesConsumed;
-            AUDIO_LOG_DEBUG("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            AUDIO_LOG_DEBUG("bytesConsumed {}, bufferFilled {}", bytesConsumed / BYTES_PER_SAMPLE, SamplesBuff.bufferFilled());
             size_t consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
             SamplesBuff.bytesRead(consumedWords);
             if (readWords == consumedWords) {
