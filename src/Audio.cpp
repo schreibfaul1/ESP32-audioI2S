@@ -694,6 +694,7 @@ void Audio::setDefaults() {
     initInBuff(); // initialize InputBuffer if not already done
 
     InBuff.reset();
+    SamplesBuff.reset();
     m_streamTitle.reset();
     m_streamURL.reset();
     m_playlistBuff.reset();
@@ -3661,6 +3662,7 @@ void IRAM_ATTR Audio::playChunk() {
     size_t   sourceWords = 0;
     bool     secondRoundDone = false;
 
+    //------------------------------------------------------------------------------------------------------------------------------------------------
     if (m_plCh.count == 0) {
         audio_process_raw_samples(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
@@ -3689,9 +3691,8 @@ void IRAM_ATTR Audio::playChunk() {
             m_plCh.count = 0;
             goto exit;
         }
-        //------------------------------------------------------------------------------------------------------
     }
-
+    //------------------------------------------------------------------------------------------------------------------------------------------------
     if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
     sourceWords = (size_t)m_validSamples * 2;
 
@@ -3700,8 +3701,7 @@ write_round: {
     size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
     wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
     if (wordsToCopy > 0) {
-        //    AUDIO_LOG_WARN("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
-
+        AUDIO_LOG_DEBUG("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
         memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
         SamplesBuff.bytesWritten(wordsToCopy);
         m_plCh.count += wordsToCopy;
@@ -3713,12 +3713,12 @@ write_round: {
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
             m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
-            //    AUDIO_LOG_WARN("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            AUDIO_LOG_DEBUG("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
             size_t consumedWords = m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
             SamplesBuff.bytesRead(consumedWords);
             if (readWords == consumedWords) {
                 if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
-                    // AUDIO_LOG_WARN("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
+                    AUDIO_LOG_DEBUG("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
                     goto read_round;
                 }
             }
@@ -3732,8 +3732,7 @@ write_round: {
             goto write_round;
         }
     }
-
-    //-------------------------------------------
+    //------------------------------------------------------------------------------------------------------------------------------------------------
 
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
@@ -6712,7 +6711,7 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
 
-    uint16_t DELAY_BUFFER_SIZE = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
+    uint32_t DELAY_BUFFER_SIZE = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
     // delay line
     m_vu_items.delay_l[m_vu_items.delay_line_index] = sample[LEFTCHANNEL];
     m_vu_items.delay_r[m_vu_items.delay_line_index] = sample[RIGHTCHANNEL];
