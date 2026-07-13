@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7f                                                                                                                            ";
-/*  Updated on: Jul 12, 2026
+    Version 3.4.7h                                                                                                                            ";
+/*  Updated on: Jul 13, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -484,6 +484,135 @@ void AudioBuffer::sanityCheck() {
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  R I N G B U F F E R  📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+// RingBuffer will be allocated in PSRAM
+//
+//  start            m_readPtr                    m_writePtr                                                     end
+//   |                  |<----------- m_used --------->|<--------------------- writeSpace ----------------------->|
+//   ▼                  ▼                              ▼                                                          ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                                           <--m_bufSize-->                                                   |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<---freeSpace---->|<------------filled---------->|<-----------------------freeSpace------------------------->|
+//
+//
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+RingBuffer::RingBuffer() {}
+
+RingBuffer::~RingBuffer() {
+    m_buffer.reset();
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::setBufsize(size_t size) {
+    m_bufSize = size;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::getBufsize() const {
+    return m_bufSize;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::init() {
+    if (!m_buffer.alloc_array(m_bufSize, "RingBuffer")) {
+        m_init = false;
+        return 0;
+    }
+    m_log.set_name("\nRingBuffer_Log");
+    reset();
+    m_init = true;
+    return m_bufSize;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::reset() {
+    m_readIndex = 0;
+    m_writeIndex = 0;
+    m_used = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::freeSpace() const {
+    if (!m_init) return 0;
+    return m_bufSize - m_used;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::bufferFilled() const {
+    if (!m_init) return 0;
+    return m_used;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::writeSpace() const {
+    if (!m_init) {
+        log_e("Buffer is not initialized");
+        return 0;
+    }
+    if (m_used == m_bufSize) return 0;
+
+    if (m_writeIndex >= m_readIndex) {
+        size_t s = m_bufSize - m_writeIndex;
+        if (m_readIndex == 0) return std::min(s, freeSpace());
+        return s;
+    }
+    return m_readIndex - m_writeIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::readSpace() const {
+    if (!m_init) return 0;
+    if (m_used == 0) return 0;
+    if (m_readIndex < m_writeIndex) return m_writeIndex - m_readIndex;
+    return m_bufSize - m_readIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t* RingBuffer::getWritePtr() {
+    if (!m_init) return nullptr;
+    return m_buffer.get() + m_writeIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t* RingBuffer::getReadPtr() {
+    if (!m_init) return nullptr;
+    return m_buffer.get() + m_readIndex;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+bool RingBuffer::bytesWritten(size_t bytes) {
+    if (!m_init) return false;
+    if (bytes > writeSpace()) {
+        m_log.assignf("bytesWritten({}) > writeSpace({})", bytes, writeSpace());
+        m_log.println();
+        return false;
+    }
+    m_writeIndex += bytes;
+    if (m_writeIndex == m_bufSize) m_writeIndex = 0;
+    m_used += bytes;
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+bool RingBuffer::bytesRead(size_t bytes) {
+    if (!m_init) return false;
+    if (bytes > readSpace()) {
+        m_log.assignf("bytesRead({}) > readSpace({})", bytes, readSpace());
+        m_log.println();
+        return false;
+    }
+    m_readIndex += bytes;
+    if (m_readIndex == m_bufSize) m_readIndex = 0;
+    m_used -= bytes;
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::showStatus() {
+    m_log.assignf("\n"
+                  "Initialized  : {}\n"
+                  "BufferSize   : {}\n"
+                  "Used         : {}\n"
+                  "Free         : {}\n"
+                  "ReadSpace    : {}\n"
+                  "WriteSpace   : {}\n"
+                  "ReadIndex    : {}\n"
+                  "WriteIndex   : {}\n\n",
+                  m_init, m_bufSize, m_used, freeSpace(), readSpace(), writeSpace(), m_readIndex, m_writeIndex);
+    m_log.print();
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O   📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::Audio(uint8_t i2sPort) {
@@ -565,6 +694,7 @@ void Audio::setDefaults() {
     initInBuff(); // initialize InputBuffer if not already done
 
     InBuff.reset();
+    SamplesBuff.reset();
     m_streamTitle.reset();
     m_streamURL.reset();
     m_playlistBuff.reset();
@@ -3512,7 +3642,7 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
-    if (m_validSamples == 0) return; // nothing to do
+    if (m_validSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
     xSemaphoreTake(mutex_playChunk, 1 * configTICK_RATE_HZ);
 
@@ -3525,73 +3655,95 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr int BYTES_PER_SAMPLE = sizeof(int32_t);
-    constexpr int BYTES_PER_STEREOFRAME = 2 * BYTES_PER_SAMPLE;
+    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
+    constexpr size_t MIN_SECOND_ROUND_WORDS = 128; // Avoid extra round for tiny remainders
 
-    if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
-    audio_process_raw_samples(m_outBuff.get(), m_validSamples);
-    //------------------------------------------------------------------------------------------
-    {
-        const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
-        for (int i = 0; i < m_validSamples; i++) {
-            if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
-            if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
-            if (applyGain) Gain(&m_outBuff[i * 2]);
+    int32_t* sourceBuff = nullptr;
+    size_t   sourceWords = 0;
+    bool     secondRoundDone = false;
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------
+    if (m_plCh.count == 0) {
+        audio_process_raw_samples(m_outBuff.get(), m_validSamples);
+        //------------------------------------------------------------------------------------------
+        {
+            const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
+            for (int i = 0; i < m_validSamples; i++) {
+                if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
+                if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
+                if (applyGain) Gain(&m_outBuff[i * 2]);
+            }
+        }
+        if (settings.SPECTRUM) processSpectrum();
+        if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
+        //------------------------------------------------------------------------------------------
+        if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
+            m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+            audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
+            sourceBuff = m_resamplesBuff.get();
+        } else {
+            audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+            sourceBuff = m_outBuff.get();
+        }
+        //------------------------------------------------------------------------------------------------------
+        if (!continueI2S) {
+            m_validSamples = 0;
+            m_plCh.count = 0;
+            goto exit;
         }
     }
-    if (settings.SPECTRUM) processSpectrum();
-    if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
-    //------------------------------------------------------------------------------------------
-    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
-        m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
-        audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
-    } else {
-        audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
-    }
-    //------------------------------------------------------------------------------------------------------
-    if (!continueI2S) {
-        m_validSamples = 0;
-        m_plCh.count = 0;
-        goto exit;
-    }
-    //------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------------------------------------------------------------------------
+    if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
+    sourceWords = (size_t)m_validSamples * 2;
 
-i2swrite:
-    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5);
-    } else {                                                                                                                                                   // without resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_STEREOFRAME, &m_plCh.i2s_bytesConsumed, 5); //
+write_round: {
+    const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
+    size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
+    wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
+    if (wordsToCopy > 0) {
+        AUDIO_LOG_DEBUG("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
+        memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
+        SamplesBuff.bytesWritten(wordsToCopy);
+        m_plCh.count += wordsToCopy;
+    }
+}
+
+    if (SamplesBuff.readSpace() > 0) {
+    read_round:                                                               //
+        size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
+        if (readWords > 0) {
+            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
+            AUDIO_LOG_DEBUG("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
+            size_t consumedWords = m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+            SamplesBuff.bytesRead(consumedWords);
+            if (readWords == consumedWords) {
+                if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
+                    AUDIO_LOG_DEBUG("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
+                    goto read_round;
+                }
+            }
+        }
     }
 
-    // ---- statistics, bytes written to I2S (every 10s)
-    // static int cnt = 0;
-    // static uint32_t t = millis();
-
-    // if(t + 10000 < millis()){
-    //     AUDIO_LOG_INFO("{}", cnt);
-    //     cnt = 0;
-    //     t = millis();
-    // }
-    // cnt+= i2s_bytesConsumed;
-    //-------------------------------------------
+    if (!secondRoundDone && m_plCh.count < sourceWords && SamplesBuff.readSpace() < SamplesBuff.freeSpace()) {
+        size_t remainingWords = sourceWords - m_plCh.count;
+        if (remainingWords >= MIN_SECOND_ROUND_WORDS) {
+            secondRoundDone = true;
+            goto write_round;
+        }
+    }
+    //------------------------------------------------------------------------------------------------------------------------------------------------
 
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
-    // if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
 
-    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_STEREOFRAME;
-
-    if (m_validSamples < 0) {
-        AUDIO_LOG_ERROR("valid samples counter is negative: {}", m_validSamples);
+    if (m_plCh.count >= sourceWords) {
+        m_plCh.count = 0;
         m_validSamples = 0;
     }
 
     if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
-
-    m_plCh.count += m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
-
-    if (m_validSamples == 0) { m_plCh.count = 0; }
-
+    //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
 exit:
     xSemaphoreGive(mutex_playChunk);
     return;
@@ -3650,7 +3802,8 @@ void Audio::loop() {
             case AUDIO_PLAYLISTINIT:
                 if (readPlayListData())
                     break;
-                else { // readPlayListData == false means connect to m3u8 URL
+                else {           // readPlayListData == false means connect to m3u8 URL
+                    playChunk(); // fill the I2S-DMA before
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                     break;
@@ -3658,6 +3811,7 @@ void Audio::loop() {
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
                 if (host.valid()) { // host contains the next playlist URL
+                    playChunk();    // fill the I2S-DMA before
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
@@ -3666,6 +3820,7 @@ void Audio::loop() {
                         break;
                     }
                     if (m_f_stream) m_lVar.no_host_timer = millis() + 10000;
+                    playChunk(); // fill the I2S-DMA before
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
@@ -3858,7 +4013,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
 
     uint8_t lines = m_playlistContent.size();
 
-    for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
+    // for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
 
     for (int i = 0; i < lines; i++) {
         if (m_playlistContent[i].contains("#EXTM3U")) {
@@ -3876,11 +4031,11 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
             if (m_playlistContent[i].starts_with("#")) { // Commentline?
                 continue;
             }
-            if (m_playlistContent[i].index_of("http") >= 0) {
-                host = m_playlistContent[i];
-                host.trim();
-                return host.c_get();
-            }
+        }
+        if (m_playlistContent[i].index_of("http") >= 0) {
+            host = m_playlistContent[i];
+            host.trim();
+            return host.c_get();
         }
     }
     return "";
@@ -4901,11 +5056,11 @@ void Audio::playAudioData() {
         vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
-    if (m_validSamples) {
+    if (m_validSamples || SamplesBuff.bufferFilled()) {
         vTaskDelay(5);
         playChunk();
-        return;
     } // guard, play samples first
+    if (m_validSamples) return;
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
@@ -6108,6 +6263,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     i2s_std_gpio_config_t gpio_cfg = {};
     bool                  result = i2s_config();
+    uint32_t              vu_delay_frames = 0;
 
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
@@ -6128,10 +6284,23 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
 
+    SamplesBuff.setBufsize(32768);
+    if (SamplesBuff.init() == 0) {
+        AUDIO_LOG_ERROR("RingBuffer allocation failed");
+        result = false;
+        goto exit;
+    }
+
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
-    m_vu_items.delay_l.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_l");
-    m_vu_items.delay_r.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_r");
+    vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
+    vu_delay_frames += SamplesBuff.getBufsize() / 2; // SamplesBuff stores L/R words, 2 words per frame
+    vu_delay_frames += 1;
+    m_vu_items.delay_buffer_size = vu_delay_frames;
+    m_vu_items.delay_line_index = 0;
+
+    m_vu_items.delay_l.alloc_array(vu_delay_frames, "delay_l");
+    m_vu_items.delay_r.alloc_array(vu_delay_frames, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
@@ -6549,21 +6718,27 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
 
-    uint16_t DELAY_BUFFER_SIZE = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
+    uint32_t DELAY_BUFFER_SIZE = m_vu_items.delay_buffer_size;
+    if (DELAY_BUFFER_SIZE < 2) DELAY_BUFFER_SIZE = 2;
+
+    uint32_t delayFrames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
+    delayFrames += SamplesBuff.bufferFilled() / 2;                                     // add current SamplesBuff latency (words -> frames)
+    if (delayFrames >= DELAY_BUFFER_SIZE) delayFrames = DELAY_BUFFER_SIZE - 1;
+
     // delay line
     m_vu_items.delay_l[m_vu_items.delay_line_index] = sample[LEFTCHANNEL];
     m_vu_items.delay_r[m_vu_items.delay_line_index] = sample[RIGHTCHANNEL];
     m_vu_items.delay_line_index++;
     if (m_vu_items.delay_line_index == DELAY_BUFFER_SIZE) m_vu_items.delay_line_index = 0;
 
-    int16_t pos = m_vu_items.delay_line_index - 1;
-    if (pos == -1) pos = DELAY_BUFFER_SIZE - 1;
+    int32_t pos = (int32_t)m_vu_items.delay_line_index - 1 - (int32_t)delayFrames;
+    while (pos < 0) pos += DELAY_BUFFER_SIZE;
 
     // FFT buffer
     float mono = 0.5f * (float)((m_vu_items.delay_l[pos] >> 20) + (m_vu_items.delay_r[pos] >> 20));
 
     // --- FFT analyzer AGC ---
-    constexpr float TARGET = 0.1f; // gewünschte RMS-Amplitude
+    constexpr float TARGET = 0.1f; // desired RMS amplitude
     constexpr float ATTACK = 0.05f;
     constexpr float RELEASE_FFT = 0.005f;
 
