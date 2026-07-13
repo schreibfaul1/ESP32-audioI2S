@@ -4013,7 +4013,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
 
     uint8_t lines = m_playlistContent.size();
 
-    for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
+    // for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
 
     for (int i = 0; i < lines; i++) {
         if (m_playlistContent[i].contains("#EXTM3U")) {
@@ -4031,11 +4031,11 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
             if (m_playlistContent[i].starts_with("#")) { // Commentline?
                 continue;
             }
-            if (m_playlistContent[i].index_of("http") >= 0) {
-                host = m_playlistContent[i];
-                host.trim();
-                return host.c_get();
-            }
+        }
+        if (m_playlistContent[i].index_of("http") >= 0) {
+            host = m_playlistContent[i];
+            host.trim();
+            return host.c_get();
         }
     }
     return "";
@@ -6263,6 +6263,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     i2s_std_gpio_config_t gpio_cfg = {};
     bool                  result = i2s_config();
+    uint32_t              vu_delay_frames = 0;
 
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
@@ -6292,8 +6293,14 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
-    m_vu_items.delay_l.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_l");
-    m_vu_items.delay_r.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_r");
+    vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
+    vu_delay_frames += SamplesBuff.getBufsize() / 2; // SamplesBuff stores L/R words, 2 words per frame
+    vu_delay_frames += 1;
+    m_vu_items.delay_buffer_size = vu_delay_frames;
+    m_vu_items.delay_line_index = 0;
+
+    m_vu_items.delay_l.alloc_array(vu_delay_frames, "delay_l");
+    m_vu_items.delay_r.alloc_array(vu_delay_frames, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
@@ -6711,21 +6718,27 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
 
-    uint32_t DELAY_BUFFER_SIZE = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
+    uint32_t DELAY_BUFFER_SIZE = m_vu_items.delay_buffer_size;
+    if (DELAY_BUFFER_SIZE < 2) DELAY_BUFFER_SIZE = 2;
+
+    uint32_t delayFrames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
+    delayFrames += SamplesBuff.bufferFilled() / 2;                                     // add current SamplesBuff latency (words -> frames)
+    if (delayFrames >= DELAY_BUFFER_SIZE) delayFrames = DELAY_BUFFER_SIZE - 1;
+
     // delay line
     m_vu_items.delay_l[m_vu_items.delay_line_index] = sample[LEFTCHANNEL];
     m_vu_items.delay_r[m_vu_items.delay_line_index] = sample[RIGHTCHANNEL];
     m_vu_items.delay_line_index++;
     if (m_vu_items.delay_line_index == DELAY_BUFFER_SIZE) m_vu_items.delay_line_index = 0;
 
-    int16_t pos = m_vu_items.delay_line_index - 1;
-    if (pos == -1) pos = DELAY_BUFFER_SIZE - 1;
+    int32_t pos = (int32_t)m_vu_items.delay_line_index - 1 - (int32_t)delayFrames;
+    while (pos < 0) pos += DELAY_BUFFER_SIZE;
 
     // FFT buffer
     float mono = 0.5f * (float)((m_vu_items.delay_l[pos] >> 20) + (m_vu_items.delay_r[pos] >> 20));
 
     // --- FFT analyzer AGC ---
-    constexpr float TARGET = 0.1f; // gewünschte RMS-Amplitude
+    constexpr float TARGET = 0.1f; // desired RMS amplitude
     constexpr float ATTACK = 0.05f;
     constexpr float RELEASE_FFT = 0.005f;
 

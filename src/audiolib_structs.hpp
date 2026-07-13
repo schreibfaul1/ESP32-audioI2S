@@ -363,7 +363,8 @@ struct i2s_items_t {
 struct vu_items_t {
     ps_ptr<int32_t> delay_l;
     ps_ptr<int32_t> delay_r;
-    uint16_t        delay_line_index = 0;
+    uint32_t        delay_line_index = 0;
+    uint32_t        delay_buffer_size = 0;
     float           left = 0;  // average value of samples, left channel
     float           right = 0; // average value of samples, right channel
     uint8_t         left_peak = 0;
