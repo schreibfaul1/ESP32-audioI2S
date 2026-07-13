@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7h                                                                                                                            ";
+    Version 3.4.7i                                                                                                                            ";
 /*  Updated on: Jul 13, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3644,26 +3644,23 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
-    xSemaphoreTake(mutex_playChunk, 1 * configTICK_RATE_HZ);
+    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
 
     if (m_isFirstChunkCall) {
         m_isFirstChunkCall = false;
-        m_plCh.count = 0;
+        m_plCh.sourceWordsConsumed = 0;
     }
 
     bool continueI2S = true;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
-    constexpr size_t MIN_SECOND_ROUND_WORDS = 128; // Avoid extra round for tiny remainders
-
     int32_t* sourceBuff = nullptr;
     size_t   sourceWords = 0;
     bool     secondRoundDone = false;
 
     //------------------------------------------------------------------------------------------------------------------------------------------------
-    if (m_plCh.count == 0) {
+    if (m_plCh.sourceWordsConsumed == 0) {
         audio_process_raw_samples(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
         {
@@ -3688,23 +3685,54 @@ void IRAM_ATTR Audio::playChunk() {
         //------------------------------------------------------------------------------------------------------
         if (!continueI2S) {
             m_validSamples = 0;
-            m_plCh.count = 0;
+            m_plCh.sourceWordsConsumed = 0;
             goto exit;
         }
     }
     //------------------------------------------------------------------------------------------------------------------------------------------------
     if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
     sourceWords = (size_t)m_validSamples * 2;
+    m_plCh.err = write_i2s_samples(sourceBuff, sourceWords, &m_plCh.sourceWordsConsumed);
+    //------------------------------------------------------------------------------------------------------------------------------------------------
+
+    if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
+    if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
+
+    if (m_plCh.sourceWordsConsumed >= sourceWords) {
+        m_plCh.sourceWordsConsumed = 0;
+        m_validSamples = 0;
+    }
+
+    if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
+    //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
+exit:
+    xSemaphoreGive(mutex_playChunk);
+    if (!xst) AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    return;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+esp_err_t Audio::write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size_t* sourceWordsConsumed) {
+    /*
+    In this function, the audio samples are temporarily stored by the decoder in the `SamplesBuff` and passed to the I2S in batches.
+    If all the samples being passed fit into the `SamplesBuff`, then `sourceWords == sourceWordsConsumed`; otherwise, a second call is required.
+    In case `sourceWords == sourceWordsConsumed` means all samples are consumed and the decoder can run again.
+    */
+
+    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
+    constexpr size_t MIN_SECOND_ROUND_WORDS = 128; // Avoid extra round for tiny remainders
+    bool             secondRoundDone = false;
+    esp_err_t        err = ESP_OK;
+    size_t           bytesConsumed = 0;
 
 write_round: {
-    const size_t remainingWords = sourceWords - min<size_t>(m_plCh.count, sourceWords);
+    const size_t remainingWords = sourceWords - min<size_t>(*sourceWordsConsumed, sourceWords);
     size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
     wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
     if (wordsToCopy > 0) {
         AUDIO_LOG_DEBUG("ws {}, m_validSamples {}, toWrite{}", SamplesBuff.writeSpace(), m_validSamples, wordsToCopy);
-        memcpy(SamplesBuff.getWritePtr(), sourceBuff + m_plCh.count, wordsToCopy * BYTES_PER_SAMPLE);
+        memcpy(SamplesBuff.getWritePtr(), sourceBuff + (*sourceWordsConsumed), wordsToCopy * BYTES_PER_SAMPLE);
         SamplesBuff.bytesWritten(wordsToCopy);
-        m_plCh.count += wordsToCopy;
+        *sourceWordsConsumed += wordsToCopy;
     }
 }
 
@@ -3712,9 +3740,10 @@ write_round: {
     read_round:                                                               //
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
         if (readWords > 0) {
-            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &m_plCh.i2s_bytesConsumed, 5);
+            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 0); // non blocking
+            m_plCh.i2s_bytesConsumed = bytesConsumed;
             AUDIO_LOG_DEBUG("rs {}, i2s_bytesConsumed {}, {}", SamplesBuff.readSpace(), m_plCh.i2s_bytesConsumed, m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE);
-            size_t consumedWords = m_plCh.i2s_bytesConsumed / BYTES_PER_SAMPLE;
+            size_t consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
             SamplesBuff.bytesRead(consumedWords);
             if (readWords == consumedWords) {
                 if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
@@ -3725,28 +3754,14 @@ write_round: {
         }
     }
 
-    if (!secondRoundDone && m_plCh.count < sourceWords && SamplesBuff.readSpace() < SamplesBuff.freeSpace()) {
-        size_t remainingWords = sourceWords - m_plCh.count;
+    if (!secondRoundDone && *sourceWordsConsumed < sourceWords && SamplesBuff.readSpace() < SamplesBuff.freeSpace()) {
+        size_t remainingWords = sourceWords - (*sourceWordsConsumed);
         if (remainingWords >= MIN_SECOND_ROUND_WORDS) {
             secondRoundDone = true;
             goto write_round;
         }
     }
-    //------------------------------------------------------------------------------------------------------------------------------------------------
-
-    if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
-    if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
-
-    if (m_plCh.count >= sourceWords) {
-        m_plCh.count = 0;
-        m_validSamples = 0;
-    }
-
-    if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
-    //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
-exit:
-    xSemaphoreGive(mutex_playChunk);
-    return;
+    return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
@@ -3831,7 +3846,6 @@ void Audio::loop() {
                 } else {
                     processWebStreamHLS(); // aac, mp3 or aacp normal stream
                 }
-
                 if (m_f_continue) { // at this point m_f_continue is true, means processWebStream() needs more data
                     m_dataMode = AUDIO_PLAYLISTDATA;
                     m_f_continue = false;
@@ -6441,7 +6455,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     // (int32_t - uint32_t promotes to unsigned) to a huge value that corrupts m_cat.sum_samples and,
     // downstream, the reported playback position/duration. setAudioFilePosition() already guards
     // against this same case; setTimeOffset() needs the same floor.
-    if (pos < (int32_t) m_audioDataStart) pos = m_audioDataStart;
+    if (pos < (int32_t)m_audioDataStart) pos = m_audioDataStart;
     m_resumeFilePos = pos;
     m_cat.sum_samples = (float)m_cat.tota_samples * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
     return true;

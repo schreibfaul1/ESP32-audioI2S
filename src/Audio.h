@@ -312,6 +312,7 @@ class Audio {
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
     void             inBufferStatus() { InBuff.showStatus(); }
+    void             samplesBufferStatus() { SamplesBuff.showStatus(); }
     void             setTone(float gainLowPass, float gainBandPass, float gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
@@ -369,6 +370,7 @@ class Audio {
     bool                     setChannels(int channels);
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
+    esp_err_t                write_i2s_samples(int32_t *sourceBuff, size_t sourceWords, size_t *count);
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
     void                     gain_ramp();
