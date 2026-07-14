@@ -6247,7 +6247,7 @@ bool Audio::i2s_config() {
     m_i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_output_sr ? m_output_sr : m_i2s_items.sampleRate;
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     result = i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
