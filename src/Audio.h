@@ -505,7 +505,7 @@ class Audio {
         uint32_t BUFFER_TRESHOLD_HLS = UINT16_MAX; // Level at which the HLS-TS stream starts and is reloaded
     } settings;
 
-    volatile uint32_t m_dmaFreeDesc = 0;
+    std::atomic<uint32_t> m_dmaFreeDesc = 0;
 
   private:
     File                m_audiofile;

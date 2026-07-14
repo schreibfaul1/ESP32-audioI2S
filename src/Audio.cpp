@@ -758,6 +758,7 @@ esp_err_t Audio::I2Sstart() {
     if (!m_f_i2s_channel_enabled) {
         err = i2s_channel_enable(m_i2s_tx_handle);
         if (err == ESP_OK) m_f_i2s_channel_enabled = true;
+        m_dmaFreeDesc = settings.DMA_DESC_NUM;
     }
     return err;
 }
@@ -6812,6 +6813,7 @@ void Audio::reconfigI2S() {
     }
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
+    m_dmaFreeDesc = settings.DMA_DESC_NUM;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
