@@ -1907,12 +1907,16 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         uint16_t dbs = (uint16_t)(*(data + 12) + (*(data + 13) << 8));                                            // Data block size
         uint16_t bps = (uint16_t)(*(data + 14) + (*(data + 15) << 8));                                            // Bits per sample
 
+        m_rwh.channels = ch;
+        m_rwh.sampleRate = sr;
+        m_rwh.bitsPerSample = bps;
+
         info(*this, evt_info, "FormatCode: {}", fc);
         // info(*this, evt_info, "Channel: {}", nic);
         // info(*this, evt_info, "SampleRate (Hz): {}", sr);
         info(*this, evt_info, "DataRate: {}", dr);
         info(*this, evt_info, "DataBlockSize: {}", dbs);
-        info(*this, evt_info, "BitsPerSample: {}", bps);
+        // info(*this, evt_info, "BitsPerSample: {}", bps);
 
         if ((bps != 8) && (bps != 16) && (bps != 24) && (bps != 32)) {
             info(*this, evt_info, "BitsPerSample is {},  must be 8, 16, 24 or 32", bps);
@@ -1963,8 +1967,9 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             m_audioDataSize = m_audioFileSize - m_rwh.headerSize;
         }
 
-        m_audioFileDuration = m_audioDataSize / (getSampleRate() * getChannels());
-        if (getBitsPerSample() == 16) m_audioFileDuration /= 2;
+        m_audioFileDuration = m_audioDataSize / (m_rwh.sampleRate * m_rwh.channels);
+        if (m_rwh.bitsPerSample == 16) m_audioFileDuration /= 2;
+        if (m_rwh.bitsPerSample == 32) m_audioFileDuration /= 4;
         info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
         return 4;
     }
@@ -6685,9 +6690,9 @@ bool Audio::fsRange(uint32_t range) {
 bool Audio::setSampleRate(uint32_t sampRate) {
 
     if (!sampRate) return false;
-    if (sampRate < 8000) {
-        AUDIO_LOG_WARN("Sample rate must not be smaller than 8kHz, found: {}", sampRate);
-        return false;
+    if (sampRate < 16000) {
+        AUDIO_LOG_WARN("Sample rate must not be smaller than 16kHz, found: {}", sampRate);
+        //return false;
     }
     if (m_i2s_items.sampleRate != sampRate) {
         m_i2s_items.sampleRate = sampRate;

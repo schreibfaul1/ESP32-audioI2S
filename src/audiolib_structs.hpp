@@ -281,6 +281,9 @@ struct rwh_t { // used in read_WAV_Header
     size_t   headerSize;
     uint32_t cs = 0;
     uint8_t  bts = 0;
+    uint16_t channels = 0;
+    uint16_t bitsPerSample = 0;
+    uint32_t sampleRate = 0;
 };
 
 typedef struct _rflh { // used in read_FLAC_Header
