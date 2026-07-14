@@ -122,7 +122,6 @@ struct m4aHdr_t { // used in read_M4A_Header
 
 struct plCh_t { // used in playChunk
     size_t    sourceWordsConsumed = 0;
-    size_t    i2s_bytesConsumed;
     esp_err_t err;
 };
 

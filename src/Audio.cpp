@@ -3652,7 +3652,6 @@ void IRAM_ATTR Audio::playChunk() {
     }
 
     bool continueI2S = true;
-    m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
     int32_t* sourceBuff = nullptr;
@@ -3723,13 +3722,14 @@ esp_err_t Audio::write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size
     bool             secondRoundDone = false;
     esp_err_t        err = ESP_OK;
     size_t           bytesConsumed = 0;
+    size_t           consumedWords = 0;
 
 write_round: {
     const size_t remainingWords = sourceWords - min<size_t>(*sourceWordsConsumed, sourceWords);
     size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
     wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
     if (wordsToCopy > 0) {
-        AUDIO_LOG_DEBUG("sourceWords {}, bufferFilled {}",  sourceWords, SamplesBuff.bufferFilled());
+        AUDIO_LOG_DEBUG("sourceWords {}, bufferFilled {}", sourceWords, SamplesBuff.bufferFilled());
         memcpy(SamplesBuff.getWritePtr(), sourceBuff + (*sourceWordsConsumed), wordsToCopy * BYTES_PER_SAMPLE);
         SamplesBuff.bytesWritten(wordsToCopy);
         *sourceWordsConsumed += wordsToCopy;
@@ -3739,11 +3739,16 @@ write_round: {
     if (SamplesBuff.readSpace() > 0) {
     read_round:                                                               //
         size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
-        if (readWords > 0) {
-            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 5);
-            m_plCh.i2s_bytesConsumed = bytesConsumed;
-            AUDIO_LOG_DEBUG("bytesConsumed {}, bufferFilled {}", bytesConsumed / BYTES_PER_SAMPLE, SamplesBuff.bufferFilled());
-            size_t consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
+        if (readWords >= settings.DMA_FRAME_NUM) {
+        feed:
+            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
+            consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
+            if (bytesConsumed == 0) { // i2s needs to be fed
+                // AUDIO_LOG_ERROR("cw {}", consumedWords);
+                vTaskDelay(5);
+                goto feed;
+            }
+            AUDIO_LOG_WARN("consumedWords {}, bufferFilled {}", consumedWords, SamplesBuff.bufferFilled());
             SamplesBuff.bytesRead(consumedWords);
             if (readWords == consumedWords) {
                 if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
@@ -6298,7 +6303,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         goto exit;
     }
 
-    SamplesBuff.setBufsize(32768);
+    SamplesBuff.setBufsize(128 * settings.DMA_FRAME_NUM); // must be a multiple of DMA_FRAME_NUM
     if (SamplesBuff.init() == 0) {
         AUDIO_LOG_ERROR("RingBuffer allocation failed");
         result = false;
