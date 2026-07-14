@@ -33,7 +33,7 @@ constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
-constexpr size_t WORK_WORDS = 512;
+constexpr size_t WORK_WORDS = 2048;
 
 constexpr size_t AUDIO_STACK_SIZE = 3500;
 
@@ -3789,42 +3789,28 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size_t* sourceWordsConsumed) {
-    /*
-    In this function, the audio samples are temporarily stored by the decoder in the `SamplesBuff` and passed to the I2S in batches.
-    If all the samples being passed fit into the `SamplesBuff`, then `sourceWords == sourceWordsConsumed`; otherwise, a second call is required.
-    In case `sourceWords == sourceWordsConsumed` means all samples are consumed and the decoder can run again.
-    */
 
     constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
     esp_err_t        err = ESP_OK;
     size_t           bytesConsumed = 0;
     size_t           consumedWords = 0;
+    static int       a = 0, b = 0;
 
     size_t written = SamplesBuff.write(sourceBuff + *sourceWordsConsumed, sourceWords - *sourceWordsConsumed);
     *sourceWordsConsumed += written;
 
-    if (SamplesBuff.readSpace() > 0) {
-    read_round:                                                               //
-        size_t readWords = SamplesBuff.readSpace() & ~static_cast<size_t>(1); // keep stereo frames aligned
-        if (readWords >= settings.DMA_FRAME_NUM) {
-        feed:
-            err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
-            consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
-
-            if (bytesConsumed == 0 && readWords >= settings.DMA_FRAME_NUM) { // i2s needs to be fed
-                vTaskDelay(5);
-                goto feed;
-            }
-            SamplesBuff.bytesRead(consumedWords);
-            if (readWords == consumedWords) {
-                if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
-                    AUDIO_LOG_DEBUG("filled {}, readWords {}", SamplesBuff.bufferFilled(), readWords);
-                    goto read_round;
-                }
-            }
-        }
+    size_t readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
+    readWords &= ~static_cast<size_t>(1); // Stereo
+    SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
+feed:
+    err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
+    consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
+    if (bytesConsumed == 0 && readWords > 0) { // i2s needs to be fed
+        vTaskDelay(5);
+        goto feed;
     }
-
+    SamplesBuff.bytesRead(consumedWords);
+    AUDIO_LOG_DEBUG("cw {}", consumedWords);
     return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
