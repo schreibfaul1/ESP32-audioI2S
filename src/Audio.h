@@ -374,7 +374,6 @@ class Audio {
     bool                     setChannels(int channels);
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
-    esp_err_t                write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size_t* count);
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
     void                     gain_ramp();
@@ -576,7 +575,7 @@ class Audio {
     uint8_t        m_M4A_objectType = 0;            // set in read_M4A_Header
     uint8_t        m_M4A_chConfig = 0;              // set in read_M4A_Header
     uint16_t       m_M4A_sampleRate = 0;            // set in read_M4A_Header
-    int16_t        m_stereoSamples = 0;             //
+    int16_t        m_validSamples = 0;             //
     int16_t        m_curSample = 0;                 //
     uint16_t       m_dataMode = 0;                  // Statemaschine
     uint16_t       m_streamTitleHash = 0;           // remember streamtitle, ignore multiple occurence in metadata

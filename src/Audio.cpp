@@ -844,7 +844,7 @@ void Audio::setDefaults() {
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_lastGranulePosition = 0;
-    m_stereoSamples = 0;
+    m_validSamples = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -3580,8 +3580,8 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
-        while (m_stereoSamples) {
-            AUDIO_LOG_DEBUG("vs {}", m_stereoSamples);
+        while (m_validSamples) {
+            AUDIO_LOG_DEBUG("vs {}", m_validSamples);
             playChunk();
         } // empty I2S DMA
         destroy_decoder();
@@ -3600,7 +3600,7 @@ bool Audio::pauseResume() {
         if (!m_f_running) {
             m_outBuff.clear();
             memset(m_resamplesBuff.get(), 0, m_resamplesBuffSize * sizeof(int16_t)); // Clear SamplesBuffer
-            m_stereoSamples = 0;
+            m_validSamples = 0;
         }
     }
     xSemaphoreGive(mutex_audioTask);
@@ -3725,7 +3725,7 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
-    if (m_stereoSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
+    if (m_validSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
     bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
 
@@ -3737,44 +3737,77 @@ void IRAM_ATTR Audio::playChunk() {
     bool continueI2S = true;
     m_plCh.err = ESP_OK;
 
-    int32_t* sourceBuff = nullptr;
-    size_t   sourceWords = 0;
-    bool     secondRoundDone = false;
+    int32_t*         sourceBuff = nullptr;
+    size_t           sourceWords = 0;
+    size_t           readWords = 0;
+    size_t           written = 0;
+    bool             secondRoundDone = false;
+    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
 
     //------------------------------------------------------------------------------------------------------------------------------------------------
     if (m_plCh.sourceWordsConsumed == 0) {
-        audio_process_raw_samples(m_outBuff.get(), m_stereoSamples);
+        audio_process_raw_samples(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
         {
             const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
-            for (int i = 0; i < m_stereoSamples; i++) {
+            for (int i = 0; i < m_validSamples; i++) {
                 if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
                 if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
                 if (applyGain) Gain(&m_outBuff[i * 2]);
             }
         }
         if (settings.SPECTRUM) processSpectrum();
-        if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_stereoSamples);
+        if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
         if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
-            m_stereoSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_stereoSamples, m_resamplesBuff.get()); // have new amount of samples
-            audio_process_i2s(m_resamplesBuff.get(), m_stereoSamples, &continueI2S);                                   // resampled stereo 32bps
+            m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+            audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
             sourceBuff = m_resamplesBuff.get();
         } else {
-            audio_process_i2s(m_outBuff.get(), (int32_t)m_stereoSamples, &continueI2S);
+            audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
             sourceBuff = m_outBuff.get();
         }
         //------------------------------------------------------------------------------------------------------
         if (!continueI2S) {
-            m_stereoSamples = 0;
+            m_validSamples = 0;
             m_plCh.sourceWordsConsumed = 0;
             goto exit;
         }
     }
     //------------------------------------------------------------------------------------------------------------------------------------------------
     if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
-    sourceWords = (size_t)m_stereoSamples * 2;
-    m_plCh.err = write_i2s_samples(sourceBuff, sourceWords, &m_plCh.sourceWordsConsumed);
+
+    sourceWords = (size_t)m_validSamples * 2; // always 2 channels
+
+    //------------------------------------------------------------------------------------------------------
+    // Decoder -> RingBuffer
+    //------------------------------------------------------------------------------------------------------
+
+    written = SamplesBuff.write(sourceBuff + m_plCh.sourceWordsConsumed, sourceWords - m_plCh.sourceWordsConsumed);
+    m_plCh.sourceWordsConsumed += written;
+
+    //------------------------------------------------------------------------------------------------------
+    // RingBuffer -> I2S
+    //------------------------------------------------------------------------------------------------------
+
+    readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
+    readWords &= ~static_cast<size_t>(1); // keep stereo aligned
+
+    if (readWords > 0) {
+        SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
+
+        while (true) {
+            size_t bytesConsumed = 0;
+            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
+            if (bytesConsumed > 0) {
+                SamplesBuff.bytesRead(bytesConsumed / BYTES_PER_SAMPLE);
+                break;
+            }
+            AUDIO_LOG_DEBUG("timeout in i2s_channel_write");
+            vTaskDelay(5);
+        }
+    }
+
     //------------------------------------------------------------------------------------------------------------------------------------------------
 
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
@@ -3782,41 +3815,15 @@ void IRAM_ATTR Audio::playChunk() {
 
     if (m_plCh.sourceWordsConsumed >= sourceWords) {
         m_plCh.sourceWordsConsumed = 0;
-        m_stereoSamples = 0;
+        m_validSamples = 0;
     }
 
-    if (m_stereoSamples) AUDIO_LOG_DEBUG("m_stereoSamples {}", m_stereoSamples);
+    if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
     //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
 exit:
     xSemaphoreGive(mutex_playChunk);
     if (!xst) AUDIO_LOG_WARN("was unable to obtain the semaphore");
     return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-esp_err_t Audio::write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size_t* sourceWordsConsumed) {
-
-    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
-    esp_err_t        err = ESP_OK;
-    size_t           bytesConsumed = 0;
-    size_t           consumedWords = 0;
-    static int       a = 0, b = 0;
-
-    size_t written = SamplesBuff.write(sourceBuff + *sourceWordsConsumed, sourceWords - *sourceWordsConsumed);
-    *sourceWordsConsumed += written;
-
-    size_t readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
-    readWords &= ~static_cast<size_t>(1); // Stereo
-    SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
-feed:
-    err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
-    consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
-    if (bytesConsumed == 0 && readWords > 0) { // i2s needs to be fed
-        vTaskDelay(5);
-        goto feed;
-    }
-    SamplesBuff.bytesRead(consumedWords);
-    AUDIO_LOG_DEBUG("cw {}", consumedWords);
-    return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
@@ -5125,11 +5132,11 @@ void Audio::playAudioData() {
         vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
-    if (m_stereoSamples || SamplesBuff.bufferFilled()) {
+    if (m_validSamples || SamplesBuff.bufferFilled()) {
         vTaskDelay(5);
         playChunk();
     } // guard, play samples first
-    if (m_stereoSamples) return;
+    if (m_validSamples) return;
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
@@ -6079,7 +6086,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     const char*           st = NULL;
     std::vector<uint32_t> vec;
     uint16_t              samples_out = 0;
-    if (m_stereoSamples) { goto exit; } // nothing to decode, next round
+    if (m_validSamples) { goto exit; } // nothing to decode, next round
 
     m_sbyt.bytesLeft = 0;
     m_sbyt.nextSync = 0;
@@ -6123,19 +6130,19 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     // status: bytesDecoded > 0 and res >= 0
 
     switch (m_codec) {
-        case CODEC_WAV: m_stereoSamples = m_decoder->getOutputSamples(); break;
-        case CODEC_MP3: m_stereoSamples = m_decoder->getOutputSamples(); break;
+        case CODEC_WAV: m_validSamples = m_decoder->getOutputSamples(); break;
+        case CODEC_MP3: m_validSamples = m_decoder->getOutputSamples(); break;
         case CODEC_AAC:
-            m_stereoSamples = m_decoder->getOutputSamples() / getChannels();
+            m_validSamples = m_decoder->getOutputSamples() / getChannels();
             if (!m_sbyt.isPS && m_decoder->val1()) { // only change 0 -> 1
                 m_sbyt.isPS = 1;
                 info(*this, evt_info, "Parametric Stereo");
             } else
                 m_sbyt.isPS = m_decoder->val1();
             break;
-        case CODEC_M4A: m_stereoSamples = m_decoder->getOutputSamples() / getChannels(); break;
+        case CODEC_M4A: m_validSamples = m_decoder->getOutputSamples() / getChannels(); break;
         case CODEC_FLAC:
-            m_stereoSamples = m_decoder->getOutputSamples();
+            m_validSamples = m_decoder->getOutputSamples();
             st = m_decoder->getStreamTitle();
             if (st) { info(*this, evt_streamtitle, "{}", st); }
             vec = m_decoder->getMetadataBlockPicture();
@@ -6148,7 +6155,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
             break;
         case CODEC_OPUS:
-            m_stereoSamples = m_decoder->getOutputSamples();
+            m_validSamples = m_decoder->getOutputSamples();
             st = m_decoder->getStreamTitle();
             if (st) { info(*this, evt_streamtitle, st); }
             vec = m_decoder->getMetadataBlockPicture();
@@ -6168,7 +6175,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             break;
 
         case CODEC_VORBIS:
-            m_stereoSamples = m_decoder->getOutputSamples();
+            m_validSamples = m_decoder->getOutputSamples();
             st = m_decoder->getStreamTitle();
             if (st) { info(*this, evt_streamtitle, st); }
             vec = m_decoder->getMetadataBlockPicture();
@@ -6181,15 +6188,15 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
             break;
     }
-    if (m_sbyt.f_setDecodeParamsOnce && m_stereoSamples) {
+    if (m_sbyt.f_setDecodeParamsOnce && m_validSamples) {
         m_sbyt.f_setDecodeParamsOnce = false;
         setDecoderItems();
     }
-    samples_out = m_stereoSamples;
+    samples_out = m_validSamples;
 
 exit:
     m_curSample = 0;
-    if (m_stereoSamples) {
+    if (m_validSamples) {
         calculateAudioTime(bytesDecoded, samples_out);
         playChunk();
     }
@@ -6682,7 +6689,7 @@ bool Audio::fsRange(uint32_t range) {
     if (range < (int32_t)startAB) { range = startAB; }
     if (range >= (int32_t)endAB) { range = endAB; }
 
-    m_stereoSamples = 0;
+    m_validSamples = 0;
     m_resumeFilePos = range; // used in processLocalFile()
     return true;
 }
@@ -6692,7 +6699,7 @@ bool Audio::setSampleRate(uint32_t sampRate) {
     if (!sampRate) return false;
     if (sampRate < 16000) {
         AUDIO_LOG_WARN("Sample rate must not be smaller than 16kHz, found: {}", sampRate);
-        //return false;
+        // return false;
     }
     if (m_i2s_items.sampleRate != sampRate) {
         m_i2s_items.sampleRate = sampRate;
