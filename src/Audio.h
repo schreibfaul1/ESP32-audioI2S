@@ -187,20 +187,24 @@ class RingBuffer {
     RingBuffer();
     ~RingBuffer();
 
-    void     setBufsize(size_t size);
-    size_t   getBufsize() const;
-    size_t   init();
-    bool     isInitialized() { return m_init; };
-    void     reset();
-    size_t   freeSpace() const;
-    size_t   bufferFilled() const;
-    size_t   writeSpace() const;
-    size_t   readSpace() const;
-    int32_t* getWritePtr();
-    int32_t* getReadPtr();
-    bool     bytesWritten(size_t bytes);
-    bool     bytesRead(size_t bytes);
-    void     showStatus();
+    void          setBufsize(size_t size);
+    size_t        getBufsize() const;
+    size_t        init();
+    bool          isInitialized() { return m_init; };
+    void          reset();
+    size_t        freeSpace() const;
+    size_t        bufferFilled() const;
+    size_t        writeSpace() const;
+    size_t        readSpace() const;
+    int32_t*      getWritePtr();
+    int32_t*      getReadPtr();
+    bool          bytesWritten(size_t bytes);
+    bool          bytesRead(size_t bytes);
+    size_t        write(const int32_t* src, size_t words);
+    size_t        read(int32_t* dst, size_t words);
+    size_t        peek(int32_t* dst, size_t words);
+    inline size_t advanceIndex(size_t index, size_t words) const;
+    void          showStatus();
 
   private:
     ps_ptr<int32_t>      m_buffer;
@@ -370,7 +374,7 @@ class Audio {
     bool                     setChannels(int channels);
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
-    esp_err_t                write_i2s_samples(int32_t *sourceBuff, size_t sourceWords, size_t *count);
+    esp_err_t                write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size_t* count);
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
     void                     gain_ramp();
@@ -535,6 +539,7 @@ class Audio {
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;         // Interleaved L/R
     ps_ptr<int32_t>          m_resamplesBuff;   // Interleaved L/R
+    ps_ptr<int32_t>          m_i2sWorkBuff;     // between SamülesBuff and i2s_channel_write()
     ps_ptr<char>             m_metadataBuff;    // icy-metadata max (16 * 256 + 1) bytes
     ps_ptr<char>             m_httpRespHdrBuff; // store http response header
     ps_ptr<char>             m_ibuff;           // used in log_info()

@@ -33,6 +33,7 @@ constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
+constexpr size_t WORK_WORDS = 512;
 
 constexpr size_t AUDIO_STACK_SIZE = 3500;
 
@@ -572,30 +573,107 @@ int32_t* RingBuffer::getReadPtr() {
     return m_buffer.get() + m_readIndex;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-bool RingBuffer::bytesWritten(size_t bytes) {
+bool RingBuffer::bytesWritten(size_t words) {
+
     if (!m_init) return false;
-    if (bytes > writeSpace()) {
-        m_log.assignf("bytesWritten({}) > writeSpace({})", bytes, writeSpace());
+
+    if (words > freeSpace()) {
+        m_log.assignf("bytesWritten({}) > freeSpace({})", words, freeSpace());
         m_log.println();
         return false;
     }
-    m_writeIndex += bytes;
-    if (m_writeIndex == m_bufSize) m_writeIndex = 0;
-    m_used += bytes;
+    m_writeIndex = advanceIndex(m_writeIndex, words);
+    m_used += words;
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-bool RingBuffer::bytesRead(size_t bytes) {
+bool RingBuffer::bytesRead(size_t words) {
+
     if (!m_init) return false;
-    if (bytes > readSpace()) {
-        m_log.assignf("bytesRead({}) > readSpace({})", bytes, readSpace());
+
+    if (words > bufferFilled()) {
+        m_log.assignf("bytesRead({}) > bufferFilled({})", words, bufferFilled());
         m_log.println();
         return false;
     }
-    m_readIndex += bytes;
-    if (m_readIndex == m_bufSize) m_readIndex = 0;
-    m_used -= bytes;
+    m_readIndex = advanceIndex(m_readIndex, words);
+    m_used -= words;
     return true;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::write(const int32_t* src, size_t words) {
+
+    if (!m_init || !src || words == 0) return 0;
+
+    words = std::min(words, freeSpace());
+
+    // Stereo-Frames nicht zerreißen
+    words &= ~static_cast<size_t>(1);
+
+    size_t written = 0;
+
+    while (written < words) {
+        size_t chunk = writeSpace();
+        chunk = std::min(chunk, words - written);
+        memcpy(getWritePtr(), src + written, chunk * sizeof(int32_t));
+        bytesWritten(chunk);
+        written += chunk;
+    }
+    return written;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::read(int32_t* dst, size_t words) {
+
+    if (!m_init || !dst || words == 0) return 0;
+
+    // Nicht mehr lesen als vorhanden
+    words = std::min(words, bufferFilled());
+
+    // Stereo-Frames nicht zerreißen
+    words &= ~static_cast<size_t>(1);
+
+    size_t read = 0;
+
+    while (read < words) {
+        size_t chunk = readSpace();
+        chunk = std::min(chunk, words - read);
+        memcpy(dst + read, getReadPtr(), chunk * sizeof(int32_t));
+        bytesRead(chunk);
+        read += chunk;
+    }
+    return read;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t RingBuffer::peek(int32_t* dst, size_t words) {
+
+    if (!m_init || !dst || words == 0) return 0;
+
+    words = std::min(words, bufferFilled());
+    words &= ~static_cast<size_t>(1);
+
+    size_t read = 0;
+    size_t readIndex = m_readIndex; // lokale Kopie
+
+    while (read < words) {
+        size_t chunk;
+        if (readIndex < m_writeIndex) {
+            chunk = m_writeIndex - readIndex;
+        } else {
+            chunk = m_bufSize - readIndex;
+        }
+        chunk = std::min(chunk, words - read);
+        memcpy(dst + read, m_buffer.get() + readIndex, chunk * sizeof(int32_t));
+        read += chunk;
+        readIndex += chunk;
+        if (readIndex == m_bufSize) readIndex = 0;
+    }
+    return read;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+inline size_t RingBuffer::advanceIndex(size_t index, size_t words) const {
+    index += words;
+    if (index >= m_bufSize) index -= m_bufSize;
+    return index;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void RingBuffer::showStatus() {
@@ -3718,23 +3796,12 @@ esp_err_t Audio::write_i2s_samples(int32_t* sourceBuff, size_t sourceWords, size
     */
 
     constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
-    constexpr size_t MIN_SECOND_ROUND_WORDS = 128; // Avoid extra round for tiny remainders
-    bool             secondRoundDone = false;
     esp_err_t        err = ESP_OK;
     size_t           bytesConsumed = 0;
     size_t           consumedWords = 0;
 
-write_round: {
-    const size_t remainingWords = sourceWords - min<size_t>(*sourceWordsConsumed, sourceWords);
-    size_t       wordsToCopy = min(SamplesBuff.writeSpace(), remainingWords);
-    wordsToCopy &= ~static_cast<size_t>(1); // keep stereo frames aligned
-    if (wordsToCopy > 0) {
-        AUDIO_LOG_DEBUG("sourceWords {}, bufferFilled {}", sourceWords, SamplesBuff.bufferFilled());
-        memcpy(SamplesBuff.getWritePtr(), sourceBuff + (*sourceWordsConsumed), wordsToCopy * BYTES_PER_SAMPLE);
-        SamplesBuff.bytesWritten(wordsToCopy);
-        *sourceWordsConsumed += wordsToCopy;
-    }
-}
+    size_t written = SamplesBuff.write(sourceBuff + *sourceWordsConsumed, sourceWords - *sourceWordsConsumed);
+    *sourceWordsConsumed += written;
 
     if (SamplesBuff.readSpace() > 0) {
     read_round:                                                               //
@@ -3743,12 +3810,11 @@ write_round: {
         feed:
             err = i2s_channel_write(m_i2s_tx_handle, SamplesBuff.getReadPtr(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
             consumedWords = bytesConsumed / BYTES_PER_SAMPLE;
-            if (bytesConsumed == 0) { // i2s needs to be fed
-                // AUDIO_LOG_ERROR("cw {}", consumedWords);
+
+            if (bytesConsumed == 0 && readWords >= settings.DMA_FRAME_NUM) { // i2s needs to be fed
                 vTaskDelay(5);
                 goto feed;
             }
-            AUDIO_LOG_WARN("consumedWords {}, bufferFilled {}", consumedWords, SamplesBuff.bufferFilled());
             SamplesBuff.bytesRead(consumedWords);
             if (readWords == consumedWords) {
                 if (SamplesBuff.readSpace() > 0) { // possible buffer end, continue at the begin
@@ -3759,13 +3825,6 @@ write_round: {
         }
     }
 
-    if (!secondRoundDone && *sourceWordsConsumed < sourceWords && SamplesBuff.readSpace() < SamplesBuff.freeSpace()) {
-        size_t remainingWords = sourceWords - (*sourceWordsConsumed);
-        if (remainingWords >= MIN_SECOND_ROUND_WORDS) {
-            secondRoundDone = true;
-            goto write_round;
-        }
-    }
     return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6312,6 +6371,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
+    m_i2sWorkBuff.alloc_array(WORK_WORDS, "i2sWorkBuff");
     vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
     vu_delay_frames += SamplesBuff.getBufsize() / 2; // SamplesBuff stores L/R words, 2 words per frame
     vu_delay_frames += 1;
