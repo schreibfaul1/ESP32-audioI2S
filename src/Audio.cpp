@@ -49,6 +49,14 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
     // Default: do nothing. User can provide their own implementation to process audio data.
 }
 
+static bool IRAM_ATTR i2s_tx_sent_callback(i2s_chan_handle_t handle, i2s_event_data_t* event, void* user_ctx) {
+    Audio* audio = static_cast<Audio*>(user_ctx);
+
+    audio->m_dmaFreeDesc++;
+
+    return false; // keine höhere Task geweckt
+}
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -702,6 +710,8 @@ Audio::Audio(uint8_t i2sPort) {
 
     clientsecure.setInsecure();
     m_i2s_items.i2s_num = i2sPort; // i2s port number
+
+    i2s_event_callbacks_t cbs = {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
@@ -3794,17 +3804,16 @@ void IRAM_ATTR Audio::playChunk() {
     readWords &= ~static_cast<size_t>(1); // keep stereo aligned
 
     if (readWords > 0) {
-        SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
-
-        while (true) {
+        while (m_dmaFreeDesc > 0) {
+            size_t readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
+            readWords &= ~static_cast<size_t>(1);
+            if (readWords == 0) break;
+            SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
             size_t bytesConsumed = 0;
-            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * BYTES_PER_SAMPLE, &bytesConsumed, 1);
-            if (bytesConsumed > 0) {
-                SamplesBuff.bytesRead(bytesConsumed / BYTES_PER_SAMPLE);
-                break;
-            }
-            AUDIO_LOG_DEBUG("timeout in i2s_channel_write");
-            vTaskDelay(5);
+            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 0);
+            if (bytesConsumed == 0) break;
+            SamplesBuff.bytesRead(bytesConsumed / sizeof(int32_t));
+            m_dmaFreeDesc--;
         }
     }
 
@@ -3827,6 +3836,7 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
+
     get_info();
     if (!m_f_running) return;
 
@@ -6340,6 +6350,10 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     i2s_std_gpio_config_t gpio_cfg = {};
     bool                  result = i2s_config();
     uint32_t              vu_delay_frames = 0;
+
+    i2s_event_callbacks_t cbs = {};
+    cbs.on_sent = i2s_tx_sent_callback;
+    ESP_ERROR_CHECK(i2s_channel_register_event_callback(m_i2s_tx_handle, &cbs, this));
 
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
