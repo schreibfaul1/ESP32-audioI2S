@@ -329,7 +329,6 @@ class Audio {
     bool                     i2s_config();
     std::unique_ptr<Decoder> createDecoder(const std::string& type);
     void                     destroy_decoder();
-    bool                     fsRange(uint32_t range);
     void                     latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void                     htmlToUTF8(char* str);
     void                     setDefaults(); // free buffers and set defaults

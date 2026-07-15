@@ -6715,22 +6715,6 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::fsRange(uint32_t range) {
-
-    if ((m_dataMode == AUDIO_LOCALFILE) && !m_audiofile) {
-        AUDIO_LOG_WARN("{}", "local file not accessibble");
-        return false;
-    } // guard
-    uint32_t startAB = m_audioDataStart;                 // audioblock begin
-    uint32_t endAB = m_audioDataStart + m_audioDataSize; // audioblock end
-    if (range < (int32_t)startAB) { range = startAB; }
-    if (range >= (int32_t)endAB) { range = endAB; }
-
-    m_validSamples = 0;
-    m_resumeFilePos = range; // used in processLocalFile()
-    return true;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setSampleRate(uint32_t sampRate) {
 
     if (!sampRate) return false;
