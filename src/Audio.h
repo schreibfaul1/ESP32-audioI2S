@@ -181,43 +181,9 @@ class AudioBuffer {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-class RingBuffer {
-
-  public:
-    RingBuffer();
-    ~RingBuffer();
-
-    void     setBufsize(size_t size);
-    size_t   getBufsize() const;
-    size_t   init();
-    bool     isInitialized() { return m_init; };
-    void     reset();
-    size_t   freeSpace() const;
-    size_t   bufferFilled() const;
-    size_t   writeSpace() const;
-    size_t   readSpace() const;
-    int32_t* getWritePtr();
-    int32_t* getReadPtr();
-    bool     bytesWritten(size_t bytes);
-    bool     bytesRead(size_t bytes);
-    void     showStatus();
-
-  private:
-    ps_ptr<int32_t>      m_buffer;
-    size_t               m_bufSize = 0;
-    size_t               m_readIndex = 0;
-    size_t               m_writeIndex = 0;
-    size_t               m_used = 0;
-    bool                 m_init = false;
-    mutable ps_ptr<char> m_log;
-};
-
-//----------------------------------------------------------------------------------------------------------------------
-
 class Audio {
   private:
     AudioBuffer InBuff; // instance of input buffer
-    RingBuffer  SamplesBuff;
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -312,7 +278,6 @@ class Audio {
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
     void             inBufferStatus() { InBuff.showStatus(); }
-    void             samplesBufferStatus() { SamplesBuff.showStatus(); }
     void             setTone(float gainLowPass, float gainBandPass, float gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
@@ -370,7 +335,6 @@ class Audio {
     bool                     setChannels(int channels);
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
-    esp_err_t                write_i2s_samples(int32_t *sourceBuff, size_t sourceWords, size_t *count);
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
     void                     gain_ramp();
@@ -486,7 +450,7 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 16;                // number of I2S DMA buffer
+        uint16_t DMA_DESC_NUM = 32;                // number of I2S DMA buffer
         uint16_t DMA_FRAME_NUM = 256;              // number of frames in one DMA buffer
         uint16_t FREQ_LS_HZ = 500;                 // IIR Filter, lowshelf
         uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter, peakingEQ
