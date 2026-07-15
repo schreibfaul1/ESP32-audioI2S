@@ -622,6 +622,11 @@ size_t RingBuffer::write(const int32_t* src, size_t words) {
 
     while (written < words) {
         size_t chunk = writeSpace();
+        if (chunk == 0) {
+            m_log.assign("RingBuffer: writeSpace()==0");
+            m_log.println();
+            break;
+        }
         chunk = std::min(chunk, words - written);
         memcpy(getWritePtr(), src + written, chunk * sizeof(int32_t));
         bytesWritten(chunk);
@@ -644,6 +649,11 @@ size_t RingBuffer::read(int32_t* dst, size_t words) {
 
     while (read < words) {
         size_t chunk = readSpace();
+        if (chunk == 0) {
+            m_log.assign("RingBuffer: readSpace()==0");
+            m_log.println();
+            break;
+        }
         chunk = std::min(chunk, words - read);
         memcpy(dst + read, getReadPtr(), chunk * sizeof(int32_t));
         bytesRead(chunk);
@@ -668,6 +678,11 @@ size_t RingBuffer::peek(int32_t* dst, size_t words) {
             chunk = m_writeIndex - readIndex;
         } else {
             chunk = m_bufSize - readIndex;
+            if (chunk == 0) {
+                m_log.assignf("RingBuffer: m_bufSize=readIndex, filled: {}", bufferFilled());
+                m_log.println();
+                break;
+            }
         }
         chunk = std::min(chunk, words - read);
         memcpy(dst + read, m_buffer.get() + readIndex, chunk * sizeof(int32_t));
@@ -680,7 +695,10 @@ size_t RingBuffer::peek(int32_t* dst, size_t words) {
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 inline size_t RingBuffer::advanceIndex(size_t index, size_t words) const {
     index += words;
-    if (index >= m_bufSize) index -= m_bufSize;
+    while (index >= m_bufSize) {
+        index -= m_bufSize;
+      //  printf("advanceIndex, index {}, words {}\n", index, words);
+    }
     return index;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -806,11 +824,12 @@ void Audio::setDefaults() {
     m_f_firstmetabyte = false;
     m_f_playing = false;
     m_f_tts = false;
-    m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
-    m_cat.firstCall = true;     // InitSequence for calculateAudioTime
-    m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
-    m_f_firstPlayCall = true;   // InitSequence for playAudioData
-    m_isFirstChunkCall = true;  // InitSequence for playChunk
+    m_f_firstCall = true;             // InitSequence for processWebstream and processLocalFile
+    m_cat.firstCall = true;           // InitSequence for calculateAudioTime
+    m_pplM3U8.firstCall = true;       // InitSequence for parsePlaylist_M3U8
+    m_f_firstPlayCall = true;         // InitSequence for playAudioData
+    m_f_firstChunkCall = true;        // InitSequence for playChunk
+    m_f_firstCacheSamplesCall = true; // InitSequence for cacheSamples
     m_f_firstLoop = true;
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -3577,7 +3596,7 @@ uint32_t Audio::stopSong() {
     uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
 
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
+    bool pdTrue = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
     {
         if (m_f_running) {
             m_f_running = false;
@@ -3591,14 +3610,12 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
-        while (m_validSamples) {
-            AUDIO_LOG_DEBUG("vs {}", m_validSamples);
-            playChunk();
-        } // empty I2S DMA
+     //   while (m_validSamples) { AUDIO_LOG_DEBUG("vs {}", m_validSamples); playChunk();} // empty I2S DMA
         destroy_decoder();
-        m_f_lockInBuffer = false;
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
+    if(!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    m_f_lockInBuffer = false;
     return currTime;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3740,8 +3757,8 @@ void IRAM_ATTR Audio::playChunk() {
 
     bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
 
-    if (m_isFirstChunkCall) {
-        m_isFirstChunkCall = false;
+    if (m_f_firstChunkCall) {
+        m_f_firstChunkCall = false;
         m_plCh.sourceWordsConsumed = 0;
     }
 
@@ -3890,8 +3907,7 @@ void Audio::loop() {
             case AUDIO_PLAYLISTINIT:
                 if (readPlayListData())
                     break;
-                else {           // readPlayListData == false means connect to m3u8 URL
-                    playChunk(); // fill the I2S-DMA before
+                else { // readPlayListData == false means connect to m3u8 URL
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                     break;
@@ -3899,7 +3915,6 @@ void Audio::loop() {
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
                 if (host.valid()) { // host contains the next playlist URL
-                    playChunk();    // fill the I2S-DMA before
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
@@ -3908,7 +3923,6 @@ void Audio::loop() {
                         break;
                     }
                     if (m_f_stream) m_lVar.no_host_timer = millis() + 10000;
-                    playChunk(); // fill the I2S-DMA before
                     httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
@@ -5145,7 +5159,8 @@ void Audio::playAudioData() {
     } // guard, stream not ready or eof reached or InBuff is locked or not running
     if (m_validSamples || SamplesBuff.bufferFilled()) {
         vTaskDelay(5);
-        playChunk();
+       // cacheSamples();
+       playChunk();
     } // guard, play samples first
     if (m_validSamples) return;
     //--------------------------------------------------------------------------------
@@ -6209,7 +6224,8 @@ exit:
     m_curSample = 0;
     if (m_validSamples) {
         calculateAudioTime(bytesDecoded, samples_out);
-        playChunk();
+        //cacheSamples();
+          playChunk();
     }
     return bytesDecoded;
 }
