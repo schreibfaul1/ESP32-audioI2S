@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.7j                                                                                                                            ";
-/*  Updated on: Jul 13, 2026
+    Version 4.0.0-alpha1                                                                                                                           ";
+/*  Updated on: Jul 14, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
