@@ -651,6 +651,7 @@ class Audio {
     audiolib::pplM3u8_t    m_pplM3U8;
     audiolib::m4aHdr_t     m_m4aHdr;
     audiolib::plCh_t       m_plCh;
+    audiolib::caSa_t       m_caSa;
     audiolib::lVar_t       m_lVar;
     audiolib::prlf_t       m_prlf;
     audiolib::cat_t        m_cat;

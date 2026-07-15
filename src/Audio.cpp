@@ -39,7 +39,7 @@ constexpr size_t AUDIO_STACK_SIZE = 3500;
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
-
+//-------------------------------------------------------------------------------------------------------------------
 // weak default implementation - can be overridden by user
 __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S) {
     // Default: do nothing. User can provide their own implementation to process audio data.
@@ -47,7 +47,7 @@ __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamp
 __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t validSamples) {
     // Default: do nothing. User can provide their own implementation to process audio data.
 }
-
+//-------------------------------------------------------------------------------------------------------------------
 static bool IRAM_ATTR i2s_tx_sent_callback(i2s_chan_handle_t handle, i2s_event_data_t* event, void* user_ctx) {
     Audio* audio = static_cast<Audio*>(user_ctx);
 
@@ -3754,7 +3754,7 @@ void Audio::cacheSamples() {
 
     if (m_f_firstCacheSamplesCall) {
         m_f_firstCacheSamplesCall = false;
-        m_plCh.sourceWordsConsumed = 0;
+        m_caSa.sourceWordsConsumed = 0;
     }
     bool     continueI2S = true;
     int32_t* sourceBuff = nullptr;
@@ -3762,33 +3762,17 @@ void Audio::cacheSamples() {
     size_t   written = 0;
 
     //------------------------------------------------------------------------------------------------------------------------------------------------
-    if (m_plCh.sourceWordsConsumed == 0) {
-        audio_process_raw_samples(m_outBuff.get(), m_validSamples);
+    if (m_caSa.sourceWordsConsumed == 0) {
+        //  audio_process_raw_samples(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
-        {
-            const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
-            for (int i = 0; i < m_validSamples; i++) {
-                if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
-                if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
-                if (applyGain) Gain(&m_outBuff[i * 2]);
-            }
-        }
         if (settings.SPECTRUM) processSpectrum();
         if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
         //------------------------------------------------------------------------------------------
         if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
             m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
-            audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
             sourceBuff = m_resamplesBuff.get();
         } else {
-            audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
             sourceBuff = m_outBuff.get();
-        }
-        //------------------------------------------------------------------------------------------------------
-        if (!continueI2S) {
-            m_validSamples = 0;
-            m_plCh.sourceWordsConsumed = 0;
-            goto exit;
         }
     }
     //------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3799,17 +3783,13 @@ void Audio::cacheSamples() {
     // Decoder -> RingBuffer
     //------------------------------------------------------------------------------------------------------
 
-    written = SamplesBuff.write(sourceBuff + m_plCh.sourceWordsConsumed, sourceWords - m_plCh.sourceWordsConsumed);
-    m_plCh.sourceWordsConsumed += written;
+    written = SamplesBuff.write(sourceBuff + m_caSa.sourceWordsConsumed, sourceWords - m_caSa.sourceWordsConsumed);
+    m_caSa.sourceWordsConsumed += written;
 
-    if (m_plCh.sourceWordsConsumed >= sourceWords) {
-        m_plCh.sourceWordsConsumed = 0;
+    if (m_caSa.sourceWordsConsumed >= sourceWords) {
+        m_caSa.sourceWordsConsumed = 0;
         m_validSamples = 0;
     }
-
-    // AUDIO_LOG_WARN("m_validSamples {}", m_validSamples);
-
-exit:
     return;
 }
 
@@ -3818,39 +3798,53 @@ void IRAM_ATTR Audio::playChunk() {
     if (SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
     //    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
-
     if (m_f_firstChunkCall) {
         m_f_firstChunkCall = false;
         m_dmaFreeDesc = 0;
     }
-
+    bool continueI2S = true;
     m_plCh.err = ESP_OK;
-
-    size_t readWords = 0;
 
     //------------------------------------------------------------------------------------------------------
     // RingBuffer -> I2S
     //------------------------------------------------------------------------------------------------------
 
-    readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
-    readWords &= ~static_cast<size_t>(1); // keep stereo aligned
+    if (SamplesBuff.bufferFilled()) {
+        if (m_dmaFreeDesc.load(std::memory_order_acquire) > settings.DMA_DESC_NUM) m_dmaFreeDesc = 0; // empty run
 
-    if (readWords > 0) {
+        while (m_dmaFreeDesc.load(std::memory_order_acquire) > 0) {
 
-        while (m_dmaFreeDesc > 0) {
             size_t readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
             readWords &= ~static_cast<size_t>(1);
             if (readWords == 0) goto exit; // break;
             SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
+            //-----------------------------------------------------------------------------------------------------------------------------------------
+            audio_process_raw_samples(m_i2sWorkBuff.get(), readWords);
+            const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
+            for (int i = 0; i < readWords / 2; i++) {
+                if (settings.VU_LEVEL) calculateVUlevel(&m_i2sWorkBuff[i * 2]);
+                if (settings.IIR_FILTER) IIR_filter(&m_i2sWorkBuff[i * 2]);
+                if (applyGain) Gain(&m_i2sWorkBuff[i * 2]);
+            }
+            audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
+            //-----------------------------------------------------------------------------------------------------------------------------------------
             size_t bytesConsumed = 0;
-            m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 0);
+            if (continueI2S) {
+                m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 0);
+            } else {
+                bytesConsumed = readWords * sizeof(int32_t);
+            }
+
             if (bytesConsumed == 0) {
-                AUDIO_LOG_WARN("couldn't not write to i2s: {}", m_dmaFreeDesc.load());
-                m_dmaFreeDesc.fetch_sub(1);
+                AUDIO_LOG_DEBUG("i2s write err={:X} consumed={} freeDesc={}", m_plCh.err, bytesConsumed, m_dmaFreeDesc.load());
+                m_dmaFreeDesc.fetch_sub(1, std::memory_order_release);
                 goto exit; // break;
             }
+
+            if (bytesConsumed != readWords * sizeof(int32_t)) { AUDIO_LOG_WARN("partial write: {} / {}", bytesConsumed, readWords * sizeof(int32_t)); }
+
             SamplesBuff.bytesRead(bytesConsumed / sizeof(int32_t));
-            m_dmaFreeDesc.fetch_sub(1);
+            m_dmaFreeDesc.fetch_sub(1, std::memory_order_release);
         }
     }
 
@@ -3858,6 +3852,7 @@ void IRAM_ATTR Audio::playChunk() {
 
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
+    if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
 
 exit:
     //    xSemaphoreGive(mutex_playChunk);
@@ -6414,7 +6409,6 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
     m_i2sWorkBuff.alloc_array(m_work_words, "i2sWorkBuff");
     vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
-    vu_delay_frames += SamplesBuff.getBufsize() / 2; // SamplesBuff stores L/R words, 2 words per frame
     vu_delay_frames += 1;
     m_vu_items.delay_buffer_size = vu_delay_frames;
     m_vu_items.delay_line_index = 0;

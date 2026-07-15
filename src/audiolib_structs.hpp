@@ -121,8 +121,13 @@ struct m4aHdr_t { // used in read_M4A_Header
 };
 
 struct plCh_t { // used in playChunk
-    size_t    sourceWordsConsumed = 0;
     esp_err_t err;
+    bool      firstCall = false;
+};
+
+struct caSa_t { // used in cacheSamples
+    size_t    sourceWordsConsumed = 0;
+    bool      firstCall = false;
 };
 
 struct lVar_t { // used in loop
@@ -343,7 +348,7 @@ struct fnsy_t { // used in findNextSync
 
 struct audioItems_t {
     float   gain_ls_db = 0.0;  // lowshelf
-    float   gain_peq_db = 0.0; // peakingEQ
+    float   gain_peq_db = 0.0; // peakingEQudio_process_i2s
     float   gain_hs_db = 0.0;  // highshelf
     float   pre_gain = 0.0;    // correction factor for level adjustment
     float   coeffs[3][5] = {0};
