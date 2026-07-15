@@ -27,8 +27,7 @@
 bool VorbisDecoder::init() {
     setDefaults();
     m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
-    m_out16.alloc_array(4608 * 2, "m_out16");
-    if (m_ogg_items.lastSegmentTable.valid() && m_out16.valid()) m_f_isValid = true;
+    if (m_ogg_items.lastSegmentTable.valid()) m_f_isValid = true;
     return m_f_isValid;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -42,7 +41,6 @@ void VorbisDecoder::reset() {
     if (m_mode_param.valid()) m_mode_param.reset();
     if (m_dsp_state.valid()) m_dsp_state.reset();
     m_ogg_items.segment_table.clear();
-    m_out16.reset();
     m_f_isValid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -51,7 +49,6 @@ void VorbisDecoder::clear() {
     m_ogg_items.reset();
     m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
     m_vorbisBlockPicItem.clear();
-    m_out16.clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool VorbisDecoder::isValid() {
@@ -130,6 +127,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbu
 
     int32_t ret = 0;
     int32_t bytesLeft_begin = *bytesLeft;
+    int16_t* pcm16 = (int16_t*)outbuf;
     m_ogg_items.data_ptr = inbuf; // save for bitReader underrun
 
     if (!m_ogg_items.segment_table.size()) {
@@ -167,7 +165,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbu
             ret = vorbisDecodePage3(inbuf, bytesLeft, m_vorbis_segment_length); // codebooks
             break;
         case 4:
-            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, m_out16.get()); // decode audio
+            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, pcm16); // decode audio
             break;
         default:
             VORBIS_LOG_ERROR("unknown page {}", m_pageNr);
@@ -186,14 +184,17 @@ exit:
     }
     if (ret == 0) {
         if (m_vorbisChannels == 1) {
-            for (int i = 0; i < m_vorbisValidSamples; i++) {
-                outbuf[i * 2] = m_out16[i] << 16;
-                outbuf[i * 2 + 1] = m_out16[i] << 16;
+            for (int i = m_vorbisValidSamples - 1; i >= 0; i--) {
+                int32_t sample = ((int32_t)pcm16[i]) << 16;
+                outbuf[i * 2] = sample;
+                outbuf[i * 2 + 1] = sample;
             }
         }
 
         if (m_vorbisChannels == 2) {
-            for (int i = 0; i < m_vorbisValidSamples * 2; i++) { outbuf[i] = m_out16[i] << 16; }
+            for (int i = m_vorbisValidSamples * 2 - 1; i >= 0; i--) {
+                outbuf[i] = ((int32_t)pcm16[i]) << 16;
+            }
         }
     }
     return ret;
