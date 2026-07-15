@@ -135,7 +135,6 @@ class OpusDecoder : public Decoder {
     int32_t         m_opusRemainBlockPicLen = 0;
     int32_t         m_opusCommentBlockSize = 0;
     float           m_opusCompressionRatio = 0;
-    ps_ptr<int16_t> m_out16;
 
     struct picture_segment_t {
         uint32_t start_page_index{};
