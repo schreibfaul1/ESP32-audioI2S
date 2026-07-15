@@ -33,7 +33,6 @@ constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
-constexpr size_t WORK_WORDS = 2048;
 
 constexpr size_t AUDIO_STACK_SIZE = 3500;
 
@@ -52,7 +51,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 static bool IRAM_ATTR i2s_tx_sent_callback(i2s_chan_handle_t handle, i2s_event_data_t* event, void* user_ctx) {
     Audio* audio = static_cast<Audio*>(user_ctx);
 
-    audio->m_dmaFreeDesc++;
+    audio->m_dmaFreeDesc.fetch_add(1);
 
     return false; // keine höhere Task geweckt
 }
@@ -697,7 +696,7 @@ inline size_t RingBuffer::advanceIndex(size_t index, size_t words) const {
     index += words;
     while (index >= m_bufSize) {
         index -= m_bufSize;
-      //  printf("advanceIndex, index {}, words {}\n", index, words);
+        //  printf("advanceIndex, index {}, words {}\n", index, words);
     }
     return index;
 }
@@ -725,7 +724,6 @@ Audio::Audio(uint8_t i2sPort) {
     mutex_playChunk = xSemaphoreCreateMutex();
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
-
     clientsecure.setInsecure();
     m_i2s_items.i2s_num = i2sPort; // i2s port number
 
@@ -3610,11 +3608,11 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
-     //   while (m_validSamples) { AUDIO_LOG_DEBUG("vs {}", m_validSamples); playChunk();} // empty I2S DMA
+        //   while (m_validSamples) { AUDIO_LOG_DEBUG("vs {}", m_validSamples); playChunk();} // empty I2S DMA
         destroy_decoder();
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
-    if(!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
     m_f_lockInBuffer = false;
     return currTime;
 }
@@ -3752,25 +3750,16 @@ uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uin
     return outFrames;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void IRAM_ATTR Audio::playChunk() {
-    if (m_validSamples == 0 && SamplesBuff.bufferFilled() == 0) return; // nothing to do
+void Audio::cacheSamples() {
 
-    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
-
-    if (m_f_firstChunkCall) {
-        m_f_firstChunkCall = false;
+    if (m_f_firstCacheSamplesCall) {
+        m_f_firstCacheSamplesCall = false;
         m_plCh.sourceWordsConsumed = 0;
     }
-
-    bool continueI2S = true;
-    m_plCh.err = ESP_OK;
-
-    int32_t*         sourceBuff = nullptr;
-    size_t           sourceWords = 0;
-    size_t           readWords = 0;
-    size_t           written = 0;
-    bool             secondRoundDone = false;
-    constexpr size_t BYTES_PER_SAMPLE = sizeof(int32_t);
+    bool     continueI2S = true;
+    int32_t* sourceBuff = nullptr;
+    size_t   sourceWords = 0;
+    size_t   written = 0;
 
     //------------------------------------------------------------------------------------------------------------------------------------------------
     if (m_plCh.sourceWordsConsumed == 0) {
@@ -3804,7 +3793,6 @@ void IRAM_ATTR Audio::playChunk() {
     }
     //------------------------------------------------------------------------------------------------------------------------------------------------
     if (!sourceBuff) { sourceBuff = (m_output_sr && m_output_sr != m_i2s_items.sampleRate) ? m_resamplesBuff.get() : m_outBuff.get(); }
-
     sourceWords = (size_t)m_validSamples * 2; // always 2 channels
 
     //------------------------------------------------------------------------------------------------------
@@ -3814,24 +3802,55 @@ void IRAM_ATTR Audio::playChunk() {
     written = SamplesBuff.write(sourceBuff + m_plCh.sourceWordsConsumed, sourceWords - m_plCh.sourceWordsConsumed);
     m_plCh.sourceWordsConsumed += written;
 
+    if (m_plCh.sourceWordsConsumed >= sourceWords) {
+        m_plCh.sourceWordsConsumed = 0;
+        m_validSamples = 0;
+    }
+
+    // AUDIO_LOG_WARN("m_validSamples {}", m_validSamples);
+
+exit:
+    return;
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void IRAM_ATTR Audio::playChunk() {
+    if (SamplesBuff.bufferFilled() == 0) return; // nothing to do
+
+    //    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
+
+    if (m_f_firstChunkCall) {
+        m_f_firstChunkCall = false;
+        m_dmaFreeDesc = 0;
+    }
+
+    m_plCh.err = ESP_OK;
+
+    size_t readWords = 0;
+
     //------------------------------------------------------------------------------------------------------
     // RingBuffer -> I2S
     //------------------------------------------------------------------------------------------------------
 
-    readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
+    readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
     readWords &= ~static_cast<size_t>(1); // keep stereo aligned
 
     if (readWords > 0) {
+
         while (m_dmaFreeDesc > 0) {
-            size_t readWords = std::min(SamplesBuff.bufferFilled(), WORK_WORDS);
+            size_t readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
             readWords &= ~static_cast<size_t>(1);
-            if (readWords == 0) break;
+            if (readWords == 0) goto exit; // break;
             SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
             size_t bytesConsumed = 0;
             m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 0);
-            if (bytesConsumed == 0) break;
+            if (bytesConsumed == 0) {
+                AUDIO_LOG_WARN("couldn't not write to i2s: {}", m_dmaFreeDesc.load());
+                m_dmaFreeDesc.fetch_sub(1);
+                goto exit; // break;
+            }
             SamplesBuff.bytesRead(bytesConsumed / sizeof(int32_t));
-            m_dmaFreeDesc--;
+            m_dmaFreeDesc.fetch_sub(1);
         }
     }
 
@@ -3840,16 +3859,9 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_plCh.err == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("NULL pointer or this handle is not tx handle");
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
 
-    if (m_plCh.sourceWordsConsumed >= sourceWords) {
-        m_plCh.sourceWordsConsumed = 0;
-        m_validSamples = 0;
-    }
-
-    if (m_validSamples) AUDIO_LOG_DEBUG("m_validSamples {}", m_validSamples);
-    //  AUDIO_LOG_WARN("buff filled {}", SamplesBuff.bufferFilled());
 exit:
-    xSemaphoreGive(mutex_playChunk);
-    if (!xst) AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    //    xSemaphoreGive(mutex_playChunk);
+    //    if (!xst) AUDIO_LOG_WARN("was unable to obtain the semaphore");
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -5159,9 +5171,9 @@ void Audio::playAudioData() {
     } // guard, stream not ready or eof reached or InBuff is locked or not running
     if (m_validSamples || SamplesBuff.bufferFilled()) {
         vTaskDelay(5);
-       // cacheSamples();
-       playChunk();
+        cacheSamples();
     } // guard, play samples first
+    playChunk();
     if (m_validSamples) return;
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
@@ -6224,9 +6236,9 @@ exit:
     m_curSample = 0;
     if (m_validSamples) {
         calculateAudioTime(bytesDecoded, samples_out);
-        //cacheSamples();
-          playChunk();
+        cacheSamples();
     }
+    playChunk();
     return bytesDecoded;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6390,7 +6402,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         result = false;
         goto exit;
     }
-
+    m_work_words = settings.DMA_FRAME_NUM * 2;
     SamplesBuff.setBufsize(128 * settings.DMA_FRAME_NUM); // must be a multiple of DMA_FRAME_NUM
     if (SamplesBuff.init() == 0) {
         AUDIO_LOG_ERROR("RingBuffer allocation failed");
@@ -6400,7 +6412,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
-    m_i2sWorkBuff.alloc_array(WORK_WORDS, "i2sWorkBuff");
+    m_i2sWorkBuff.alloc_array(m_work_words, "i2sWorkBuff");
     vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
     vu_delay_frames += SamplesBuff.getBufsize() / 2; // SamplesBuff stores L/R words, 2 words per frame
     vu_delay_frames += 1;

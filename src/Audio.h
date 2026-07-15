@@ -373,6 +373,7 @@ class Audio {
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
+    void                     cacheSamples();
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
@@ -637,6 +638,7 @@ class Audio {
     size_t         m_audioDataSize = 0;               //
     size_t         m_ibuffSize = 0;                   // log buffer size for audio_info()
     size_t         m_i2s_bytesWritten = 0;            // set in i2s_write() but not used
+    size_t         m_work_words = 0;                  // calculated in setPinout()
 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
