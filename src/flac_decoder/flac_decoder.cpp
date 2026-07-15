@@ -1072,7 +1072,8 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     else if (FLACFrameHeader->sampleRateCode == 13 || FLACFrameHeader->sampleRateCode == 14) { readUint(16, bytesLeft); }
     readUint(8, bytesLeft);
 
-    for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
+    const uint8_t neededChannels = (FLACMetadataBlock->numChannels == 2) ? 2 : 1;
+    for (int32_t i = 0; i < neededChannels; i++) {
         if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
         if (!m_samplesBuffer[i].calloc_array(m_numOfOutSamples, "m_samplesBuffer") || !m_samplesBuffer[i].valid()) {
             FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffer {}, samples: {}", i, m_numOfOutSamples);
@@ -1080,6 +1081,10 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
             m_valid = false;
             return FLAC_ERR;
         }
+    }
+
+    for (int32_t i = neededChannels; i < FLAC_MAX_CHANNELS; i++) {
+        if (m_samplesBuffer[i].valid()) { m_samplesBuffer[i].reset(); }
     }
 
     m_flacStatus = DECODE_SUBFRAMES;
