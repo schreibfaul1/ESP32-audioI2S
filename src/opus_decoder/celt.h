@@ -148,6 +148,9 @@ class CeltDecoder {
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     CELTDecoder_t   m_celtDec; // unique pointer
     ps_ptr<int32_t> m_decode_mem;
+    ps_ptr<int32_t> m_freq_buf;     // celt_synthesis scratch: max shortMdctSize<<maxLM = 960
+    ps_ptr<int32_t> m_scratch_buf;  // deemphasis scratch: max 960
+    ps_ptr<int16_t> m_norm_buf;     // quant_all_bands norm: max 2*M*eBands[20] = 1248
     band_ctx_t      m_band_ctx;
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

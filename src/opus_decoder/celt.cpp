@@ -41,13 +41,17 @@ uint32_t CeltDecoder::celt_pvq_u_row(uint32_t row, uint32_t data) {
 bool CeltDecoder::init() {
     size_t omd = celt_decoder_get_size(2);
     m_decode_mem.alloc(omd, "decode_mem");
-    if (m_decode_mem.valid()) {
-        OPUS_LOG_DEBUG("Celt decoder, allocated bytes: {}", omd);
-        m_decode_mem.clear(); // mem zero
-        return true;
+    if (!m_decode_mem.valid()) {
+        OPUS_LOG_ERROR("oom for {} bytes", omd);
+        return false;
     }
-    OPUS_LOG_ERROR("oom for {} bytes", omd);
-    return false;
+    OPUS_LOG_DEBUG("Celt decoder, allocated bytes: {}", omd);
+    m_decode_mem.clear(); // mem zero
+    // pre-allocate scratch buffers once (reused every frame)
+    if (!m_freq_buf.alloc_array(960))    { OPUS_LOG_ERROR("oom m_freq_buf");    return false; }
+    if (!m_scratch_buf.alloc_array(960)) { OPUS_LOG_ERROR("oom m_scratch_buf"); return false; }
+    if (!m_norm_buf.alloc_array(1248))   { OPUS_LOG_ERROR("oom m_norm_buf");   return false; }
+    return true;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::clear() {
@@ -56,6 +60,9 @@ void CeltDecoder::clear() {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::reset() {
     m_decode_mem.reset();
+    m_freq_buf.reset();
+    m_scratch_buf.reset();
+    m_norm_buf.reset();
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::exp_rotation1(int16_t* X, int32_t len, int32_t stride, int16_t c, int16_t s) {
@@ -160,13 +167,13 @@ uint32_t CeltDecoder::alg_unquant(int16_t* X, int32_t N, int32_t K, int32_t spre
 
     assert2(K > 0, "alg_unquant() needs at least one pulse");
     assert2(N > 1, "alg_unquant() needs at least two dimensions");
-    ps_ptr<int32_t> iy;
-    iy.alloc_array(N + 3);
+    // max N = (eband5ms[21]-eband5ms[20]) << maxLM = 22 << 3 = 176; +3 safety → 179
+    int32_t iy[180];
 
-    Ryy = decode_pulses(iy.get(), N, K);
-    normalise_residual(iy.get(), X, N, Ryy, gain);
+    Ryy = decode_pulses(iy, N, K);
+    normalise_residual(iy, X, N, Ryy, gain);
     exp_rotation(X, N, -1, B, K, spread);
-    collapse_mask = extract_collapse_mask(iy.get(), N, B);
+    collapse_mask = extract_collapse_mask(iy, N, B);
     return collapse_mask;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1039,7 +1046,6 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t* X_, int16
     const int16_t* eBands = eband5ms;
     int16_t *      norm, *norm2;
 
-    int32_t  resynth_alloc;
     int16_t* lowband_scratch;
     int32_t  B;
     int32_t  M;
@@ -1052,31 +1058,13 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t* X_, int16
     M = 1 << LM;
     B = shortBlocks ? M : 1;
     norm_offset = M * eBands[start];
-    /* No need to allocate norm for the last band because we don't need an
-       output in that band. */
-    ps_ptr<int16_t> _norm;
-    _norm.alloc_array(C * (M * eBands[m_CELTMode.nbEBands - 1] - norm_offset));
-    norm = _norm.get();
+
+    /* Use pre-allocated member norm buffer (max 1248 int16_t). */
+    norm = m_norm_buf.get();
     norm2 = norm + M * eBands[m_CELTMode.nbEBands - 1] - norm_offset;
 
-    /* For decoding, we can use the last band as scratch space because we don't need that scratch space for the last band and we don't care about the data there until we're
-       decoding the last band. */
-    resynth_alloc = ALLOC_NONE;
-
-    ps_ptr<int16_t> _lowband_scratch;
-    _lowband_scratch.alloc_array(resynth_alloc);
+    /* For decoding, the last band is scratch space (no output needed there). */
     lowband_scratch = X_ + M * eBands[m_CELTMode.nbEBands - 1];
-
-    ps_ptr<int16_t> X_save;
-    X_save.alloc_array(resynth_alloc);
-    ps_ptr<int16_t> Y_save;
-    Y_save.alloc_array(resynth_alloc);
-    ps_ptr<int16_t> X_save2;
-    X_save2.alloc_array(resynth_alloc);
-    ps_ptr<int16_t> Y_save2;
-    Y_save2.alloc_array(resynth_alloc);
-    ps_ptr<int16_t> norm_save2;
-    norm_save2.alloc_array(resynth_alloc);
 
     lowband_offset = 0;
     m_band_ctx.bandE = bandE;
@@ -1263,8 +1251,7 @@ void CeltDecoder::deemphasis(int32_t* in[], int16_t* pcm, int32_t N, int32_t C, 
         return;
     }
 
-    ps_ptr<int32_t> scratch;
-    scratch.alloc_array(N);
+    int32_t* scratch = m_scratch_buf.get();
     coef0 = coef[0];
     Nd = N / downsample;
     c = 0;
@@ -1329,8 +1316,7 @@ void CeltDecoder::celt_synthesis(int16_t* X, int32_t* out_syn[], int16_t* oldBan
     overlap = m_CELTMode.overlap;
     nbEBands = m_CELTMode.nbEBands;
     N = m_CELTMode.shortMdctSize << LM;
-    ps_ptr<int32_t> freq;
-    freq.alloc_array(N); /**< Interleaved signal MDCTs */
+    int32_t* freq = m_freq_buf.get(); /**< Interleaved signal MDCTs */
     M = 1 << LM;
 
     if (isTransient) {
@@ -1346,17 +1332,17 @@ void CeltDecoder::celt_synthesis(int16_t* X, int32_t* out_syn[], int16_t* oldBan
     if (CC == 2 && C == 1) {
         /* Copying a mono streams to two channels */
         int32_t* freq2;
-        denormalise_bands(X, freq.get(), oldBandE, start, effEnd, M, downsample, silence);
+        denormalise_bands(X, freq, oldBandE, start, effEnd, M, downsample, silence);
         /* Store a temporary copy in the output buffer because the IMDCT destroys its input. */
         freq2 = out_syn[1] + overlap / 2;
-        memcpy(freq2, freq.get(), N * sizeof(*freq2));
+        memcpy(freq2, freq, N * sizeof(*freq2));
         for (b = 0; b < B; b++) clt_mdct_backward(&freq2[b], out_syn[0] + NB * b, overlap, shift, B);
         for (b = 0; b < B; b++) clt_mdct_backward(&freq[b], out_syn[1] + NB * b, overlap, shift, B);
     } else if (CC == 1 && C == 2) {
         /* Downmixing a stereo stream to mono */
         int32_t* freq2;
         freq2 = out_syn[0] + overlap / 2;
-        denormalise_bands(X, freq.get(), oldBandE, start, effEnd, M, downsample, silence);
+        denormalise_bands(X, freq, oldBandE, start, effEnd, M, downsample, silence);
         /* Use the output buffer as temp array before downmixing. */
         denormalise_bands(X + N, freq2, oldBandE + nbEBands, start, effEnd, M, downsample, silence);
         for (i = 0; i < N; i++) freq[i] = ADD32(HALF32(freq[i]), HALF32(freq2[i]));
@@ -1366,7 +1352,7 @@ void CeltDecoder::celt_synthesis(int16_t* X, int32_t* out_syn[], int16_t* oldBan
         /* Normal case (mono or stereo) */
         c = 0;
         do {
-            denormalise_bands(X + c * N, freq.get(), oldBandE + c * nbEBands, start, effEnd, M, downsample, silence);
+            denormalise_bands(X + c * N, freq, oldBandE + c * nbEBands, start, effEnd, M, downsample, silence);
             for (b = 0; b < B; b++)
                 for (b = 0; b < B; b++) clt_mdct_backward(&freq[b], out_syn[c] + NB * b, overlap, shift, B);
         } while (++c < CC);
@@ -2820,11 +2806,20 @@ void CeltDecoder::dual_inner_prod_c(const int16_t* x, const int16_t* y01, const 
     *xy2 = xy02;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t CeltDecoder::celt_inner_prod_c(const int16_t* x, const int16_t* y, int32_t N) {
-    int32_t i;
-    int32_t xy = 0;
-    for (i = 0; i < N; i++) xy = MAC16_16(xy, x[i], y[i]);
-    return xy;
+IRAM_ATTR int32_t CeltDecoder::celt_inner_prod_c(const int16_t* x, const int16_t* y, int32_t N) {
+    int32_t i   = 0;
+    int32_t xy0 = 0, xy1 = 0, xy2 = 0, xy3 = 0;
+    /* 4× unrolled loop: reduces loop-control overhead and allows the
+       Xtensa LX6 to schedule 4 independent MAC16_16 ops back-to-back. */
+    for (; i <= N - 4; i += 4) {
+        xy0 = MAC16_16(xy0, x[i + 0], y[i + 0]);
+        xy1 = MAC16_16(xy1, x[i + 1], y[i + 1]);
+        xy2 = MAC16_16(xy2, x[i + 2], y[i + 2]);
+        xy3 = MAC16_16(xy3, x[i + 3], y[i + 3]);
+    }
+    /* tail */
+    for (; i < N; i++) xy0 = MAC16_16(xy0, x[i], y[i]);
+    return xy0 + xy1 + xy2 + xy3;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t CeltDecoder::get_pulses(int32_t i) {

@@ -34,7 +34,7 @@ constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
 
-constexpr size_t AUDIO_STACK_SIZE = 3500;
+constexpr size_t AUDIO_STACK_SIZE = 3700;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
@@ -3794,7 +3794,7 @@ void Audio::cacheSamples() {
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void IRAM_ATTR Audio::playChunk() {
+void Audio::playChunk() {
     if (SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
     //    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
