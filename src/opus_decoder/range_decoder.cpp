@@ -19,14 +19,14 @@ uint32_t RangeDecoder::tell_frac() {
     return nbits - l;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR int32_t RangeDecoder::read_byte() { return m_offs < m_storage ? m_buf[m_offs++] : 0; }
+int32_t RangeDecoder::read_byte() {return m_offs < m_storage ? m_buf[m_offs++] : 0; }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR int32_t RangeDecoder::read_byte_from_end() {
+int32_t RangeDecoder::read_byte_from_end() {
     return m_end_offs < m_storage ? m_buf[m_storage - ++(m_end_offs)] : 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
-IRAM_ATTR void RangeDecoder::dec_normalize() {
+void RangeDecoder::dec_normalize() {
     /*If the range is too small, rescale it and input some bits.*/
     while (m_rng <= EC_CODE_BOT) {
         int32_t sym;
@@ -60,21 +60,21 @@ void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
     dec_normalize();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR uint32_t RangeDecoder::decode(uint32_t _ft) {
+uint32_t RangeDecoder::decode(uint32_t _ft) {
     uint32_t s;
     m_ext = m_rng / _ft;
     s = (uint32_t)(m_val / m_ext);
     return _ft - EC_MINI(s + 1, _ft);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR uint32_t RangeDecoder::decode_bin(uint32_t _bits) {
+uint32_t RangeDecoder::decode_bin(uint32_t _bits) {
     uint32_t s;
     m_ext = m_rng >> _bits;
     s = (uint32_t)(m_val / m_ext);
     return (1U << _bits) - EC_MINI(s + 1U, 1U << _bits);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR void RangeDecoder::dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
+void RangeDecoder::dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
     uint32_t s;
     s = m_ext *  (_ft - _fh);
     m_val -= s;
@@ -89,7 +89,7 @@ IRAM_ATTR void RangeDecoder::dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*The probability of having a "one" is 1/(1<<_logp).*/
-IRAM_ATTR int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
+int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
     uint32_t r;
     uint32_t d;
     uint32_t s;
@@ -104,7 +104,7 @@ IRAM_ATTR int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR int32_t RangeDecoder::dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
+int32_t RangeDecoder::dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
     uint32_t r;
     uint32_t d;
     uint32_t s;
@@ -150,7 +150,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
+uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     uint32_t window;
     int32_t available;
     uint32_t ret;
@@ -171,7 +171,7 @@ IRAM_ATTR uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-IRAM_ATTR int32_t RangeDecoder::tell(){return m_nbits_total-EC_ILOG(m_rng);}
+int32_t RangeDecoder::tell(){return m_nbits_total-EC_ILOG(m_rng);}
 void RangeDecoder::add_nbits_total(int32_t nbits_total){m_nbits_total += nbits_total;}
 uint32_t RangeDecoder::get_storage(){return m_storage;}
 int32_t RangeDecoder::get_error(){return m_error;}

@@ -428,8 +428,6 @@ class Audio {
     int32_t                min3(int32_t a, int32_t b, int32_t c);
     uint64_t               bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
     bool                   b64encode(const char* source, uint16_t sourceLength, char* dest);
-    void                   vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec);
-    void                   deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
     uint32_t               simpleHash(const char* str);
     ps_ptr<char>           urlencode(const char* str, bool spacesOnly);
     audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs);
@@ -513,7 +511,6 @@ class Audio {
     NetworkClientSecure clientsecure;
     NetworkClient*      m_client = nullptr;
 
-    SemaphoreHandle_t mutex_playChunk;
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;
     TaskHandle_t      m_audioTaskHandle = nullptr;

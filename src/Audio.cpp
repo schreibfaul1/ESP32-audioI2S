@@ -5,7 +5,7 @@
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
     Version 4.0.0-alpha1                                                                                                                           ";
-/*  Updated on: Jul 14, 2026
+/*  Updated on: Jul 16, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -721,7 +721,6 @@ void RingBuffer::showStatus() {
 Audio::Audio(uint8_t i2sPort) {
 
     m_f_I2S_init = false;
-    mutex_playChunk = xSemaphoreCreateMutex();
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
     clientsecure.setInsecure();
@@ -737,7 +736,6 @@ Audio::~Audio() {
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
     stopAudioTask();
-    vSemaphoreDelete(mutex_playChunk);
     vSemaphoreDelete(mutex_audioTask);
     vSemaphoreDelete(mutex_audioTaskIsDecoding);
 }
@@ -809,9 +807,17 @@ void Audio::setDefaults() {
     m_resamplesBuff.clear(); // Clear m_resamplesBuff
     m_syltTimeStamp.clear();
 
-    vector_clear_and_shrink(m_playlistURL);
-    vector_clear_and_shrink(m_playlistContent);
-    vector_clear_and_shrink(m_syltLines);
+    m_playlistURL.clear();
+    m_playlistURL.shrink_to_fit();
+    m_playlistContent.clear();
+    m_playlistContent.shrink_to_fit();
+    m_syltLines.clear();
+    m_syltLines.shrink_to_fit();
+    m_linesWithURL.clear();
+    m_linesWithURL.shrink_to_fit();
+    m_linesWithEXTINF.clear();
+    m_linesWithEXTINF.shrink_to_fit();
+
 
     client.stop();
     clientsecure.stop();
@@ -4094,7 +4100,8 @@ bool Audio::readPlayListData() {
     return true;
 
 exit:
-    vector_clear_and_shrink(m_playlistContent);
+    m_playlistContent.clear();
+    m_playlistContent.shrink_to_fit();
     getChunkSize(0, true);
     return false;
 }
@@ -4416,8 +4423,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if (lines) {
         bool addNextLine = false;
-        deque_clear_and_shrink(m_linesWithURL);
-        vector_clear_and_shrink(m_linesWithEXTINF);
+        m_linesWithURL.clear();
+        m_linesWithEXTINF.clear();
         for (uint32_t i = 0; i < lines; i++) {
             // AUDIO_LOG_INFO("pl{} = {}", i, m_playlistContent[i].get());
             if (m_playlistContent[i].starts_with("#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*AUDIO_LOG_ERROR("we have a redirection");*/ }
@@ -4435,7 +4442,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         if (!f_haveRedirection) {
             accomplish_m3u8_url();
             prepare_first_m3u8_url(m_playlistBuff);
-            vector_clear_and_shrink(m_playlistContent);
+            m_playlistContent.clear();
         }
     }
 
@@ -4448,7 +4455,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if (f_haveRedirection) {
         m_m3u8_host = m3u8redirection(&m_m3u8Codec);
-        vector_clear_and_shrink(m_playlistContent);
+        m_playlistContent.clear();
         return {};
     }
 
@@ -5164,12 +5171,12 @@ void Audio::playAudioData() {
         vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
-    if (m_validSamples || SamplesBuff.bufferFilled()) {
-        vTaskDelay(5);
+    if (SamplesBuff.bufferFilled()) { playChunk(); } // guard, play samples first
+
+    if (m_validSamples) {
         cacheSamples();
-    } // guard, play samples first
-    playChunk();
-    if (m_validSamples) return;
+        return;
+    }
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
@@ -5249,7 +5256,6 @@ void Audio::playAudioData() {
     }
 exit:
     xSemaphoreGive(mutex_audioTaskIsDecoding);
-
     AUDIO_LOG_DEBUG("m_audioDataReadPtr {}, m_audioDataSize {}", m_audioDataReadPtr, m_audioDataSize);
     return;
 }
@@ -5963,7 +5969,11 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     //         -1 the sync word was not found within the block with the length len
 
     m_fnsy.nextSync = 0;
-
+    if (InBuff.bufferFilled() == 0) {
+        AUDIO_LOG_WARN("no more data available");
+        vTaskDelay(1000);
+        return -1;
+    }
     if (m_codec == CODEC_WAV) {
         m_f_playing = true;
         m_fnsy.nextSync = 0;
@@ -6141,7 +6151,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
     //-----------------------------------------------------------------
+    {
+        PROFILE_SCOPE_N(1000);
+
     res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
+    }
     bytesDecoded = len - m_sbyt.bytesLeft;
     //-----------------------------------------------------------------
 
@@ -6233,7 +6247,7 @@ exit:
         calculateAudioTime(bytesDecoded, samples_out);
         cacheSamples();
     }
-    playChunk();
+    if (SamplesBuff.bufferFilled()) { playChunk(); }
     return bytesDecoded;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8171,18 +8185,6 @@ bool Audio::b64encode(const char* source, uint16_t sourceLength, char* dest) {
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec) {
-    for (int i = 0; i < vec.size(); i++) vec[i].reset();
-    vec.clear();         // unique_ptr takes care of free()
-    vec.shrink_to_fit(); // put back memory
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq) {
-    for (int i = 0; i < deq.size(); i++) deq[i].reset();
-    deq.clear();         // unique_ptr takes care of free()
-    deq.shrink_to_fit(); // put back memory
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::simpleHash(const char* str) {
     if (str == NULL) return 0;
     uint32_t hash = 0;
@@ -8322,6 +8324,7 @@ void Audio::performAudioTask() {
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
+        if (SamplesBuff.bufferFilled()) { playChunk(); }
         vTaskDelay(20);
         return;
     }
