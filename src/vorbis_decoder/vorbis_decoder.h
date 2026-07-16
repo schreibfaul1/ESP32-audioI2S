@@ -309,7 +309,6 @@ class VorbisDecoder : public Decoder {
     ps_ptr<vorbis_info_mapping>       m_map_param;
     ps_ptr<vorbis_info_mode_t>        m_mode_param;
     ps_ptr<vorbis_dsp_state>          m_dsp_state;
-    ps_ptr<int16_t>                   m_out16;
 
     std::vector<uint32_t> m_vorbisBlockPicItem;
 
