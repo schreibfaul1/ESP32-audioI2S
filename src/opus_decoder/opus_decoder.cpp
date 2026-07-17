@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 14.02.2026
+ *  Updated on: 17.02.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -1369,6 +1369,7 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     m_opusSegmentLength = 0;
     segmentTableWrPtr = -1;
 
+    m_f_packetContinuesAfterPage = false;
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -1380,6 +1381,10 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
         m_opusSegmentTable[segmentTableWrPtr] = n;
         m_opusSegmentLength += n;
     }
+
+    // The last lacing value determines whether the last packet continues
+    if (pageSegments > 0) { m_f_packetContinuesAfterPage = (*(inbuf + 27 + pageSegments - 1) == 255); }
+
     m_opusSegmentTableSize = segmentTableWrPtr + 1;
     m_opusCompressionRatio = (float)(960 * 2 * pageSegments) / m_opusSegmentLength; // const 960 validBytes out
 
@@ -1389,7 +1394,8 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
 
     if (m_f_firstPage) { m_opusPageNr = 0; }
 
-    OPUS_LOG_DEBUG("firstPage {}, continuedPage {}, lastPage {}", m_f_firstPage, m_f_continuedPage, m_f_lastPage);
+    OPUS_LOG_DEBUG("firstPage {}, continuedPage {}, packetContinuesAfterPage {}, lastPage {}", m_f_firstPage, m_f_continuedPage, m_f_packetContinuesAfterPage, m_f_lastPage);
+    if (m_f_packetContinuesAfterPage)OPUS_LOG_WARN("packet continues after page"); // todo
 
     uint16_t headerSize = pageSegments + 27;
     *bytesLeft -= headerSize;
