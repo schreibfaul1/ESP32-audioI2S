@@ -1236,9 +1236,14 @@ bool Audio::httpPrint(const char* host) {
     cur_hwoe = dismantledLastHost.hwoe;
 
     bool f_equal = true;
-    if (hwoe == cur_hwoe && port == dismantledLastHost.port) {
+    if (hwoe == cur_hwoe && port == dismantledLastHost.port && m_f_ssl == dismantledLastHost.ssl) {
         f_equal = true;
     } else {
+        f_equal = false;
+    }
+    // Classic playlist entries often leave a stale keep-alive socket; force a fresh connection for the resolved stream URL.
+    if (m_playlistFormat != FORMAT_M3U8 && (m_dataMode == AUDIO_PLAYLISTINIT || m_dataMode == AUDIO_PLAYLISTDATA)) {
+        if (m_client && m_client->connected()) m_client->stop();
         f_equal = false;
     }
 
@@ -3875,9 +3880,10 @@ void Audio::loop() {
             case HTTP_RESPONSE_HEADER:
                 if (!parseHttpResponseHeader()) {
                     if (m_f_timeout && m_lVar.count < 3) {
+                        const char* retryHost = m_currentHost.valid() ? m_currentHost.get() : m_lastHost.get();
                         m_f_timeout = false;
                         m_lVar.count++;
-                        connecttohost(m_lastHost.get());
+                        connecttohost(retryHost);
                     }
                 } else {
                     m_lVar.count = 0;
@@ -5276,8 +5282,9 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
         if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
             AUDIO_LOG_ERROR("timeout");
+            m_f_timeout = true;
             m_phreh.f_time = false;
-            // stopSong();
+            if (m_client && m_client->connected()) m_client->stop();
             return false;
         }
     }
