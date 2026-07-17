@@ -151,6 +151,10 @@ class CeltDecoder {
     ps_ptr<int32_t> m_freq_buf;     // celt_synthesis scratch: max shortMdctSize<<maxLM = 960
     ps_ptr<int32_t> m_scratch_buf;  // deemphasis scratch: max 960
     ps_ptr<int16_t> m_norm_buf;     // quant_all_bands norm: max 2*M*eBands[20] = 1248
+    ps_ptr<int32_t> m_decode_i32_buf;
+    ps_ptr<uint8_t> m_collapse_masks_buf;
+    ps_ptr<int16_t> m_mdct_norm_buf;
+    ps_ptr<int16_t> m_hadamard_tmp_buf;
     band_ctx_t      m_band_ctx;
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
