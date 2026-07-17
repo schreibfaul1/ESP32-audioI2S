@@ -50,9 +50,7 @@ __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t v
 //-------------------------------------------------------------------------------------------------------------------
 static bool IRAM_ATTR i2s_tx_sent_callback(i2s_chan_handle_t handle, i2s_event_data_t* event, void* user_ctx) {
     Audio* audio = static_cast<Audio*>(user_ctx);
-
     audio->m_dmaFreeDesc.fetch_add(1);
-
     return false; // keine höhere Task geweckt
 }
 
@@ -3803,7 +3801,6 @@ void Audio::cacheSamples() {
 void Audio::playChunk() {
     if (SamplesBuff.bufferFilled() == 0) return; // nothing to do
 
-    //    bool xst = xSemaphoreTake(mutex_playChunk, 0.3 * configTICK_RATE_HZ);
     if (m_f_firstChunkCall) {
         m_f_firstChunkCall = false;
         m_dmaFreeDesc = 0;
@@ -3822,7 +3819,7 @@ void Audio::playChunk() {
 
             size_t readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
             readWords &= ~static_cast<size_t>(1);
-            if (readWords == 0) goto exit; // break;
+            if (readWords == 0) break;
             SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
             //-----------------------------------------------------------------------------------------------------------------------------------------
             audio_process_raw_samples(m_i2sWorkBuff.get(), readWords);
@@ -3844,7 +3841,7 @@ void Audio::playChunk() {
             if (bytesConsumed == 0) {
                 AUDIO_LOG_DEBUG("i2s write err={:X} consumed={} freeDesc={}", m_plCh.err, bytesConsumed, m_dmaFreeDesc.load());
                 m_dmaFreeDesc.fetch_sub(1, std::memory_order_release);
-                goto exit; // break;
+                break;
             }
 
             if (bytesConsumed != readWords * sizeof(int32_t)) { AUDIO_LOG_WARN("partial write: {} / {}", bytesConsumed, readWords * sizeof(int32_t)); }
@@ -3860,9 +3857,6 @@ void Audio::playChunk() {
     if (m_plCh.err == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("I2S is not ready to write");
     if (m_plCh.err == ESP_ERR_TIMEOUT) AUDIO_LOG_ERROR("Writing timeout, no writing event received from ISR within ticks_to_wait");
 
-exit:
-    //    xSemaphoreGive(mutex_playChunk);
-    //    if (!xst) AUDIO_LOG_WARN("was unable to obtain the semaphore");
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
