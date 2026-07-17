@@ -5,7 +5,7 @@
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
     Version 4.0.0-alpha1                                                                                                                           ";
-/*  Updated on: Jul 16, 2026
+/*  Updated on: Jul 17, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -815,7 +815,6 @@ void Audio::setDefaults() {
     m_linesWithURL.shrink_to_fit();
     m_linesWithEXTINF.clear();
     m_linesWithEXTINF.shrink_to_fit();
-
 
     client.stop();
     clientsecure.stop();
@@ -6022,6 +6021,14 @@ void Audio::setDecoderItems() {
     setChannels(m_decoder->getChannels());
     setSampleRate(m_decoder->getSampleRate());
     setBitsPerSample(m_decoder->getBitsPerSample());
+
+    uint32_t decoderBitRate = m_decoder->getBitRate();
+    if (!m_nominal_bitrate && decoderBitRate > 0) {
+        m_nominal_bitrate = decoderBitRate;
+        info(*this, evt_bitrate, "{}", m_nominal_bitrate);
+        info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
+    }
+
     if (m_decoder->arg1()) info(*this, evt_info, "{}", m_decoder->arg1());
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
@@ -6145,11 +6152,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
     //-----------------------------------------------------------------
-    {
-        PROFILE_SCOPE_N(1000);
-
     res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
-    }
     bytesDecoded = len - m_sbyt.bytesLeft;
     //-----------------------------------------------------------------
 
@@ -6286,7 +6289,8 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
             double instBitRate = (m_cat.deltaBytesIn * 8000.0) / delta_t;
             m_cat.counter++;
             m_cat.avrBitRate += (instBitRate - m_cat.avrBitRate) / m_cat.counter;
-            if ((abs(m_cat.avrBitRate - m_cat.oldAvrBitrate < 50)) && !m_cat.avrBitrateStable && m_cat.avrBitRate > 1000) {
+            uint32_t bitrateDelta = (m_cat.avrBitRate >= m_cat.oldAvrBitrate) ? (m_cat.avrBitRate - m_cat.oldAvrBitrate) : (m_cat.oldAvrBitrate - m_cat.avrBitRate);
+            if ((bitrateDelta < 50) && !m_cat.avrBitrateStable && m_cat.avrBitRate > 1000) {
                 m_cat.brCounter++;
                 if (m_cat.brCounter > 6) {
                     m_cat.avrBitrateStable = m_cat.avrBitRate;
