@@ -278,7 +278,7 @@ class Audio {
     // -------------------------------------------------------------------
     typedef enum : uint32_t { SR_ORIGIN = 0, SR_44100 = 44100, SR_48000 = 48000 } OutputSR_t;
 
-    bool             openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
+    bool             openai_speech(const char* api_key, const char* model, const char* input, const char* instructions, const char* voice, const char* response_format, const char* speed);
     audiolib::hwoe_t dismantle_host(const char* host);
     bool             connecttohost(const char* host, const char* user = nullptr, const char* pwd = nullptr);
     bool             connecttospeech(const char* speech, const char* lang);

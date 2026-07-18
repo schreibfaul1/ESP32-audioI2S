@@ -899,79 +899,60 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
 
     Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
-bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
+bool Audio::openai_speech(const char* api_key, const char* model, const char* input, const char* instructions, const char* voice, const char* response_format, const char* speed) {
     ps_ptr<char> host;
     host.assign("api.openai.com");
     char path[] = "/v1/audio/speech";
 
-    if (input == "") {
+    if (!input || *input == '\0') {
         AUDIO_LOG_WARN("input text is empty");
         stopSong();
         return false;
     }
 
+    auto clean = [](const char* input) -> ps_ptr<char> {
+        ps_ptr<char> in;
+        if (!input) return in;
+        in = input;
+
+        in.replace("\\", "\\\\"); // first!
+        in.replace("\"", "\\\"");
+        in.replace("\n", "\\n");
+        in.replace("\r", "\\r");
+        in.replace("\t", "\\t");
+        in.replace("\b", "\\b");
+        in.replace("\f", "\\f");
+        return in;
+    };
+
     setDefaults();
     m_f_ssl = true;
 
-    m_speechtxt.assign(input.c_str());
+    ps_ptr<char> input_clean = clean(input);
+    ps_ptr<char> instructions_clean = clean(instructions);
 
-    // Escape special characters in input
-    String input_clean = "";
-    for (int i = 0; i < input.length(); i++) {
-        char c = input.charAt(i);
-        if (c == '\"') {
-            input_clean += "\\\"";
-        } else if (c == '\n') {
-            input_clean += "\\n";
-        } else if (c == '\r') {
-            input_clean += "\\r";
-        } else if (c == '\t') {
-            input_clean += "\\t";
-        } else if (c == '\\') {
-            input_clean += "\\\\";
-        } else if (c == '\b') {
-            input_clean += "\\b";
-        } else if (c == '\f') {
-            input_clean += "\\f";
-        } else {
-            input_clean += c;
-        }
-    }
+    ps_ptr<char> post_body = {};
+    post_body.reserve(4096);
+    post_body.assignf("{\"model\":\"{}\","
+                      "\"stream\":true,"
+                      "\"input\":\"{}\","
+                      "\"instructions\":\"{}\","
+                      "\"voice\":\"{}\","
+                      "\"response_format\":\"{}\","
+                      "\"speed\":{}}",
+                      model, input_clean, instructions_clean, voice, response_format, speed);
 
-    // Escape special characters in instructions
-    String instructions_clean = "";
-    for (int i = 0; i < instructions.length(); i++) {
-        char c = instructions.charAt(i);
-        if (c == '\"') {
-            instructions_clean += "\\\"";
-        } else if (c == '\n') {
-            instructions_clean += "\\n";
-        } else if (c == '\r') {
-            instructions_clean += "\\r";
-        } else if (c == '\t') {
-            instructions_clean += "\\t";
-        } else if (c == '\\') {
-            instructions_clean += "\\\\";
-        } else if (c == '\b') {
-            instructions_clean += "\\b";
-        } else if (c == '\f') {
-            instructions_clean += "\\f";
-        } else {
-            instructions_clean += c;
-        }
-    }
-
-    String post_body = "{"
-                       "\"model\": \"" +
-                       model + "\"," + "\"stream\": true," + // add
-                       "\"input\": \"" + input_clean + "\"," + "\"instructions\": \"" + instructions_clean + "\"," + "\"voice\": \"" + voice + "\"," + "\"response_format\": \"" + response_format + "\"," + "\"speed\": " + speed + "}";
-
-    String http_request =
-        //  "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
-        "POST " + String(path) + " HTTP/1.1\r\n" + "Host: " + host.get() + "\r\n" + "Authorization: Bearer " + api_key + "\r\n" + "Accept-Encoding: identity;q=1,*;q=0\r\n" + "User-Agent: nArija/1.0\r\n" + "Content-Type: application/json; charset=utf-8\r\n" + "Content-Length: " + post_body.length() +
-        "\r\n"
-        //  + "Connection: close\r\n" + "\r\n"
-        + "\r\n" + post_body + "\r\n";
+    ps_ptr<char> http_request = {};
+    http_request.reserve(post_body.strlen() + 300);
+    http_request.assignf("POST {} HTTP/1.1\r\n"
+                         "Host: {}\r\n"
+                         "Authorization: Bearer {}\r\n"
+                         "Accept-Encoding: identity;q=1,*;q=0\r\n"
+                         "User-Agent: nArija/1.0\r\n"
+                         "Content-Type: application/json; charset=utf-8\r\n"
+                         "Content-Length: {}\r\n\r\n"
+                         "{}\r\n",
+                         path, host, api_key, post_body.strlen(), post_body);
 
     bool res = true;
     int  port = 443;
@@ -992,11 +973,11 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     m_expectedPlsFmt = FORMAT_NONE;
 
     if (res) {
-        m_client->print(http_request);
-        if (response_format == "mp3") m_expectedCodec = CODEC_MP3;
-        if (response_format == "opus") m_expectedCodec = CODEC_OPUS;
-        if (response_format == "aac") m_expectedCodec = CODEC_AAC;
-        if (response_format == "flac") m_expectedCodec = CODEC_FLAC;
+        m_client->print(http_request.c_get());
+        if (strcmp(response_format, "mp3") == 0) m_expectedCodec = CODEC_MP3;
+        if (strcmp(response_format, "opus") == 0) m_expectedCodec = CODEC_OPUS;
+        if (strcmp(response_format, "aac") == 0) m_expectedCodec = CODEC_AAC;
+        if (strcmp(response_format, "flac") == 0) m_expectedCodec = CODEC_FLAC;
 
         m_dataMode = HTTP_RESPONSE_HEADER;
         m_f_tts = true;

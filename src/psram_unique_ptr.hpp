@@ -2486,6 +2486,12 @@ class ps_ptr {
                     continue;
                 }
 
+                // Nur {} oder {:...} sind Platzhalter
+                if (fmt[1] != '}' && fmt[1] != ':') {
+                    out += *fmt++;
+                    continue;
+                }
+
                 // Ende suchen
                 const char* end = std::strchr(fmt, '}');
 
@@ -2668,20 +2674,23 @@ class ps_ptr {
                 fmt += 2;
                 continue;
             }
+
             // escaped }}
             if (fmt[0] == '}' && fmt[1] == '}') {
                 fmt += 2;
                 continue;
             }
 
-            // echtes {
+            // Nur wenn wirklich '{'
             if (*fmt == '{') {
-                const char* end = std::strchr(fmt, '}');
-
-                if (end) {
-                    ++count;
-                    fmt = end + 1;
-                    continue;
+                // Nur {} oder {:...} sind Platzhalter
+                if (fmt[1] == '}' || fmt[1] == ':') {
+                    const char* end = std::strchr(fmt, '}');
+                    if (end) {
+                        ++count;
+                        fmt = end + 1;
+                        continue;
+                    }
                 }
             }
             ++fmt;
