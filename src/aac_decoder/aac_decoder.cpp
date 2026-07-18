@@ -126,7 +126,7 @@ error_info_t AACDecoder::getErrorMessage(int8_t err) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    void*    sample_buffer = outbuf;
+    void* sample_buffer = outbuf;
     if (m_f_firstCall == false) {
         if (m_f_setRaWBlockParams) { // set raw AAC values, e.g. for M4A config.
             m_f_setRaWBlockParams = false;
@@ -155,15 +155,24 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     int8_t err = 0 - m_frameInfo.error;
     m_compressionRatio = (float)m_frameInfo.samples * 2 / m_frameInfo.bytesconsumed;
     if (err < 0) {
-        if (err == -100) return AAC_ID3_HDR; // ID3 header found
-        else{
-            if(getErrorMessage(abs(err)).level == AAC_ERROR) AAC_LOG_ERROR("{}", getErrorMessage(abs(err)).text);
-            if(getErrorMessage(abs(err)).level == AAC_WARN) AAC_LOG_WARN("{}", getErrorMessage(abs(err)).text);
-            if(getErrorMessage(abs(err)).level == AAC_INFO) AAC_LOG_INFO("{}", getErrorMessage(abs(err)).text);
-            if(getErrorMessage(abs(err)).level == AAC_DEBUG) AAC_LOG_DEBUG("{}", getErrorMessage(abs(err)).text);
-            if(getErrorMessage(abs(err)).level == AAC_VERBOSE) AAC_LOG_VERBOSE("{}", getErrorMessage(abs(err)).text);
+        if (err == -100)
+            return AAC_ID3_HDR; // ID3 header found
+        else {
+            if (getErrorMessage(abs(err)).level == AAC_ERROR) AAC_LOG_ERROR("{}", getErrorMessage(abs(err)).text);
+            if (getErrorMessage(abs(err)).level == AAC_WARN) AAC_LOG_WARN("{}", getErrorMessage(abs(err)).text);
+            if (getErrorMessage(abs(err)).level == AAC_INFO) AAC_LOG_INFO("{}", getErrorMessage(abs(err)).text);
+            if (getErrorMessage(abs(err)).level == AAC_DEBUG) AAC_LOG_DEBUG("{}", getErrorMessage(abs(err)).text);
+            if (getErrorMessage(abs(err)).level == AAC_VERBOSE) AAC_LOG_VERBOSE("{}", getErrorMessage(abs(err)).text);
         }
     } else {
+        if (m_aacChannels == 1 && !m_frameInfo.isPS) { // ESP32-S3 and -P4 has ParametricStereo activated
+            AAC_LOG_ERROR("1");
+            for (int32_t i = m_validSamples - 1; i >= 0; i--) {
+                int32_t sample = outbuf[i];
+                outbuf[i * 2] = sample;
+                outbuf[i * 2 + 1] = sample;
+            }
+        }
     }
     return err;
 }
