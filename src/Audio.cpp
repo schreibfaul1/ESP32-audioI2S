@@ -802,8 +802,9 @@ void Audio::setDefaults() {
     m_m3u8_host.reset();
 
     m_outBuff.clear();       // Clear OutputBuffer
-    m_resamplesBuff.clear(); // Clear m_resamplesBuff
+    m_resamplesBuff.clear(); // Clear ResamplesBuff
     m_syltTimeStamp.clear();
+    memset(m_audio_items.state_biquad, 0, sizeof(m_audio_items.state_biquad)); // clear biquad history
 
     m_playlistURL.clear();
     m_playlistURL.shrink_to_fit();
@@ -3837,7 +3838,7 @@ void Audio::playChunk() {
             //-----------------------------------------------------------------------------------------------------------------------------------------
             size_t bytesConsumed = 0;
             if (continueI2S) {
-                m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 0);
+                m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_i2sWorkBuff.get(), readWords * sizeof(int32_t), &bytesConsumed, 5);
             } else {
                 bytesConsumed = readWords * sizeof(int32_t);
             }
@@ -7236,7 +7237,6 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
                     m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1], m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2], m_audio_items.coeffs[2][3],
                     m_audio_items.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
-    memset(m_audio_items.state_biquad, 0, sizeof(m_audio_items.state_biquad));
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::IIR_filter(int32_t* sample) {
