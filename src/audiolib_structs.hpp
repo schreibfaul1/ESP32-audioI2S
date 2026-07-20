@@ -126,8 +126,8 @@ struct plCh_t { // used in playChunk
 };
 
 struct caSa_t { // used in cacheSamples
-    size_t    sourceWordsConsumed = 0;
-    bool      firstCall = false;
+    size_t sourceWordsConsumed = 0;
+    bool   firstCall = false;
 };
 
 struct lVar_t { // used in loop
@@ -368,16 +368,28 @@ struct i2s_items_t {
 };
 
 struct vu_items_t {
-    ps_ptr<int32_t> delay_l;
-    ps_ptr<int32_t> delay_r;
-    uint32_t        delay_line_index = 0;
-    uint32_t        delay_buffer_size = 0;
-    float           left = 0;  // average value of samples, left channel
-    float           right = 0; // average value of samples, right channel
-    uint8_t         left_peak = 0;
-    uint8_t         right_peak = 0;
-    uint16_t        left_hold = 0;
-    uint16_t        right_hold = 0;
+    uint16_t samps_50ms = {};
+    uint16_t samps_count = {};
+    uint8_t  attackStep = {};
+    uint8_t  releaseStep = {};
+    uint8_t  maxLeft = {};
+    uint8_t  maxRight = {};
+    uint8_t  measuredLeft;  // Average value of the current 50-ms window
+    uint8_t  displayLeft;   // current displayed value
+    uint8_t  peakLeft;      // Peak display
+    uint8_t  measuredRight; // Average value of the current 50-ms window
+    uint8_t  displayRight;  // current displayed value
+    uint8_t  peakRight;     // Peak display
+    uint64_t sumL = {};
+    uint64_t sumR = {};
+    ps_ptr<uint8_t>vuCurve = {};
+    std::vector<uint32_t> lrvec = {};
+
+    void reset() {
+        *this = vu_items_t{};
+        lrvec.push_back(0);
+        lrvec.push_back(0);
+    }
 };
 
 #define FFT_BANDS 6

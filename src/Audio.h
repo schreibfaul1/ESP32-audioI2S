@@ -191,6 +191,7 @@ class RingBuffer {
     size_t        getBufsize() const;
     size_t        init();
     bool          isInitialized() { return m_init; };
+    void          clear();
     void          reset();
     size_t        freeSpace() const;
     size_t        bufferFilled() const;
@@ -244,6 +245,7 @@ class Audio {
         evt_image,
         evt_lyrics,
         evt_log,
+        evt_vu,
     } event_t;
 
     // Audio event type descriptions
@@ -311,7 +313,6 @@ class Audio {
     uint32_t         getAudioCurrentTime();
     uint32_t         getAudioFilePosition();
     bool             setAudioFilePosition(uint32_t pos);
-    uint16_t         getVUlevel();
     uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
@@ -374,7 +375,7 @@ class Audio {
     uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     cacheSamples();
     void                     playChunk();
-    void                     calculateVUlevel(int32_t* sample);
+    void                     calculateVUlevel(int32_t* buff, size_t len);
     void                     processSpectrum();
     void                     gain_ramp();
     void                     calculateVolumeLimits();
@@ -601,6 +602,7 @@ class Audio {
     bool           m_f_firstLoop = false;             // InitSequence in loop()
     bool           m_f_firstPlayCall = false;         // InitSequence for playAudioData
     bool           m_f_firstCacheSamplesCall = false; // InitSequence for cacheSamples
+    bool           m_f_first_vu_call = false;         // InitSequence for calculateVUlevel
     bool           m_f_firstChunkCall = false;        // InitSequence for playChunk
     bool           m_f_ID3v1TagFound = false;         // ID3v1 tag found
     bool           m_f_chunked = false;               // Station provides chunked transfer
@@ -674,12 +676,25 @@ class Audio {
     audiolib::info_queue_t m_info_queue;
     audiolib::icy_items_t  m_icy_items;
 
+    inline uint8_t sampleToVU(int32_t sample) {
+        uint32_t mag;
+        if (sample < 0)
+            mag = (uint32_t)(-(int64_t)sample);
+        else
+            mag = (uint32_t)sample;
+        return std::min<uint32_t>(mag >> 23, 255);
+    };
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!fmt) return false;
         if (!audio_info_callback) return false;
+        if (instance.m_info_queue.msg.size() == 1000) {
+            log_e("infoqueue is full");
+            return false;
+        }
 
         ps_ptr<char> result;
         result.assignf(fmt, std::forward<Args>(args)...);
@@ -727,9 +742,19 @@ class Audio {
 
     static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
         if (!audio_info_callback) return false;
+        if (instance.m_info_queue.msg.size() == 1000) {
+            log_e("infoqueue is full");
+            return false;
+        }
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-        ps_ptr<char>                apic;
-        apic.assignf("APIC found at pos {}", v[0]);
+        ps_ptr<char>                txt;
+        if (e == evt_image) {
+            txt.assignf("APIC found at pos {}", v[0]);
+            instance.m_info_queue.msg.emplace_front(txt);
+        } else if (e == evt_vu) {
+            txt.assignf("VU left {:03}, right {:03}", v[0], v[1]);
+            instance.m_info_queue.msg.emplace_front(txt);
+        }
         // msg_t i;
         // i.msg = apic.c_get();
         // i.e = e;
@@ -738,7 +763,6 @@ class Audio {
         // i.vec = v;
         // audio_info_callback(i);
 
-        instance.m_info_queue.msg.emplace_front(apic);
         instance.m_info_queue.s.emplace_front(eventStr[e]);
         instance.m_info_queue.arg1.emplace_front(0);
         instance.m_info_queue.arg2.emplace_front(0);

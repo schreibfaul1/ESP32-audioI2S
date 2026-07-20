@@ -530,6 +530,8 @@ size_t RingBuffer::init() {
     return m_bufSize;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
+void RingBuffer::clear() {}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 void RingBuffer::reset() {
     m_readIndex = 0;
     m_writeIndex = 0;
@@ -832,6 +834,7 @@ void Audio::setDefaults() {
     m_f_firstPlayCall = true;         // InitSequence for playAudioData
     m_f_firstChunkCall = true;        // InitSequence for playChunk
     m_f_firstCacheSamplesCall = true; // InitSequence for cacheSamples
+    m_f_first_vu_call = true;         // InitSequence for calculateVUlevel
     m_f_firstLoop = true;
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -3810,8 +3813,11 @@ void Audio::playChunk() {
             //-----------------------------------------------------------------------------------------------------------------------------------------
             audio_process_raw_samples(m_i2sWorkBuff.get(), readWords);
             const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
+
+            if (settings.VU_LEVEL) calculateVUlevel(m_i2sWorkBuff.get(), readWords);
+
             for (int i = 0; i < readWords / 2; i++) {
-                if (settings.VU_LEVEL) calculateVUlevel(&m_i2sWorkBuff[i * 2]);
+                //    if (settings.VU_LEVEL) calculateVUlevel(&m_i2sWorkBuff[i * 2]);
                 if (settings.IIR_FILTER) IIR_filter(&m_i2sWorkBuff[i * 2]);
                 if (applyGain) Gain(&m_i2sWorkBuff[i * 2]);
             }
@@ -6399,20 +6405,13 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
     m_i2sWorkBuff.alloc_array(m_work_words, "i2sWorkBuff");
-    vu_delay_frames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num;
-    vu_delay_frames += 1;
-    m_vu_items.delay_buffer_size = vu_delay_frames;
-    m_vu_items.delay_line_index = 0;
-
-    m_vu_items.delay_l.alloc_array(vu_delay_frames, "delay_l");
-    m_vu_items.delay_r.alloc_array(vu_delay_frames, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
     m_metadataBuff.alloc(4096 + 1, "m_metadataBuff");   // max 4096 + 1 for null terminator, just to make library code 'safe'
     m_httpRespHdrBuff.alloc(4096, "m_httpRespHdrBuff"); // enough space to store http response header
 
-    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_resamplesBuff.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() || !m_fft_items.work.valid()) {
+    if (!m_outBuff.valid() || !m_resamplesBuff.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() || !m_fft_items.work.valid()) {
         result = false;
         goto exit;
     }
@@ -6813,95 +6812,75 @@ void Audio::reconfigI2S() {
     m_dmaFreeDesc = settings.DMA_DESC_NUM;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
+void Audio::calculateVUlevel(int32_t* buff, size_t len) {
 
-    uint32_t DELAY_BUFFER_SIZE = m_vu_items.delay_buffer_size;
-    if (DELAY_BUFFER_SIZE < 2) DELAY_BUFFER_SIZE = 2;
-
-    uint32_t delayFrames = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
-    delayFrames += SamplesBuff.bufferFilled() / 2;                                     // add current SamplesBuff latency (words -> frames)
-    if (delayFrames >= DELAY_BUFFER_SIZE) delayFrames = DELAY_BUFFER_SIZE - 1;
-
-    // delay line
-    m_vu_items.delay_l[m_vu_items.delay_line_index] = sample[LEFTCHANNEL];
-    m_vu_items.delay_r[m_vu_items.delay_line_index] = sample[RIGHTCHANNEL];
-    m_vu_items.delay_line_index++;
-    if (m_vu_items.delay_line_index == DELAY_BUFFER_SIZE) m_vu_items.delay_line_index = 0;
-
-    int32_t pos = (int32_t)m_vu_items.delay_line_index - 1 - (int32_t)delayFrames;
-    while (pos < 0) pos += DELAY_BUFFER_SIZE;
-
-    // FFT buffer
-    float mono = 0.5f * (float)((m_vu_items.delay_l[pos] >> 20) + (m_vu_items.delay_r[pos] >> 20));
-
-    // --- FFT analyzer AGC ---
-    constexpr float TARGET = 0.1f; // desired RMS amplitude
-    constexpr float ATTACK = 0.05f;
-    constexpr float RELEASE_FFT = 0.005f;
-
-    float level = fabsf(mono);
-
-    if (level > 1e-6f) {
-        float desired = TARGET / level;
-        if (desired < m_fft_items.gain)
-            m_fft_items.gain += ATTACK * (desired - m_fft_items.gain);
-        else
-            m_fft_items.gain += RELEASE_FFT * (desired - m_fft_items.gain);
-    }
-    if (fabsf(mono) < 1e-4f) mono = 0.0f;
-    mono *= m_fft_items.gain;
-
-    m_fft_items.buffer[m_fft_items.buffer_index] = mono;
-    m_fft_items.buffer_index++;
-    if (m_fft_items.buffer_index == m_fft_items.SIZE) m_fft_items.buffer_index = 0;
-
-    uint8_t l = 0, r = 0;
-    l = abs(m_vu_items.delay_l[pos] >> 23);
-    r = abs(m_vu_items.delay_r[pos] >> 23);
-
-    // Attack immediately
-    constexpr float RELEASE = 1.0f; // the bigger, the more sluggish
-    if (l > m_vu_items.left) {
-        m_vu_items.left = l;
-    } else if (m_vu_items.left > RELEASE) {
-        m_vu_items.left -= RELEASE;
-    }
-    if (r > m_vu_items.right) {
-        m_vu_items.right = r;
-    } else if (m_vu_items.right > RELEASE) {
-        m_vu_items.right -= RELEASE;
-    }
-
-    // LEFT
-    if (m_vu_items.left > m_vu_items.left_peak) {
-        m_vu_items.left_peak = m_vu_items.left;
-        m_vu_items.left_hold = settings.PEAK_HOLD_SAMPLES;
-    } else {
-        if (m_vu_items.left_hold > 0) {
-            m_vu_items.left_hold--;
-        } else if (m_vu_items.left_peak > settings.PEAK_RELEASE) {
-            m_vu_items.left_peak -= settings.PEAK_RELEASE;
+    if (m_f_first_vu_call) {
+        m_f_first_vu_call = false;
+        m_vu_items.maxLeft = 0;
+        m_vu_items.maxRight = 0;
+        m_vu_items.sumL = 0;
+        m_vu_items.sumR = 0;
+        m_vu_items.samps_count = 0;
+        m_vu_items.samps_50ms = m_i2s_items.sampleRate / 20; // every 50ms one output
+        m_vu_items.attackStep = 255;
+        m_vu_items.releaseStep = 10;
+        m_vu_items.lrvec.clear();
+        for (int i = 0; i < 4; i++) m_vu_items.lrvec.push_back(0);
+        m_vu_items.vuCurve.alloc(256, "vuCurve");
+        for (int i = 0; i < 256; i++) { // Compression characteristic curve
+            double x = i / 255.0;
+            int    y = std::lround(255.0 * std::pow(x, 0.5)); // curve: 1.0 linear, 0.8 soft, 0.7 classic, 0.5 punchy
+            m_vu_items.vuCurve[i] = y;
         }
     }
 
-    // RIGHT
-    if (m_vu_items.right > m_vu_items.right_peak) {
-        m_vu_items.right_peak = m_vu_items.right;
-        m_vu_items.right_hold = settings.PEAK_HOLD_SAMPLES;
-    } else {
-        if (m_vu_items.right_hold > 0) {
-            m_vu_items.right_hold--;
-        } else if (m_vu_items.right_peak > settings.PEAK_RELEASE) {
-            m_vu_items.right_peak -= settings.PEAK_RELEASE;
+    for (int i = 0; i < len / 2; i++) { // always stereo
+        uint8_t l = sampleToVU(buff[i * 2]);
+        uint8_t r = sampleToVU(buff[i * 2 + 1]);
+        m_vu_items.sumL += l;
+        m_vu_items.sumR += r;
+        if (l > m_vu_items.maxLeft) m_vu_items.maxLeft = l;
+        if (r > m_vu_items.maxRight) m_vu_items.maxRight = r;
+
+        m_vu_items.samps_count++;
+        if (m_vu_items.samps_count >= m_vu_items.samps_50ms) { // every 20ms
+
+            m_vu_items.measuredLeft = m_vu_items.sumL / m_vu_items.samps_count;
+            m_vu_items.measuredRight = m_vu_items.sumR / m_vu_items.samps_count;
+
+            //--------------------------------------------------------------------------------------------------
+            uint8_t& currentL = m_vu_items.displayLeft;
+            if (m_vu_items.measuredLeft > currentL) { // attack left
+                currentL = std::min<uint8_t>(min(currentL + m_vu_items.attackStep, 255), m_vu_items.measuredLeft);
+            } else { // release left
+                uint8_t diff = currentL - m_vu_items.measuredLeft;
+                currentL -= std::min<uint8_t>(diff, m_vu_items.releaseStep);
+            }
+            //--------------------------------------------------------------------------------------------------
+            uint8_t& currentR = m_vu_items.displayRight;
+            if (m_vu_items.measuredRight > currentR) { // attack right
+                currentR = std::min<uint8_t>(min(currentR + m_vu_items.attackStep, 255), m_vu_items.measuredRight);
+            } else { // release right
+                uint8_t diff = currentR - m_vu_items.measuredRight;
+                currentR -= std::min<uint8_t>(diff, m_vu_items.releaseStep);
+            }
+            //--------------------------------------------------------------------------------------------------
+
+            // output
+            m_vu_items.lrvec[0] = m_vu_items.vuCurve[m_vu_items.displayLeft];
+            m_vu_items.lrvec[1] = m_vu_items.vuCurve[m_vu_items.displayRight];
+            m_vu_items.lrvec[2] = m_vu_items.vuCurve[m_vu_items.maxLeft];
+            m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.maxLeft];
+        //    AUDIO_LOG_INFO("{:03} {:03} {:03} {:03}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.maxLeft, m_vu_items.maxLeft);
+            info(*this, evt_vu, m_vu_items.lrvec);
+
+            m_vu_items.sumL = 0;
+            m_vu_items.sumR = 0;
+            m_vu_items.maxLeft = 0;
+            m_vu_items.maxRight = 0;
+            m_vu_items.samps_count = 0;
         }
     }
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint16_t Audio::getVUlevel() {
-    if (!m_f_running) return 0;
-    AUDIO_LOG_DEBUG("{}", m_vu_items.left);
-    // avg 0 ... 255                                                                                  MSB          LSB
-    return ((uint8_t)m_vu_items.right_peak << 8) + (uint8_t)m_vu_items.left_peak; // returns  rrrrrrrrllllllll
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setTone(float gainLowPass, float gainBandPass, float gainHighPass) {
@@ -8298,7 +8277,7 @@ void Audio::performAudioTask() {
         return;
     } else {
         int32_t c[2] = {0};
-        calculateVUlevel(c);
+        //   calculateVUlevel(c);
         gain_ramp();
         if (SamplesBuff.bufferFilled()) { playChunk(); }
         vTaskDelay(20);
