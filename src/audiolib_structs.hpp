@@ -387,6 +387,10 @@ struct vu_items_t {
     uint64_t sumL = {};
     uint64_t sumR = {};
     ps_ptr<uint8_t>vuCurve = {};
+    ps_ptr<uint8_t> delay_bars_left = {};
+    ps_ptr<uint8_t> delay_bars_right = {};
+    ps_ptr<uint8_t> delay_peak_left = {};
+    ps_ptr<uint8_t> delay_peak_right = {};
     std::vector<uint32_t> lrvec = {};
 };
 

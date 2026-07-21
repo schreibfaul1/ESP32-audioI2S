@@ -2238,6 +2238,14 @@ class ps_ptr {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F I F O _ P U S H   📌📌📌
+
+    // ps_ptr<uint8_t> delay_line = {};
+    // delay_line.calloc(128);
+    // delay_line.fifo_reset();
+    // for(int i = 0; i < 128) delay_line.fifo_push(i);
+    // uint a = delay_line.fifo_pop();
+    // uint b = delay_line.fifo_pop();
+
     template <typename U> void fifo_push(const U& value) {
         if (!mem || !allocated_size) return;
 
@@ -2247,7 +2255,7 @@ class ps_ptr {
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F I F O _ P O P   📌📌📌
-    template <typename U> U fifo_pop() {
+    template <typename U = T> U fifo_pop() {
         if (!mem || !allocated_size) return U{};
 
         U value = mem[m_fifoRead];
@@ -2257,8 +2265,16 @@ class ps_ptr {
         return value;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O  📌📌📌
+    // fifo_push() and fifo(pop) in one line
+    template <typename U = T> U fifo(const T& value) {
+        U out = fifo_pop<U>();
+        fifo_push(value);
+        return out;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F I F O _ R E S E T  📌📌📌
-    template <typename U> void fifo_reset() {
+    void fifo_reset() {
         m_fifoRead = 0;
         m_fifoWrite = 0;
     }
