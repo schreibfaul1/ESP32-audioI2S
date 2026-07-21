@@ -379,7 +379,7 @@ class Audio {
     void                     processSpectrum();
     void                     gain_ramp();
     void                     calculateVolumeLimits();
-    void                     Gain(int32_t* sample);
+    void                     Gain(int32_t* buff, size_t len);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(ps_ptr<char> ct);
     bool                     parseHttpResponseHeader();

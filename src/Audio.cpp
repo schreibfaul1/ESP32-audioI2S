@@ -3804,7 +3804,7 @@ void Audio::playChunk() {
     if (SamplesBuff.bufferFilled()) {
         if (m_dmaFreeDesc.load(std::memory_order_acquire) > settings.DMA_DESC_NUM) m_dmaFreeDesc = 0; // empty run
 
-        while (m_dmaFreeDesc.load(std::memory_order_acquire) > 0) {
+        while (m_dmaFreeDesc.load(std::memory_order_acquire) > 0) { // m_dmaFreeDesc is atomic!
 
             size_t readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
             readWords &= ~static_cast<size_t>(1);
@@ -3812,14 +3812,11 @@ void Audio::playChunk() {
             SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
             //-----------------------------------------------------------------------------------------------------------------------------------------
             audio_process_raw_samples(m_i2sWorkBuff.get(), readWords);
-            const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
 
             if (settings.VU_LEVEL) calculateVUlevel(m_i2sWorkBuff.get(), readWords);
             if (settings.IIR_FILTER) IIR_filter(m_i2sWorkBuff.get(), readWords);
+            if (settings.VOLUME_CONTROL) Gain(m_i2sWorkBuff.get(), readWords);
 
-            for (int i = 0; i < readWords / 2; i++) {
-                if (applyGain) Gain(&m_i2sWorkBuff[i * 2]);
-            }
             audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
             //-----------------------------------------------------------------------------------------------------------------------------------------
             size_t bytesConsumed = 0;
@@ -7159,11 +7156,14 @@ void Audio::processSpectrum() {
     //    m_fft_items.spectrum[3]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::Gain(int32_t* sample) {
+void Audio::Gain(int32_t* buff, size_t len) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    int32_t* s32 = (int32_t*)sample;
-    s32[LEFTCHANNEL] *= m_audio_items.limiter[LEFTCHANNEL];
-    s32[RIGHTCHANNEL] *= m_audio_items.limiter[RIGHTCHANNEL];
+    int32_t* s32;
+    for (int i = 0; i < len / 2; i++) {
+        s32 = buff + (i * 2);
+        s32[LEFTCHANNEL] *= m_audio_items.limiter[LEFTCHANNEL];
+        s32[RIGHTCHANNEL] *= m_audio_items.limiter[RIGHTCHANNEL];
+    }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::inBufferFilled() {
