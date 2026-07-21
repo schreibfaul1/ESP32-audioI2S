@@ -85,9 +85,12 @@ class ps_ptr {
   private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t                             allocated_size = 0;
-    char*                              name = nullptr; // member for object name
-    static inline T                    dummy{};        // For invalid accesses
-    size_t                             length_ = 0;    // actual number of characters
+    char*                              name = nullptr;  // member for object name
+    static inline T                    dummy{};         // For invalid accesses
+    size_t                             length_ = 0;     // actual number of characters
+    size_t                             m_fifoWrite = 0; // fifo functionality for arrays
+    size_t                             m_fifoRead = 0;  // fifo functionality for arrays
+
   public:
     // Auxiliary function for setting the name
     void set_name(const char* new_name) {
@@ -2233,6 +2236,32 @@ class ps_ptr {
 
     bool valid() const { return mem != nullptr; }
 
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ P U S H   📌📌📌
+    template <typename U> void fifo_push(const U& value) {
+        if (!mem || !allocated_size) return;
+
+        mem[m_fifoWrite] = value;
+
+        if (++m_fifoWrite == allocated_size) m_fifoWrite = 0;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ P O P   📌📌📌
+    template <typename U> U fifo_pop() {
+        if (!mem || !allocated_size) return U{};
+
+        U value = mem[m_fifoRead];
+
+        if (++m_fifoRead == allocated_size) m_fifoRead = 0;
+
+        return value;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ R E S E T  📌📌📌
+    template <typename U> void fifo_reset() {
+        m_fifoRead = 0;
+        m_fifoWrite = 0;
+    }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E S E T   📌📌📌
 
