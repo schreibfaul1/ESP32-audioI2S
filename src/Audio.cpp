@@ -6814,6 +6814,27 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* buff, size_t len) {
 
+    auto newVal = [&](uint8_t* display, uint8_t measured, uint8_t max, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
+        if (m_vu_items.measuredLeft > *display) { // attack
+            *tmpHold = hold;
+            *display = std::min<uint8_t>(min(*display + attackStep, 255), max);
+        } else { // release left
+            if (*tmpHold == 0) {
+                uint8_t diff = *display - measured;
+                *display -= std::min<uint8_t>(diff, releaseStep);
+            } else {
+                (*tmpHold)--;
+            }
+        }
+    };
+
+    uint8_t bars_attack_step = 200; // bars rising steps
+    uint8_t bars_release_step = 30; // bars falling steps
+    uint8_t peak_attack_step = 200; // peak rising steps
+    uint8_t peak_release_step = 20; // peak falling steps
+    uint8_t bars_hold_cycles = 1;   // cycles * 20ms
+    uint8_t peak_hold_cycles = 3;   // cycles * 20ms
+
     if (m_f_first_vu_call) {
         m_f_first_vu_call = false;
         m_vu_items.maxLeft = 0;
@@ -6821,9 +6842,12 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
         m_vu_items.sumL = 0;
         m_vu_items.sumR = 0;
         m_vu_items.samps_count = 0;
+        m_vu_items.barsHoldLeft_tmp = 0;
+        m_vu_items.barsHoldRight_tmp = 0;
+        m_vu_items.peakHoldLeft_tmp = 0;
+        m_vu_items.peakHoldRight_tmp = 0;
         m_vu_items.samps_50ms = m_i2s_items.sampleRate / 20; // every 50ms one output
-        m_vu_items.attackStep = 255;
-        m_vu_items.releaseStep = 10;
+
         m_vu_items.lrvec.clear();
         for (int i = 0; i < 4; i++) m_vu_items.lrvec.push_back(0);
         m_vu_items.vuCurve.alloc(256, "vuCurve");
@@ -6832,6 +6856,7 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
             int    y = std::lround(255.0 * std::pow(x, 0.5)); // curve: 1.0 linear, 0.8 soft, 0.7 classic, 0.5 punchy
             m_vu_items.vuCurve[i] = y;
         }
+        info(*this, evt_vu, m_vu_items.lrvec);
     }
 
     for (int i = 0; i < len / 2; i++) { // always stereo
@@ -6849,29 +6874,19 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
             m_vu_items.measuredRight = m_vu_items.sumR / m_vu_items.samps_count;
 
             //--------------------------------------------------------------------------------------------------
-            uint8_t& currentL = m_vu_items.displayLeft;
-            if (m_vu_items.measuredLeft > currentL) { // attack left
-                currentL = std::min<uint8_t>(min(currentL + m_vu_items.attackStep, 255), m_vu_items.measuredLeft);
-            } else { // release left
-                uint8_t diff = currentL - m_vu_items.measuredLeft;
-                currentL -= std::min<uint8_t>(diff, m_vu_items.releaseStep);
-            }
-            //--------------------------------------------------------------------------------------------------
-            uint8_t& currentR = m_vu_items.displayRight;
-            if (m_vu_items.measuredRight > currentR) { // attack right
-                currentR = std::min<uint8_t>(min(currentR + m_vu_items.attackStep, 255), m_vu_items.measuredRight);
-            } else { // release right
-                uint8_t diff = currentR - m_vu_items.measuredRight;
-                currentR -= std::min<uint8_t>(diff, m_vu_items.releaseStep);
-            }
+            newVal(&m_vu_items.displayLeft, m_vu_items.measuredLeft, m_vu_items.maxLeft, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldLeft_tmp);
+            newVal(&m_vu_items.displayRight, m_vu_items.measuredRight, m_vu_items.maxRight, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldRight_tmp);
+
+            newVal(&m_vu_items.peakLeft, m_vu_items.measuredLeft, m_vu_items.maxLeft, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldLeft_tmp);
+            newVal(&m_vu_items.peakRight, m_vu_items.measuredRight, m_vu_items.maxRight, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldRight_tmp);
             //--------------------------------------------------------------------------------------------------
 
             // output
             m_vu_items.lrvec[0] = m_vu_items.vuCurve[m_vu_items.displayLeft];
             m_vu_items.lrvec[1] = m_vu_items.vuCurve[m_vu_items.displayRight];
             m_vu_items.lrvec[2] = m_vu_items.vuCurve[m_vu_items.maxLeft];
-            m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.maxLeft];
-        //    AUDIO_LOG_INFO("{:03} {:03} {:03} {:03}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.maxLeft, m_vu_items.maxLeft);
+            m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.maxRight];
+            //    AUDIO_LOG_INFO("{:03} {:03} {:03} {:03}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.maxLeft, m_vu_items.maxLeft);
             info(*this, evt_vu, m_vu_items.lrvec);
 
             m_vu_items.sumL = 0;

@@ -375,21 +375,19 @@ struct vu_items_t {
     uint8_t  maxLeft = {};
     uint8_t  maxRight = {};
     uint8_t  measuredLeft;  // Average value of the current 50-ms window
-    uint8_t  displayLeft;   // current displayed value
-    uint8_t  peakLeft;      // Peak display
     uint8_t  measuredRight; // Average value of the current 50-ms window
+    uint8_t  displayLeft;   // current displayed value
     uint8_t  displayRight;  // current displayed value
+    uint8_t  peakLeft;      // Peak display
     uint8_t  peakRight;     // Peak display
+    uint8_t  barsHoldLeft_tmp;
+    uint8_t  barsHoldRight_tmp;
+    uint8_t  peakHoldLeft_tmp;
+    uint8_t  peakHoldRight_tmp;
     uint64_t sumL = {};
     uint64_t sumR = {};
     ps_ptr<uint8_t>vuCurve = {};
     std::vector<uint32_t> lrvec = {};
-
-    void reset() {
-        *this = vu_items_t{};
-        lrvec.push_back(0);
-        lrvec.push_back(0);
-    }
 };
 
 #define FFT_BANDS 6
