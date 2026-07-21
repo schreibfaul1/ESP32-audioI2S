@@ -391,7 +391,7 @@ class Audio {
     void                     reconfigI2S();
     void                     stereo2mono(int32_t* buff, uint16_t validSamples);
     void                     IIR_calculateCoefficients();
-    void                     IIR_filter(int32_t* iir_in);
+    void                     IIR_filter(int32_t* buff, size_t len);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);

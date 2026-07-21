@@ -3815,10 +3815,9 @@ void Audio::playChunk() {
             const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
 
             if (settings.VU_LEVEL) calculateVUlevel(m_i2sWorkBuff.get(), readWords);
+            if (settings.IIR_FILTER) IIR_filter(m_i2sWorkBuff.get(), readWords);
 
             for (int i = 0; i < readWords / 2; i++) {
-                //    if (settings.VU_LEVEL) calculateVUlevel(&m_i2sWorkBuff[i * 2]);
-                if (settings.IIR_FILTER) IIR_filter(&m_i2sWorkBuff[i * 2]);
                 if (applyGain) Gain(&m_i2sWorkBuff[i * 2]);
             }
             audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
@@ -7240,20 +7239,21 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filter(int32_t* sample) {
-
-    int32_t* s32 = sample;
+void Audio::IIR_filter(int32_t* buff, size_t len) {
+    int32_t* s32;
     float    s[2];
-    s[LEFTCHANNEL] = (float)(s32[LEFTCHANNEL] * m_audio_items.pre_gain);
-    s[RIGHTCHANNEL] = (float)(s32[RIGHTCHANNEL] * m_audio_items.pre_gain);
-    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
-    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
-    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
-    s32[LEFTCHANNEL] = (int32_t)std::clamp(s[LEFTCHANNEL], -2147483648.0f, 2147483647.0f);
-    s32[RIGHTCHANNEL] = (int32_t)std::clamp(s[RIGHTCHANNEL], -2147483648.0f, 2147483647.0f);
+    for (int i = 0; i < len / 2; i++) {
+        s32 = buff + (i * 2);
+        s[LEFTCHANNEL] = (float)(s32[LEFTCHANNEL] * m_audio_items.pre_gain);
+        s[RIGHTCHANNEL] = (float)(s32[RIGHTCHANNEL] * m_audio_items.pre_gain);
+        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
+        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
+        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
+        s32[LEFTCHANNEL] = (int32_t)std::clamp(s[LEFTCHANNEL], -2147483648.0f, 2147483647.0f);
+        s32[RIGHTCHANNEL] = (int32_t)std::clamp(s[RIGHTCHANNEL], -2147483648.0f, 2147483647.0f);
+    }
     return;
 }
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 //    AAC - T R A N S P O R T S T R E A M
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
