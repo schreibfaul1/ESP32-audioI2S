@@ -693,7 +693,7 @@ class Audio {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   private:
-    int32_t extract_last_number(std::string_view s) {
+   static int32_t extract_last_number(std::string_view s) {
         auto is_space = [](char c) { return std::isspace(static_cast<unsigned char>(c)); };
         auto is_digit = [](char c) { return std::isdigit(static_cast<unsigned char>(c)); };
         auto it = s.end();
@@ -745,7 +745,7 @@ class Audio {
         ps_ptr<char> result;
         result.assignf(fmt, std::forward<Args>(args)...);
         if (!result.get()) return false;
-        int32_t number = extract_last_number(result.c_get()).value_or(0);
+        int32_t number = extract_last_number(result.c_get());
         return enqueueInfo(instance, e, std::move(result), number);
     }
     //-------------------------------------------------------------------------------------------------------------------
