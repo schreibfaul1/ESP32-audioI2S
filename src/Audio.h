@@ -577,7 +577,6 @@ class Audio {
     uint8_t        m_M4A_chConfig = 0;                // set in read_M4A_Header
     uint16_t       m_M4A_sampleRate = 0;              // set in read_M4A_Header
     int16_t        m_validSamples = 0;                //
-    int16_t        m_curSample = 0;                   //
     uint16_t       m_dataMode = 0;                    // Statemaschine
     uint16_t       m_streamTitleHash = 0;             // remember streamtitle, ignore multiple occurence in metadata
     uint16_t       m_timeout_ms = 250;                //

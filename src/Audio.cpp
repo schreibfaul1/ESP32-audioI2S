@@ -871,10 +871,9 @@ void Audio::setDefaults() {
     m_nominal_bitrate = 0;
     m_bytesNotConsumed = 0; // counts all not decodable bytes
     m_chunkcount = 0;       // for chunked streams
-    m_curSample = 0;
-    m_LFcount = 0;        // For end of header detection
-    m_controlCounter = 0; // Status within readID3data() and readWaveHeader()
-    m_channels = 2;       // assume stereo #209
+    m_LFcount = 0;          // For end of header detection
+    m_controlCounter = 0;   // Status within readID3data() and readWaveHeader()
+    m_channels = 2;         // assume stereo
     m_ID3Size = 0;
     m_haveNewFilePos = 0;
     m_M4A_chConfig = 0;
@@ -6117,15 +6116,15 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::sendBytes(uint8_t* data, size_t len) {
-    if (!m_f_running) return 0; // guard
-    if (!m_decoder) return 0;   // guard
+    if (!m_f_running) return 0;   // guard
+    if (!m_decoder) return 0;     // guard
+    if (m_validSamples) return 0; // guard
 
     int                   res = 0;
     int                   bytesDecoded = 0;
     const char*           st = NULL;
     std::vector<uint32_t> vec;
     uint16_t              samples_out = 0;
-    if (m_validSamples) { goto exit; } // nothing to decode, next round
 
     m_sbyt.bytesLeft = 0;
     m_sbyt.nextSync = 0;
@@ -6233,8 +6232,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     samples_out = m_validSamples;
 
-exit:
-    m_curSample = 0;
     if (m_validSamples) {
         calculateAudioTime(bytesDecoded, samples_out);
         cacheSamples();
@@ -8058,18 +8055,18 @@ bool Audio::get_info() {
 
     const audiolib::InfoItem& item = m_info_queue.queue.front();
 
-        ps_ptr<char> msg = item.msg;
-        i.msg = msg.c_get();
-        i.e = (event_t)item.e;
-        ps_ptr<char> evtstr = item.s;
-        i.s = evtstr.c_get();
-        i.arg1 = item.arg1;
-        i.arg2 = item.arg2;
-        i.i2s_num = m_i2s_items.i2s_num;
-        i.vec = item.vec;
+    ps_ptr<char> msg = item.msg;
+    i.msg = msg.c_get();
+    i.e = (event_t)item.e;
+    ps_ptr<char> evtstr = item.s;
+    i.s = evtstr.c_get();
+    i.arg1 = item.arg1;
+    i.arg2 = item.arg2;
+    i.i2s_num = m_i2s_items.i2s_num;
+    i.vec = item.vec;
 
-        audio_info_callback(i);
-        m_info_queue.queue.pop_front();
+    audio_info_callback(i);
+    m_info_queue.queue.pop_front();
 
     return true;
 }
