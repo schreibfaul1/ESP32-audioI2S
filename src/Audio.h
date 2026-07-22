@@ -577,6 +577,7 @@ class Audio {
     uint8_t        m_M4A_chConfig = 0;                // set in read_M4A_Header
     uint16_t       m_M4A_sampleRate = 0;              // set in read_M4A_Header
     int16_t        m_validSamples = 0;                //
+    int16_t        m_curSample = 0;                   //
     uint16_t       m_dataMode = 0;                    // Statemaschine
     uint16_t       m_streamTitleHash = 0;             // remember streamtitle, ignore multiple occurence in metadata
     uint16_t       m_timeout_ms = 250;                //
@@ -691,87 +692,72 @@ class Audio {
     };
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-  public:
-    template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+  private:
+    int32_t extract_last_number(std::string_view s) {
+        auto is_space = [](char c) { return std::isspace(static_cast<unsigned char>(c)); };
+        auto is_digit = [](char c) { return std::isdigit(static_cast<unsigned char>(c)); };
+        auto it = s.end();
+        // skip trailing whitespace
+        while (it != s.begin() && is_space(*(it - 1))) { --it; }
+        auto end = it;
+        // Reading numbers backwards
+        while (it != s.begin() && is_digit(*(it - 1))) { --it; }
+        // optional sign
+        if (it != s.begin()) {
+            char c = *(it - 1);
+            if (c == '+' || c == '-') { --it; }
+        }
+        // found nothing?
+        if (it == end) { return 0; }
+        // There must be a leading space or a space before the number
+        if (it != s.begin() && !is_space(*(it - 1))) { return 0; }
+        int32_t value{};
+        auto [ptr, ec] = std::from_chars(it, end, value);
+        // Was the full parse successful?
+        if (ec == std::errc{} && ptr == end) { return value; }
+        return 0;
+    }
+
+    static bool enqueueInfo(Audio& instance, event_t e, ps_ptr<char>&& msg, int32_t arg1 = 0, int32_t arg2 = 0, std::vector<uint32_t>&& vec = {}) {
+
         std::lock_guard<std::mutex> lock(instance.mutex_info);
-        if (!fmt) return false;
         if (!audio_info_callback) return false;
-        if (instance.m_info_queue.queue.size() == 1000) {
+        if (instance.m_info_queue.queue.size() >= 1000) {
             log_e("infoqueue is full");
             return false;
         }
+        audiolib::InfoItem item;
+        item.s = eventStr[e];
+        item.e = static_cast<uint8_t>(e);
+        item.msg = std::move(msg);
+        item.arg1 = arg1;
+        item.arg2 = arg2;
+        item.vec = std::move(vec);
+
+        instance.m_info_queue.queue.push_back(std::move(item));
+        return true;
+    }
+
+  public:
+    //-------------------------------------------------------------------------------------------------------------------
+    template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
 
         ps_ptr<char> result;
         result.assignf(fmt, std::forward<Args>(args)...);
         if (!result.get()) return false;
-
-        auto extract_last_number = [](std::string_view s) -> std::optional<int32_t> {
-            auto is_space = [](char c) { return std::isspace(static_cast<unsigned char>(c)); };
-            auto is_digit = [](char c) { return std::isdigit(static_cast<unsigned char>(c)); };
-
-            auto it = s.end();
-            // skip trailing whitespace
-            while (it != s.begin() && is_space(*(it - 1))) { --it; }
-            auto end = it;
-            // Reading numbers backwards
-            while (it != s.begin() && is_digit(*(it - 1))) { --it; }
-            // optional sign
-            if (it != s.begin()) {
-                char c = *(it - 1);
-                if (c == '+' || c == '-') { --it; }
-            }
-
-            // found nothing?
-            if (it == end) { return std::nullopt; }
-            // There must be a leading space or a space before the number
-            if (it != s.begin() && !is_space(*(it - 1))) { return std::nullopt; }
-            int32_t value{};
-            auto [ptr, ec] = std::from_chars(it, end, value);
-
-            // Was the full parse successful?
-            if (ec == std::errc{} && ptr == end) { return value; }
-            return std::nullopt;
-        };
-
-        audiolib::InfoItem item;
-        item.s = eventStr[e];
-        item.arg1 = extract_last_number(result.c_get()).value_or(0);
-        item.arg2 = 0;
-        item.e = (uint8_t)e;
-        item.msg = result;
-        instance.m_info_queue.queue.push_back(std::move(item));
-        result.reset();
-        return true;
+        int32_t number = extract_last_number(result.c_get()).value_or(0);
+        return enqueueInfo(instance, e, std::move(result), number);
     }
-    //--------------------------------------------------------------------------------------------------------------
-    static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
-        if (!audio_info_callback) return false;
-        if (instance.m_info_queue.queue.size() == 1000) {
-            log_e("infoqueue is full");
-            return false;
+    //-------------------------------------------------------------------------------------------------------------------
+    static bool info(Audio& instance, event_t e, const std::vector<uint32_t>& v) {
+        ps_ptr<char> txt;
+        switch (e) {
+            case evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
+            case evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
+            case evt_spectrum: txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13], v[14]); break;
+            default: txt.assign("???"); break;
         }
-        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-        ps_ptr<char>                txt;
-        if (e == evt_image) {
-            txt.assignf("APIC found at pos {}", v[0]);
-        } else if (e == evt_vu) {
-            txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]);
-        } else if (e == evt_spectrum) {
-            txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
-                        v[10], v[11], v[12], v[13], v[14]);
-        } else { //
-            txt.assign("???");
-        }
-
-        audiolib::InfoItem item;
-        item.s = eventStr[e];
-        item.arg1 = 0;
-        item.arg2 = 0;
-        item.vec = v;
-        item.e = (uint8_t)e;
-        item.msg = txt;
-        instance.m_info_queue.queue.push_back(std::move(item));
-        return true;
+        return enqueueInfo(instance, e, std::move(txt), 0, 0, std::vector<uint32_t>(v));
     }
     //----------------------------------------------------------------------------------------------------------------------
 
