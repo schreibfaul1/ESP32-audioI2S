@@ -673,8 +673,12 @@ class Audio {
     audiolib::fft_items_t  m_fft_items;
     audiolib::i2s_items_t  m_i2s_items;
     audiolib::resampler_t  m_resampler;
-    audiolib::info_queue_t m_info_queue;
     audiolib::icy_items_t  m_icy_items;
+
+    struct info_queue_t {
+        std::deque<audiolib::InfoItem> queue;
+        void                           reset() { queue.clear(); }
+    } m_info_queue;
 
     inline uint8_t sampleToVU(int32_t sample) {
         uint32_t mag;
@@ -691,7 +695,7 @@ class Audio {
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!fmt) return false;
         if (!audio_info_callback) return false;
-        if (instance.m_info_queue.msg.size() == 1000) {
+        if (instance.m_info_queue.queue.size() == 1000) {
             log_e("infoqueue is full");
             return false;
         }
@@ -728,21 +732,19 @@ class Audio {
             return std::nullopt;
         };
 
-        std::vector<uint32_t> v;
-        v.push_back(0);
-        instance.m_info_queue.msg.emplace_front(result);
-        instance.m_info_queue.s.emplace_front(eventStr[e]);
-        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()).value_or(0));
-        instance.m_info_queue.arg2.emplace_front(0);
-        instance.m_info_queue.vec.emplace_front(v);
-        instance.m_info_queue.e.emplace_front((uint8_t)e);
+        audiolib::InfoItem item;
+        item.s = eventStr[e];
+        item.arg1 = extract_last_number(result.c_get()).value_or(0);
+        item.arg2 = 0;
+        item.e = (uint8_t)e, item.msg = result;
+        instance.m_info_queue.queue.push_back(std::move(item));
         result.reset();
         return true;
     }
 
     static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
         if (!audio_info_callback) return false;
-        if (instance.m_info_queue.msg.size() == 1000) {
+        if (instance.m_info_queue.queue.size() == 1000) {
             log_e("infoqueue is full");
             return false;
         }
@@ -750,11 +752,14 @@ class Audio {
         ps_ptr<char>                txt;
         if (e == evt_image) {
             txt.assignf("APIC found at pos {}", v[0]);
-            instance.m_info_queue.msg.emplace_front(txt);
         } else if (e == evt_vu) {
             txt.assignf("VU left {:03}, right {:03}", v[0], v[1]);
-            instance.m_info_queue.msg.emplace_front(txt);
+        } else if (e == evt_spectrum) {
+            txt.assign("Spectrum");
+        } else { //
+            txt.assign("???");
         }
+
         // msg_t i;
         // i.msg = apic.c_get();
         // i.e = e;
@@ -763,11 +768,12 @@ class Audio {
         // i.vec = v;
         // audio_info_callback(i);
 
-        instance.m_info_queue.s.emplace_front(eventStr[e]);
-        instance.m_info_queue.arg1.emplace_front(0);
-        instance.m_info_queue.arg2.emplace_front(0);
-        instance.m_info_queue.vec.emplace_front(v);
-        instance.m_info_queue.e.emplace_front((uint8_t)e);
+        audiolib::InfoItem item;
+        item.s = eventStr[e];
+        item.arg1 = 0;
+        item.arg2 = 0;
+        item.vec = v, item.e = (uint8_t)e, item.msg = txt;
+        instance.m_info_queue.queue.push_back(std::move(item));
         return true;
     }
     //----------------------------------------------------------------------------------------------------------------------

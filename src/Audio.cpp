@@ -2636,7 +2636,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
-                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}",
+                     m_ID3Hdr.SYLT.text_encoding == 0   ? "ASCII"
+                     : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8"
+                                                        : "?",
+                     m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
                 m_ID3Hdr.SYLT.content_type = syltBuff[5];
 
@@ -2868,7 +2872,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if (!m_m4aHdr.progressive) {
                 m_m4aHdr.mdat_startPos = m_m4aHdr.headerSize + 8;
                 m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16);
-                if (atom_struct) { AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat); }
+                if (atom_struct) {
+                    AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat);
+                }
                 info(*this, evt_info, "Audiofile is non progressive");
                 m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
                 m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
@@ -3351,11 +3357,13 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const TagInfo tags[] = {
             // List of all usual tags
-            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},        {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},    {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},           {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},
-            {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},      {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},   {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},         {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},
-            {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"}, {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},      {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
-            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},        {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"}, {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},      {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},
-            {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},    {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},  {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"},       {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
+            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},      {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},           {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},
+            {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},      {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},          {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},
+            {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},   {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},      {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"},
+            {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},       {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
+            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},      {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"},        {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},
+            {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},   {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},        {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},
+            {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"}, {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
@@ -7034,37 +7042,38 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateSpectrum(int32_t* buff, size_t len) {
-/*
-            | Area (Hz)    | Title
-      ------+--------------+-----------
-      0     | 86…172       | 125 Hz
-      1     | 258…344      | 300 Hz
-      2     | 430…602      | 500 Hz
-      3     | 689…947      | 800 Hz
-      4     | 1033…1378    | 1.2 kHz
-      5     | 1464…1981    | 1.7 kHz
-      6     | 2067…2756    | 2.4 kHz
-      7     | 2842…3789    | 3.3 kHz
-      8     | 3875…5167    | 4.5 kHz
-      9     | 5253…6890    | 6.0 kHz
-      10    | 6976…8957    | 8 kHz
-      11    | 9043…11357   | 10 kHz
-      12    | 11444…14118  | 13 kHz
-      13    | 14205…17222  | 16 kHz
-      14    | 17308…19638  | 18 kHz
-      15    | 19724…21964  | 20 kHz (not used NYQUIST!)
-*/
+    /*
+                | Area (Hz)    | Title
+          ------+--------------+-----------
+          0     | 86…172       | 125 Hz
+          1     | 258…344      | 300 Hz
+          2     | 430…602      | 500 Hz
+          3     | 689…947      | 800 Hz
+          4     | 1033…1378    | 1.2 kHz
+          5     | 1464…1981    | 1.7 kHz
+          6     | 2067…2756    | 2.4 kHz
+          7     | 2842…3789    | 3.3 kHz
+          8     | 3875…5167    | 4.5 kHz
+          9     | 5253…6890    | 6.0 kHz
+          10    | 6976…8957    | 8 kHz
+          11    | 9043…11357   | 10 kHz
+          12    | 11444…14118  | 13 kHz
+          13    | 14205…17222  | 16 kHz
+          14    | 17308…19638  | 18 kHz
+          15    | 19724…21964  | 20 kHz (not used NYQUIST!)
+    */
     struct FFTBand {
         uint16_t firstBin;
         uint16_t lastBin;
         float    invCount;
     };
-    const FFTBand fftBands[16] = {{1, 2, 1.0f / 2.0f},    {3, 4, 1.0f / 2.0f},    {5, 7, 1.0f / 3.0f},     {8, 11, 1.0f / 4.0f},     {12, 16, 1.0f / 5.0f},    {17, 23, 1.0f / 7.0f},    {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},
-                                  {45, 60, 1.0f / 16.0f}, {61, 80, 1.0f / 20.0f}, {81, 104, 1.0f / 24.0f}, {105, 132, 1.0f / 28.0f}, {133, 164, 1.0f / 32.0f}, {165, 200, 1.0f / 36.0f}, {201, 228, 1.0f / 28.0f}, {229, 255, 1.0f / 27.0f}};
+    const FFTBand fftBands[16] = {{1, 2, 1.0f / 2.0f},      {3, 4, 1.0f / 2.0f},      {5, 7, 1.0f / 3.0f},      {8, 11, 1.0f / 4.0f},    {12, 16, 1.0f / 5.0f},   {17, 23, 1.0f / 7.0f},
+                                  {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},   {45, 60, 1.0f / 16.0f},   {61, 80, 1.0f / 20.0f},  {81, 104, 1.0f / 24.0f}, {105, 132, 1.0f / 28.0f},
+                                  {133, 164, 1.0f / 32.0f}, {165, 200, 1.0f / 36.0f}, {201, 228, 1.0f / 28.0f}, {229, 255, 1.0f / 27.0f}};
 
     constexpr float DB_MIN = 40.0f;
     constexpr float DB_MAX = 125.0f;
-    float pw[16];
+    float           pw[16];
 
     if (m_f_first_fft_call) {
         m_f_first_fft_call = false;
@@ -7216,9 +7225,10 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_peakingEQ_f32(m_audio_items.coeffs[PEAKINGEQ], normFreqPEQ, m_audio_items.gain_peq_db, QS); // my own calc.
     dsps_biquad_gen_highShelf_f32(m_audio_items.coeffs[HIFGSHELF], normFreqHS, m_audio_items.gain_hs_db, QS);
 
-    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0], m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3],
-                    m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1], m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2], m_audio_items.coeffs[2][3],
-                    m_audio_items.coeffs[2][4]);
+    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
+                    m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3], m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1],
+                    m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2],
+                    m_audio_items.coeffs[2][3], m_audio_items.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8040,27 +8050,27 @@ const char* Audio::getVersion() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::get_info() {
-    if (m_info_queue.e.size() == 0) return false;
-    msg_t i = {0};
-    while (m_info_queue.e.size()) {
-        ps_ptr<char> msg = m_info_queue.msg.back();
-        i.msg = msg.c_get();
-        i.e = (event_t)m_info_queue.e.back();
-        ps_ptr<char> evtstr = m_info_queue.s.back();
-        i.s = evtstr.c_get();
-        i.arg1 = m_info_queue.arg1.back();
-        i.arg2 = m_info_queue.arg2.back();
-        i.i2s_num = m_i2s_items.i2s_num;
-        i.vec = m_info_queue.vec.back();
 
-        m_info_queue.msg.pop_back();
-        m_info_queue.e.pop_back();
-        m_info_queue.s.pop_back();
-        m_info_queue.arg1.pop_back();
-        m_info_queue.arg2.pop_back();
-        m_info_queue.vec.pop_back();
+    std::lock_guard<std::mutex> lock(mutex_info);
+    if (m_info_queue.queue.empty()) return false;
+
+    msg_t i = {0};
+
+    const audiolib::InfoItem& item = m_info_queue.queue.front();
+
+        ps_ptr<char> msg = item.msg;
+        i.msg = msg.c_get();
+        i.e = (event_t)item.e;
+        ps_ptr<char> evtstr = item.s;
+        i.s = evtstr.c_get();
+        i.arg1 = item.arg1;
+        i.arg2 = item.arg2;
+        i.i2s_num = m_i2s_items.i2s_num;
+        i.vec = item.vec;
+
         audio_info_callback(i);
-    }
+        m_info_queue.queue.pop_front();
+
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

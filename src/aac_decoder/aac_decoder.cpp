@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 26.06.2026
+ *  Updated on: 22.07.2026
  */
 
 #include "aac_decoder.h"
@@ -166,7 +166,6 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
         }
     } else {
         if (m_aacChannels == 1 && !m_frameInfo.isPS) { // ESP32-S3 and -P4 has ParametricStereo activated
-            AAC_LOG_ERROR("1");
             for (int32_t i = m_validSamples - 1; i >= 0; i--) {
                 int32_t sample = outbuf[i];
                 outbuf[i * 2] = sample;

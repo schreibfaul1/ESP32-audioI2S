@@ -395,15 +395,15 @@ struct vu_items_t {
 };
 
 struct fft_items_t {
-    size_t          count = 0;
-    size_t          samps_100ms = 0;
-    ps_ptr<int16_t> samples_buffer;
-    size_t          samples_buffer_index = 0;
-    const uint16_t  FFT_SIZE = 512;
-    const uint16_t  NUM_BANDS = 16;
-    ps_ptr<float>   window;
-    ps_ptr<float>   fft_in;
-    ps_ptr<float>   spectrum;
+    size_t                count = 0;
+    size_t                samps_100ms = 0;
+    ps_ptr<int16_t>       samples_buffer;
+    size_t                samples_buffer_index = 0;
+    const uint16_t        FFT_SIZE = 512;
+    const uint16_t        NUM_BANDS = 16;
+    ps_ptr<float>         window;
+    ps_ptr<float>         fft_in;
+    ps_ptr<float>         spectrum;
     std::vector<uint32_t> sp_vec = {};
 };
 
@@ -435,15 +435,13 @@ struct resampler_t {
     bool    hasLast = false; // First frame has no “last”
 };
 
-struct info_queue_t {
-    std::deque<ps_ptr<char>>          msg = {};
-    std::deque<ps_ptr<char>>          s = {};
-    std::deque<uint8_t>               e = {}; // event type
-    std::deque<int32_t>               arg1 = {};
-    std::deque<int32_t>               arg2 = {};
-    std::deque<std::vector<uint32_t>> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
-
-    void reset() { *this = info_queue_t{}; }
+struct InfoItem {
+    ps_ptr<char>          msg;
+    ps_ptr<char>          s;
+    uint8_t               e = 0; // event type
+    int32_t               arg1 = 0;
+    int32_t               arg2 = 0;
+    std::vector<uint32_t> vec; // apic [pos, len, pos, len, pos, len, ....]
 };
 
 struct icy_items_t {
