@@ -250,7 +250,7 @@ class Audio {
     } event_t;
 
     // Audio event type descriptions
-    static constexpr std::array<const char*, 14> eventStr = {
+    static constexpr std::array<const char*, 16> eventStr = {
         "info",            // evt_info
         "id3data",         // evt_id3data
         "eof",             // evt_eof
@@ -265,6 +265,8 @@ class Audio {
         "cover_image",     // evt_image
         "lyrics",          // evt_lyrics
         "log",             // evt_log
+        "VU",              // evt_vu
+        "BANDS",           // evt_spectrum
     };
 
     typedef struct _msg { // used in info(audio_info_callback());
@@ -736,12 +738,13 @@ class Audio {
         item.s = eventStr[e];
         item.arg1 = extract_last_number(result.c_get()).value_or(0);
         item.arg2 = 0;
-        item.e = (uint8_t)e, item.msg = result;
+        item.e = (uint8_t)e;
+        item.msg = result;
         instance.m_info_queue.queue.push_back(std::move(item));
         result.reset();
         return true;
     }
-
+    //--------------------------------------------------------------------------------------------------------------
     static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
         if (!audio_info_callback) return false;
         if (instance.m_info_queue.queue.size() == 1000) {
@@ -753,26 +756,21 @@ class Audio {
         if (e == evt_image) {
             txt.assignf("APIC found at pos {}", v[0]);
         } else if (e == evt_vu) {
-            txt.assignf("VU left {:03}, right {:03}", v[0], v[1]);
+            txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]);
         } else if (e == evt_spectrum) {
-            txt.assign("Spectrum");
+            txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
+                        v[10], v[11], v[12], v[13], v[14]);
         } else { //
             txt.assign("???");
         }
-
-        // msg_t i;
-        // i.msg = apic.c_get();
-        // i.e = e;
-        // i.s = eventStr[e];
-        // i.i2s_num = instance.m_i2s_items.i2s_num;
-        // i.vec = v;
-        // audio_info_callback(i);
 
         audiolib::InfoItem item;
         item.s = eventStr[e];
         item.arg1 = 0;
         item.arg2 = 0;
-        item.vec = v, item.e = (uint8_t)e, item.msg = txt;
+        item.vec = v;
+        item.e = (uint8_t)e;
+        item.msg = txt;
         instance.m_info_queue.queue.push_back(std::move(item));
         return true;
     }
