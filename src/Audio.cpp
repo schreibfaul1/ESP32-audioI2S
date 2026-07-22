@@ -6823,7 +6823,7 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
     uint8_t peak_attack_step = 200; // peak rising steps
     uint8_t peak_release_step = 10; // peak falling steps
     uint8_t bars_hold_cycles = 1;   // bars hold_cycles * 20ms
-    uint8_t peak_hold_cycles = 3;   // peak hold_cycles * 20ms
+    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * 20ms
 
     if (m_f_first_vu_call) {
         m_f_first_vu_call = false;
