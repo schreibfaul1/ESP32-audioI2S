@@ -246,6 +246,7 @@ class Audio {
         evt_lyrics,
         evt_log,
         evt_vu,
+        evt_spectrum,
     } event_t;
 
     // Audio event type descriptions
@@ -376,10 +377,12 @@ class Audio {
     void                     cacheSamples();
     void                     playChunk();
     void                     calculateVUlevel(int32_t* buff, size_t len);
-    void                     processSpectrum();
+    void                     calculateSpectrum(int32_t* buff, size_t len);
+    void                     Gain(int32_t* buff, size_t len);
+    void                     stereo2mono(int32_t* buff, size_t len);
+    void                     IIR_filter(int32_t* buff, size_t len);
     void                     gain_ramp();
     void                     calculateVolumeLimits();
-    void                     Gain(int32_t* buff, size_t len);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(ps_ptr<char> ct);
     bool                     parseHttpResponseHeader();
@@ -389,9 +392,7 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
-    void                     stereo2mono(int32_t* buff, uint16_t validSamples);
     void                     IIR_calculateCoefficients();
-    void                     IIR_filter(int32_t* buff, size_t len);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);
@@ -494,9 +495,7 @@ class Audio {
         uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter, peakingEQ
         uint16_t FREQ_HS_HZ = 6000;                // IIR Filter, highshelf
         float    QUALITY_SLOPE = 0.707;            // Quality (all shelfes)
-        uint16_t PEAK_HOLD_SAMPLES = 2000;         // VU_meter, (2000) ca. 20 ms @ 48 kHz
-        uint8_t  PEAK_RELEASE = 1;                 // VU_meter, Fall rate
-        bool     VU_LEVEL = true;                  // true: vu meter is enabled
+        bool     VU_LEVEL = false;                 // true: vu meter is enabled
         bool     IIR_FILTER = true;                // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
         bool     SPECTRUM = false;                 // true: spectrum analyzer is enabled
         bool     VOLUME_CONTROL = true;            // true: volume and balance control is enabled
@@ -604,6 +603,7 @@ class Audio {
     bool           m_f_firstCacheSamplesCall = false; // InitSequence for cacheSamples
     bool           m_f_first_vu_call = false;         // InitSequence for calculateVUlevel
     bool           m_f_firstChunkCall = false;        // InitSequence for playChunk
+    bool           m_f_first_fft_call = false;        // InitSequence for calculateSpectrum
     bool           m_f_ID3v1TagFound = false;         // ID3v1 tag found
     bool           m_f_chunked = false;               // Station provides chunked transfer
     bool           m_f_firstmetabyte = false;         // True if first metabyte (counter)

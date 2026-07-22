@@ -368,48 +368,43 @@ struct i2s_items_t {
 };
 
 struct vu_items_t {
-    uint16_t samps_50ms = {};
-    uint16_t samps_count = {};
-    uint8_t  attackStep = {};
-    uint8_t  releaseStep = {};
-    uint8_t  maxLeft = {};
-    uint8_t  maxRight = {};
-    uint8_t  measuredLeft;  // Average value of the current 50-ms window
-    uint8_t  measuredRight; // Average value of the current 50-ms window
-    uint8_t  displayLeft;   // current displayed value
-    uint8_t  displayRight;  // current displayed value
-    uint8_t  peakLeft;      // Peak display
-    uint8_t  peakRight;     // Peak display
-    uint8_t  barsHoldLeft_tmp;
-    uint8_t  barsHoldRight_tmp;
-    uint8_t  peakHoldLeft_tmp;
-    uint8_t  peakHoldRight_tmp;
-    uint64_t sumL = {};
-    uint64_t sumR = {};
-    ps_ptr<uint8_t>vuCurve = {};
-    ps_ptr<uint8_t> delay_bars_left = {};
-    ps_ptr<uint8_t> delay_bars_right = {};
-    ps_ptr<uint8_t> delay_peak_left = {};
-    ps_ptr<uint8_t> delay_peak_right = {};
+    uint16_t              samps_50ms = {};
+    uint16_t              samps_count = {};
+    uint8_t               attackStep = {};
+    uint8_t               releaseStep = {};
+    uint8_t               maxLeft = {};
+    uint8_t               maxRight = {};
+    uint8_t               measuredLeft;  // Average value of the current 50-ms window
+    uint8_t               measuredRight; // Average value of the current 50-ms window
+    uint8_t               displayLeft;   // current displayed value
+    uint8_t               displayRight;  // current displayed value
+    uint8_t               peakLeft;      // Peak display
+    uint8_t               peakRight;     // Peak display
+    uint8_t               barsHoldLeft_tmp;
+    uint8_t               barsHoldRight_tmp;
+    uint8_t               peakHoldLeft_tmp;
+    uint8_t               peakHoldRight_tmp;
+    uint64_t              sumL = {};
+    uint64_t              sumR = {};
+    ps_ptr<uint8_t>       vuCurve = {};
+    ps_ptr<uint8_t>       delay_bars_left = {};
+    ps_ptr<uint8_t>       delay_bars_right = {};
+    ps_ptr<uint8_t>       delay_peak_left = {};
+    ps_ptr<uint8_t>       delay_peak_right = {};
     std::vector<uint32_t> lrvec = {};
 };
 
-#define FFT_BANDS 6
-#define FFT_SIZE  256
 struct fft_items_t {
-    const uint16_t SIZE = FFT_SIZE;
-    const uint16_t BANDS = FFT_BANDS;
-    ps_ptr<float>  buffer; // FFT input (real)
-    ps_ptr<float>  window; // FFT window
-    uint16_t       buffer_index = 0;
-    uint16_t       pos = 0;
-    bool           initialized = false;          // FFT state
-    float          spec_smooth[FFT_BANDS] = {0}; // smoothing
-    uint32_t       last_ms = 0;                  // timing (10 Hz)
-    float          gain = 1.0f;                  // AGC in process()
-    bool           lr_switch = false;            // start/stop
-    ps_ptr<float>  work;                         // FFT work buffer (complex interleaved)
-    uint8_t        spectrum[FFT_BANDS] = {0};    // output
+    size_t          count = 0;
+    size_t          samps_100ms = 0;
+    ps_ptr<int16_t> samples_buffer;
+    size_t          samples_buffer_index = 0;
+    const uint16_t  FFT_SIZE = 512;
+    const uint16_t  NUM_BANDS = 16;
+    ps_ptr<float>   window;
+    ps_ptr<float>   fft_in;
+    ps_ptr<float>   spectrum;
+    std::vector<uint32_t> sp_vec = {};
 };
 
 struct Biquad {
