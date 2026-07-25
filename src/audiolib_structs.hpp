@@ -404,7 +404,11 @@ struct fft_items_t {
     ps_ptr<float>         window;
     ps_ptr<float>         fft_in;
     ps_ptr<float>         spectrum;
-    std::vector<uint32_t> sp_vec = {};
+    std::vector<uint32_t> measured_vec = {};
+    std::vector<uint32_t> display_vec = {};
+    std::vector<uint32_t> peak_vec = {};
+    std::vector<uint8_t>  bars_hold_vec = {};
+    std::vector<uint8_t>  peak_hold_vec = {};
 };
 
 struct Biquad {

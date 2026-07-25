@@ -2635,11 +2635,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
-                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}",
-                     m_ID3Hdr.SYLT.text_encoding == 0   ? "ASCII"
-                     : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8"
-                                                        : "?",
-                     m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
                 m_ID3Hdr.SYLT.content_type = syltBuff[5];
 
@@ -2871,9 +2867,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if (!m_m4aHdr.progressive) {
                 m_m4aHdr.mdat_startPos = m_m4aHdr.headerSize + 8;
                 m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16);
-                if (atom_struct) {
-                    AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat);
-                }
+                if (atom_struct) { AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat); }
                 info(*this, evt_info, "Audiofile is non progressive");
                 m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
                 m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
@@ -3356,13 +3350,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const TagInfo tags[] = {
             // List of all usual tags
-            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},      {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},           {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},
-            {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},      {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},          {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},
-            {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},   {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},      {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"},
-            {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},       {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
-            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},      {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"},        {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},
-            {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},   {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},        {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},
-            {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"}, {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
+            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},        {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},    {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},           {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},
+            {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},      {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},   {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},         {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},
+            {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"}, {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},      {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
+            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},        {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"}, {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},      {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},
+            {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},    {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},  {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"},       {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
@@ -7057,20 +7049,34 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
           12    | 11444…14118  | 13 kHz
           13    | 14205…17222  | 16 kHz
           14    | 17308…19638  | 18 kHz
-          15    | 19724…21964  | 20 kHz (not used NYQUIST!)
+          15    | 19724…21964  | 20 kHz (not used becouse NYQUIST bounds!)
     */
     struct FFTBand {
         uint16_t firstBin;
         uint16_t lastBin;
         float    invCount;
     };
-    const FFTBand fftBands[16] = {{1, 2, 1.0f / 2.0f},      {3, 4, 1.0f / 2.0f},      {5, 7, 1.0f / 3.0f},      {8, 11, 1.0f / 4.0f},    {12, 16, 1.0f / 5.0f},   {17, 23, 1.0f / 7.0f},
-                                  {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},   {45, 60, 1.0f / 16.0f},   {61, 80, 1.0f / 20.0f},  {81, 104, 1.0f / 24.0f}, {105, 132, 1.0f / 28.0f},
-                                  {133, 164, 1.0f / 32.0f}, {165, 200, 1.0f / 36.0f}, {201, 228, 1.0f / 28.0f}, {229, 255, 1.0f / 27.0f}};
+    const FFTBand fftBands[16] = {{1, 2, 1.0f / 2.0f},    {3, 4, 1.0f / 2.0f},    {5, 7, 1.0f / 3.0f},     {8, 11, 1.0f / 4.0f},     {12, 16, 1.0f / 5.0f},    {17, 23, 1.0f / 7.0f},    {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},
+                                  {45, 60, 1.0f / 16.0f}, {61, 80, 1.0f / 20.0f}, {81, 104, 1.0f / 24.0f}, {105, 132, 1.0f / 28.0f}, {133, 164, 1.0f / 32.0f}, {165, 200, 1.0f / 36.0f}, {201, 228, 1.0f / 28.0f}, {229, 255, 1.0f / 27.0f}};
 
-    constexpr float DB_MIN = 40.0f;
-    constexpr float DB_MAX = 125.0f;
-    float           pw[16];
+    auto newVal = [](uint32_t* display, uint32_t measured, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
+        if (measured > *display) { // attack
+            *tmpHold = hold;
+            *display = std::min<uint32_t>(*display + attackStep, measured);
+        } else { // release
+            if (*tmpHold == 0) {
+                uint32_t diff = *display - measured;
+                *display -= std::min<uint32_t>(diff, releaseStep);
+            } else {
+                (*tmpHold)--;
+            }
+        }
+    };
+
+    const uint16_t       NUM_BANDS = 15;
+    constexpr float      DB_MIN = 40.0f;
+    constexpr float      DB_MAX = 125.0f;
+    float                pw[16];
 
     if (m_f_first_fft_call) {
         m_f_first_fft_call = false;
@@ -7085,11 +7091,29 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         }
         if (!m_fft_items.fft_in.valid()) { m_fft_items.fft_in.alloc_array(m_fft_items.FFT_SIZE * 2, "fft_in"); }
         if (!m_fft_items.spectrum.valid()) { m_fft_items.spectrum.alloc_array(m_fft_items.NUM_BANDS, "spectrum"); }
-        m_fft_items.sp_vec.clear();
-        for (int i = 0; i < 16; i++) m_fft_items.sp_vec.push_back(0);
+        m_fft_items.measured_vec.clear();
+        m_fft_items.display_vec.clear();
+        m_fft_items.peak_vec.clear();
+        m_fft_items.peak_hold_vec.clear();
+        for (int i = 0; i < 16; i++) m_fft_items.measured_vec.push_back(0);
         esp_err_t err = dsps_fft2r_init_fc32(nullptr, m_fft_items.FFT_SIZE);
         if (err != ESP_OK) AUDIO_LOG_ERROR("err {}", err);
+
+        for (int i = 0; i < m_fft_items.NUM_BANDS; i++) {
+            m_fft_items.measured_vec.push_back(0);
+            m_fft_items.display_vec.push_back(0);
+            m_fft_items.peak_vec.push_back(0);
+            m_fft_items.bars_hold_vec.push_back(0);
+            m_fft_items.peak_hold_vec.push_back(0);
+        }
     }
+
+    uint8_t bars_attack_step = 200; // bars rising steps
+    uint8_t bars_release_step = 30; // bars falling steps
+    uint8_t peak_attack_step = 200; // peak rising steps
+    uint8_t peak_release_step = 10; // peak falling steps
+    uint8_t bars_hold_cycles = 1;   // bars hold_cycles * 100ms
+    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * 100ms
 
     for (int i = 0; i < len / 2; i++) { // always stereo
         int16_t s = ((buff[i * 2] >> 17) + (buff[i * 2 + 1] >> 17));
@@ -7121,24 +7145,20 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
                     for (int i = fftBands[b].firstBin; i <= fftBands[b].lastBin; i++) {
                         float re = m_fft_items.fft_in[2 * i];
                         float im = m_fft_items.fft_in[2 * i + 1];
-                        float mag2 = re * re + im * im;
-                        power += mag2;
+                        power += re * re + im * im;
                     }
 
                     power *= fftBands[b].invCount;
                     float db = 10.0f * log10f(power + 1.0f);
                     db = std::clamp(db, DB_MIN, DB_MAX);
                     float x = (db - DB_MIN) / (DB_MAX - DB_MIN);
-                    m_fft_items.sp_vec[b] = uint8_t(x * 255.0f + 0.5f);
-                }
-                info(*this, evt_spectrum, m_fft_items.sp_vec);
+                    m_fft_items.measured_vec[b] = uint8_t(x * 255.0f + 0.5f);
 
-                // static int j = 0;
-                // j++;
-                // if (j % 100 == 0) {
-                //     for (int i = 0; i < m_fft_items.NUM_BANDS; i++) { AUDIO_LOG_WARN("{:03} {:.1f}", i, m_fft_items.spectrum[i]); }
-                //     AUDIO_LOG_WARN("");
-                // }
+                    newVal(&m_fft_items.display_vec[b], m_fft_items.measured_vec[b], bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
+
+                    newVal(&m_fft_items.peak_vec[b], m_fft_items.measured_vec[b], peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+                }
+                info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
             }
         }
     }
@@ -7222,10 +7242,9 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_peakingEQ_f32(m_audio_items.coeffs[PEAKINGEQ], normFreqPEQ, m_audio_items.gain_peq_db, QS); // my own calc.
     dsps_biquad_gen_highShelf_f32(m_audio_items.coeffs[HIFGSHELF], normFreqHS, m_audio_items.gain_hs_db, QS);
 
-    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
-                    m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3], m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1],
-                    m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2],
-                    m_audio_items.coeffs[2][3], m_audio_items.coeffs[2][4]);
+    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0], m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3],
+                    m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1], m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2], m_audio_items.coeffs[2][3],
+                    m_audio_items.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

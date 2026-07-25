@@ -749,7 +749,7 @@ class Audio {
         return enqueueInfo(instance, e, std::move(result), number);
     }
     //-------------------------------------------------------------------------------------------------------------------
-    static bool info(Audio& instance, event_t e, const std::vector<uint32_t>& v) {
+    static bool info(Audio& instance, event_t e, const std::vector<uint32_t>& v, const std::vector<uint32_t>& p = {})  {
         ps_ptr<char> txt;
         switch (e) {
             case evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
