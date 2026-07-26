@@ -276,7 +276,8 @@ class Audio {
         int32_t               i2s_num = 0;
         int32_t               arg1 = 0;
         int32_t               arg2 = 0;
-        std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
+        std::vector<uint32_t> vec1 = {}; // apic [pos, len, pos, len, pos, len, ....]
+        std::vector<uint32_t> vec2 = {};
     } msg_t;
     inline static std::function<void(msg_t i)> audio_info_callback;
     using VolumeCurveFn = std::function<float(float t)>;
@@ -718,7 +719,7 @@ class Audio {
         return 0;
     }
 
-    static bool enqueueInfo(Audio& instance, event_t e, ps_ptr<char>&& msg, int32_t arg1 = 0, int32_t arg2 = 0, std::vector<uint32_t>&& vec = {}) {
+    static bool enqueueInfo(Audio& instance, event_t e, ps_ptr<char>&& msg, int32_t arg1 = 0, int32_t arg2 = 0, std::vector<uint32_t>&& vec1 = {}, std::vector<uint32_t>&& vec2 = {}) {
 
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!audio_info_callback) return false;
@@ -732,7 +733,8 @@ class Audio {
         item.msg = std::move(msg);
         item.arg1 = arg1;
         item.arg2 = arg2;
-        item.vec = std::move(vec);
+        item.vec1 = std::move(vec1);
+        item.vec2 = std::move(vec2);
 
         instance.m_info_queue.queue.push_back(std::move(item));
         return true;
@@ -757,7 +759,7 @@ class Audio {
             case evt_spectrum: txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13], v[14]); break;
             default: txt.assign("???"); break;
         }
-        return enqueueInfo(instance, e, std::move(txt), 0, 0, std::vector<uint32_t>(v));
+        return enqueueInfo(instance, e, std::move(txt), 0, 0, std::vector<uint32_t>(v), std::vector<uint32_t>(p));
     }
     //----------------------------------------------------------------------------------------------------------------------
 

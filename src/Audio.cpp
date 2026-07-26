@@ -7056,8 +7056,8 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         uint16_t lastBin;
         float    invCount;
     };
-    const FFTBand fftBands[16] = {{1, 2, 1.0f / 2.0f},    {3, 4, 1.0f / 2.0f},    {5, 7, 1.0f / 3.0f},     {8, 11, 1.0f / 4.0f},     {12, 16, 1.0f / 5.0f},    {17, 23, 1.0f / 7.0f},    {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},
-                                  {45, 60, 1.0f / 16.0f}, {61, 80, 1.0f / 20.0f}, {81, 104, 1.0f / 24.0f}, {105, 132, 1.0f / 28.0f}, {133, 164, 1.0f / 32.0f}, {165, 200, 1.0f / 36.0f}, {201, 228, 1.0f / 28.0f}, {229, 255, 1.0f / 27.0f}};
+    const FFTBand fftBands[16] = {{1, 1, 0.10f / 1.0f},   {3, 3, 0.2f / 1.0f},    {5, 7, 0.30f / 3.0f},    {8, 11, 0.40f / 4.0f},    {12, 16, 0.50f / 5.0f},   {17, 23, 0.70f / 7.0f},   {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},
+                                  {45, 60, 1.0f / 16.0f}, {61, 80, 1.0f / 20.0f}, {81, 104, 1.1f / 24.0f}, {105, 132, 1.2f / 28.0f}, {133, 164, 1.3f / 32.0f}, {165, 200, 1.4f / 36.0f}, {201, 228, 1.5f / 28.0f}, {229, 255, 1.6f / 27.0f}};
 
     auto newVal = [](uint32_t* display, uint32_t measured, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
         if (measured > *display) { // attack
@@ -7073,15 +7073,16 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         }
     };
 
-    const uint16_t       NUM_BANDS = 15;
-    constexpr float      DB_MIN = 40.0f;
-    constexpr float      DB_MAX = 125.0f;
-    float                pw[16];
+    const uint16_t  NUM_BANDS = 15;
+    constexpr float DB_MIN = 90.0f;
+    constexpr float DB_MAX = 120.0f;
+    float           pw[16];
+    uint16_t timer_ms = 50; // every 50ms one output
 
     if (m_f_first_fft_call) {
         m_f_first_fft_call = false;
         m_fft_items.count = 0;
-        m_fft_items.samps_100ms = m_i2s_items.sampleRate / 10; // every 100ms one output
+        m_fft_items.samps_x_ms = m_i2s_items.sampleRate / (1000 / timer_ms);
         if (!m_fft_items.samples_buffer.valid()) { m_fft_items.samples_buffer.alloc_array(m_fft_items.FFT_SIZE, "samples_buffer"); }
         m_fft_items.samples_buffer.clear();
         m_fft_items.samples_buffer_index = 0;
@@ -7091,6 +7092,8 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         }
         if (!m_fft_items.fft_in.valid()) { m_fft_items.fft_in.alloc_array(m_fft_items.FFT_SIZE * 2, "fft_in"); }
         if (!m_fft_items.spectrum.valid()) { m_fft_items.spectrum.alloc_array(m_fft_items.NUM_BANDS, "spectrum"); }
+        m_fft_items.fft_in.clear();
+        m_fft_items.spectrum.clear();
         m_fft_items.measured_vec.clear();
         m_fft_items.display_vec.clear();
         m_fft_items.peak_vec.clear();
@@ -7108,59 +7111,67 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         }
     }
 
-    uint8_t bars_attack_step = 200; // bars rising steps
-    uint8_t bars_release_step = 30; // bars falling steps
+    uint8_t bars_attack_step = 100; // bars rising steps
+    uint8_t bars_release_step = 20; // bars falling steps
     uint8_t peak_attack_step = 200; // peak rising steps
     uint8_t peak_release_step = 10; // peak falling steps
-    uint8_t bars_hold_cycles = 1;   // bars hold_cycles * 100ms
-    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * 100ms
+    uint8_t bars_hold_cycles = 1;   // bars hold_cycles * x ms
+    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * x ms
 
-    for (int i = 0; i < len / 2; i++) { // always stereo
-        int16_t s = ((buff[i * 2] >> 17) + (buff[i * 2 + 1] >> 17));
-        m_fft_items.samples_buffer[m_fft_items.samples_buffer_index++] = s;
-        if (m_fft_items.samples_buffer_index == m_fft_items.FFT_SIZE) {
-            //----------------------------------------------------------------------------------
-            // FFT
-            //----------------------------------------------------------------------------------
-            for (uint16_t i = 0; i < m_fft_items.FFT_SIZE; i++) {
-                m_fft_items.fft_in[2 * i] = (float)m_fft_items.samples_buffer[i] * m_fft_items.window[i]; // Realteil
-                m_fft_items.fft_in[2 * i + 1] = 0.0f;                                                     // Imaginärteil
-            }
-            dsps_fft2r_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
-            // Bit-Reversal
-            dsps_bit_rev_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
-            // Ausgabe in normales Frequenzformat bringen
-            dsps_cplx2reC_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
-            //----------------------------------------------------------------------------------
-            memmove(m_fft_items.samples_buffer.get(), m_fft_items.samples_buffer.get() + (m_fft_items.FFT_SIZE / 2), (m_fft_items.FFT_SIZE / 2) * sizeof(int16_t));
-            m_fft_items.samples_buffer_index = m_fft_items.FFT_SIZE / 2;
-
-            m_fft_items.count += m_fft_items.FFT_SIZE / 2;
-            if (m_fft_items.count >= m_fft_items.samps_100ms) {
-                m_fft_items.count -= m_fft_items.samps_100ms;
-
-                for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
-                    float power = 0.0f;
-
-                    for (int i = fftBands[b].firstBin; i <= fftBands[b].lastBin; i++) {
-                        float re = m_fft_items.fft_in[2 * i];
-                        float im = m_fft_items.fft_in[2 * i + 1];
-                        power += re * re + im * im;
-                    }
-
-                    power *= fftBands[b].invCount;
-                    float db = 10.0f * log10f(power + 1.0f);
-                    db = std::clamp(db, DB_MIN, DB_MAX);
-                    float x = (db - DB_MIN) / (DB_MAX - DB_MIN);
-                    m_fft_items.measured_vec[b] = uint8_t(x * 255.0f + 0.5f);
-
-                    newVal(&m_fft_items.display_vec[b], m_fft_items.measured_vec[b], bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
-
-                    newVal(&m_fft_items.peak_vec[b], m_fft_items.measured_vec[b], peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+    if (m_decoder) {
+        for (int i = 0; i < len / 2; i++) { // always stereo
+            int16_t s = ((buff[i * 2] >> 17) + (buff[i * 2 + 1] >> 17));
+            m_fft_items.samples_buffer[m_fft_items.samples_buffer_index++] = s;
+            if (m_fft_items.samples_buffer_index == m_fft_items.FFT_SIZE) {
+                //----------------------------------------------------------------------------------
+                // FFT
+                //----------------------------------------------------------------------------------
+                for (uint16_t i = 0; i < m_fft_items.FFT_SIZE; i++) {
+                    m_fft_items.fft_in[2 * i] = (float)m_fft_items.samples_buffer[i] * m_fft_items.window[i]; // Real part
+                    m_fft_items.fft_in[2 * i + 1] = 0.0f;                                                     // Imaginary part
                 }
-                info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
+                dsps_fft2r_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
+                // Bit-Reversal
+                dsps_bit_rev_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
+                // Convert the output to standard frequency format
+                dsps_cplx2reC_fc32(m_fft_items.fft_in.get(), m_fft_items.FFT_SIZE);
+                //----------------------------------------------------------------------------------
+                memmove(m_fft_items.samples_buffer.get(), m_fft_items.samples_buffer.get() + (m_fft_items.FFT_SIZE / 2), (m_fft_items.FFT_SIZE / 2) * sizeof(int16_t));
+                m_fft_items.samples_buffer_index = m_fft_items.FFT_SIZE / 2;
+
+                m_fft_items.count += m_fft_items.FFT_SIZE / 2;
+                if (m_fft_items.count >= m_fft_items.samps_x_ms) {
+                    m_fft_items.count -= m_fft_items.samps_x_ms;
+
+                    for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
+                        float power = 0.0f;
+
+                        for (int i = fftBands[b].firstBin; i <= fftBands[b].lastBin; i++) {
+                            float re = m_fft_items.fft_in[2 * i];
+                            float im = m_fft_items.fft_in[2 * i + 1];
+                            power += re * re + im * im;
+                        }
+
+                        power *= fftBands[b].invCount;
+                        float db = 10.0f * log10f(power + 1.0f);
+                        db = std::clamp(db, DB_MIN, DB_MAX);
+                        float x = (db - DB_MIN) / (DB_MAX - DB_MIN);
+                        m_fft_items.measured_vec[b] = uint8_t(x * 255.0f + 0.5f);
+
+                        newVal(&m_fft_items.display_vec[b], m_fft_items.measured_vec[b], bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
+                        newVal(&m_fft_items.peak_vec[b], m_fft_items.measured_vec[b], peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+                    }
+                    info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
+                }
             }
         }
+    }
+    else { // !m_decoder
+        for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
+            newVal(&m_fft_items.display_vec[b], 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
+            newVal(&m_fft_items.peak_vec[b], 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+        }
+        info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
     }
 }
 
@@ -8082,7 +8093,8 @@ bool Audio::get_info() {
     i.arg1 = item.arg1;
     i.arg2 = item.arg2;
     i.i2s_num = m_i2s_items.i2s_num;
-    i.vec = item.vec;
+    i.vec1 = item.vec1;
+    i.vec2 = item.vec2;
 
     audio_info_callback(i);
     m_info_queue.queue.pop_front();

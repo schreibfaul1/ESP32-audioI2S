@@ -396,7 +396,7 @@ struct vu_items_t {
 
 struct fft_items_t {
     size_t                count = 0;
-    size_t                samps_100ms = 0;
+    size_t                samps_x_ms = 0;
     ps_ptr<int16_t>       samples_buffer;
     size_t                samples_buffer_index = 0;
     const uint16_t        FFT_SIZE = 512;
@@ -445,7 +445,8 @@ struct InfoItem {
     uint8_t               e = 0; // event type
     int32_t               arg1 = 0;
     int32_t               arg2 = 0;
-    std::vector<uint32_t> vec; // apic [pos, len, pos, len, pos, len, ....]
+    std::vector<uint32_t> vec1; // apic [pos, len, pos, len, pos, len, ....] or spectrum (bars)
+    std::vector<uint32_t> vec2; // spectrum peaks
 };
 
 struct icy_items_t {
