@@ -7077,7 +7077,7 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
     constexpr float DB_MIN = 90.0f;
     constexpr float DB_MAX = 120.0f;
     float           pw[16];
-    uint16_t timer_ms = 50; // every 50ms one output
+    uint16_t        timer_ms = 50; // every 50ms one output
 
     if (m_f_first_fft_call) {
         m_f_first_fft_call = false;
@@ -7165,8 +7165,7 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
                 }
             }
         }
-    }
-    else { // !m_decoder
+    } else { // !m_decoder
         for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
             newVal(&m_fft_items.display_vec[b], 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
             newVal(&m_fft_items.peak_vec[b], 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
@@ -8081,24 +8080,23 @@ bool Audio::get_info() {
     std::lock_guard<std::mutex> lock(mutex_info);
     if (m_info_queue.queue.empty()) return false;
 
-    msg_t i = {0};
+    while (m_info_queue.queue.size()) {
+        msg_t                     i = {0};
+        const audiolib::InfoItem& item = m_info_queue.queue.front();
+        ps_ptr<char>              msg = item.msg;
+        i.msg = msg.c_get();
+        i.e = (event_t)item.e;
+        ps_ptr<char> evtstr = item.s;
+        i.s = evtstr.c_get();
+        i.arg1 = item.arg1;
+        i.arg2 = item.arg2;
+        i.i2s_num = m_i2s_items.i2s_num;
+        i.vec1 = item.vec1;
+        i.vec2 = item.vec2;
 
-    const audiolib::InfoItem& item = m_info_queue.queue.front();
-
-    ps_ptr<char> msg = item.msg;
-    i.msg = msg.c_get();
-    i.e = (event_t)item.e;
-    ps_ptr<char> evtstr = item.s;
-    i.s = evtstr.c_get();
-    i.arg1 = item.arg1;
-    i.arg2 = item.arg2;
-    i.i2s_num = m_i2s_items.i2s_num;
-    i.vec1 = item.vec1;
-    i.vec2 = item.vec2;
-
-    audio_info_callback(i);
-    m_info_queue.queue.pop_front();
-
+        audio_info_callback(i);
+        m_info_queue.queue.pop_front();
+    }
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
