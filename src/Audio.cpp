@@ -2718,8 +2718,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         } else {
             // padding after ID3 body?
-            uint32_t padding_counter = 0;
-            while (data[padding_counter] == 0) {
+            size_t padding_counter = 0;
+            while (padding_counter < len && data[padding_counter] == 0) { // big padding can have more rounds
                 padding_counter++;
                 m_audioDataStart++;
                 m_audioDataSize--;
