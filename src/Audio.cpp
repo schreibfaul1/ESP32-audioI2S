@@ -1068,8 +1068,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         return false;
     } // max length in Chrome DevTools
 
-    const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     bool     res = false;   // return value
     uint16_t port = 0;      // port number
@@ -1122,7 +1122,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept: */*\r\n");
-    rqh.appendf("User-Agent: {}\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
+    rqh.appendf("User-Agent: {}\r\n", user_agent);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
         rqh.append(authorization);
@@ -5245,6 +5245,26 @@ exit:
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::readHeader() {
+    uint16_t pos = 0;
+    while (true) { // read the header first and store it in m_httpRespHdrBuff
+        int c = audioFileRead(5000);
+        if (c < 0) {
+            AUDIO_LOG_ERROR("timeout");
+            return false;
+        }
+
+        if (pos >= m_httpRespHdrBuff.size() - 1) {
+            AUDIO_LOG_WARN("responseHeaderline overflow");
+            m_httpRespHdrBuff[pos] = '\0';
+            break;
+        }
+        m_httpRespHdrBuff[pos++] = c;
+        if (m_httpRespHdrBuff.ends_with("\r\n\r\n") || m_httpRespHdrBuff.ends_with("\n\n")) break;
+    }
+    return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
     if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
@@ -5252,35 +5272,14 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     m_metaint = 0; // no metaint yet
 
     m_phreh.reset();
-    m_phreh.ctime = millis();
-    m_phreh.timeout = 5000; // ms
     m_httpRespHdrBuff.clear();
-    uint16_t pos = 0;
-
-    while (true) { // read the header first and store it in m_httpRespHdrBuff
-        if (m_client->available()) { m_httpRespHdrBuff[pos++] = audioFileRead(); }
-        if (m_httpRespHdrBuff.ends_with("\r\n\r\n")) break;
-        if (m_httpRespHdrBuff.ends_with("\n\n")) break;
-        if (pos == m_httpRespHdrBuff.size()) {
-            AUDIO_LOG_WARN("responseHeaderline overflow");
-            m_httpRespHdrBuff[pos - 1] = '\0';
-            break;
-        }
-        if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
-            AUDIO_LOG_ERROR("timeout");
-            m_f_timeout = true;
-            m_phreh.f_time = false;
-            if (m_client && m_client->connected()) m_client->stop();
-            return false;
-        }
-    }
-
     ps_ptr<char> rhl;
     bool         ct_seen = false;
+    int          pos = 0;
 
+    if (!readHeader()) goto exit;
     // m_httpRespHdrBuff.println();
 
-    pos = 0;
     while (true) { // read the header line for line
         int idx = m_httpRespHdrBuff.index_of('\n', pos);
         if (idx > pos) {
@@ -5341,19 +5340,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         } // —— END ICY BLOCK —————————————————————————————————————————————————————————————————————————————————————————
 
         if (rhl.starts_with_icase("HTTP/")) { // HTTP status error code
-            char statusCode[5];
-            statusCode[0] = rhl[9];
-            statusCode[1] = rhl[10];
-            statusCode[2] = rhl[11];
-            statusCode[3] = '\0';
-            int sc = atoi(statusCode);
-            if (sc == 403 && !m_f_alt_user_agent) { // HTTP/1.1 403 Forbidden
-                m_f_alt_user_agent = true;
-                AUDIO_LOG_WARN("403 Forbidden, test alternative user agent");
-                connecttohost(m_lastHost.c_get());
-                return true;
-            }
-            m_f_alt_user_agent = false;
+            int sc = atoi(rhl.get() + 9);
             if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
                 info(*this, evt_streamtitle, "{}", rhl.get());
                 goto exit;
@@ -5454,13 +5441,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     } // outer while
 
 exit: // termination condition
-    m_f_alt_user_agent = false;
     m_dataMode = AUDIO_NONE;
     stopSong();
     return false;
 
 lastToDo:
-    m_f_alt_user_agent = false;
     m_streamType = ST_WEBSTREAM;
     if (m_audioFileSize > 0) m_streamType = ST_WEBFILE; // content length found
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
