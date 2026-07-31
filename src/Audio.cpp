@@ -5245,13 +5245,15 @@ exit:
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::readHeader() {
-    uint16_t pos = 0;
+std::vector<ps_ptr<char>> Audio::readHeader() {
+    uint16_t                  pos = 0;
+    std::vector<ps_ptr<char>> hdr_lines;
     while (true) { // read the header first and store it in m_httpRespHdrBuff
         int c = audioFileRead(5000);
         if (c < 0) {
             AUDIO_LOG_ERROR("timeout");
-            return false;
+            hdr_lines.clear();
+            return hdr_lines;
         }
 
         if (pos >= m_httpRespHdrBuff.size() - 1) {
@@ -5262,7 +5264,19 @@ bool Audio::readHeader() {
         m_httpRespHdrBuff[pos++] = c;
         if (m_httpRespHdrBuff.ends_with("\r\n\r\n") || m_httpRespHdrBuff.ends_with("\n\n")) break;
     }
-    return true;
+
+    pos = 0;
+
+    while (true) {
+        int idx = m_httpRespHdrBuff.index_of('\n', pos);
+        if (idx < 0) break;
+        ps_ptr<char> line = m_httpRespHdrBuff.substr(pos, idx - pos);
+        line.remove_chars("\r");
+        if (line.valid()) hdr_lines.push_back(std::move(line));
+        pos = idx + 1;
+    }
+
+    return hdr_lines;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
@@ -5273,28 +5287,15 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
     m_phreh.reset();
     m_httpRespHdrBuff.clear();
-    ps_ptr<char> rhl;
     bool         ct_seen = false;
     int          pos = 0;
 
-    if (!readHeader()) goto exit;
-    // m_httpRespHdrBuff.println();
+    auto header = readHeader();
+    if (header.empty()) goto exit;
 
-    while (true) { // read the header line for line
-        int idx = m_httpRespHdrBuff.index_of('\n', pos);
-        if (idx > pos) {
-            rhl = m_httpRespHdrBuff.substr(pos, idx - pos);
-            rhl.set_name("rhl");
-            rhl.remove_chars("\r");
-            pos = idx + 1;
-            if (rhl.strlen() == 0) continue;
-        } else { // done?
-            if (ct_seen)
-                goto lastToDo;
-            else { goto exit; }
-        }
+    for (auto& rhl : header) {// read the header line for line
 
-        //    rhl.println();
+        rhl.println();
 
         if (rhl.starts_with_icase("icy-")) { // —— ICY BLOCK ——————————————————————————————————————————————————————————
             m_phreh.f_icy_data = true;
@@ -5439,6 +5440,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             ;
         }
     } // outer while
+
+    if (ct_seen)
+        goto lastToDo;
+    else { goto exit; }
 
 exit: // termination condition
     m_dataMode = AUDIO_NONE;
