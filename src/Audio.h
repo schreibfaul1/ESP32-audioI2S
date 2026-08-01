@@ -389,6 +389,7 @@ class Audio {
     void                      showstreamtitle(char* ml);
     bool                      parseContentType(ps_ptr<char> ct);
     std::vector<ps_ptr<char>> readHeader();
+    ps_ptr<char>              parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value);
     bool                      parseHttpResponseHeader();
     bool                      parseHttpRangeHeader();
     bool                      initializeDecoder();
@@ -676,7 +677,6 @@ class Audio {
     audiolib::fft_items_t  m_fft_items;
     audiolib::i2s_items_t  m_i2s_items;
     audiolib::resampler_t  m_resampler;
-    audiolib::icy_items_t  m_icy_items;
 
     struct info_queue_t {
         std::deque<audiolib::InfoItem> queue;
