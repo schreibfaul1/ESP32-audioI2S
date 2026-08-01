@@ -5283,11 +5283,12 @@ std::vector<ps_ptr<char>> Audio::readHeader() {
     return hdr_lines;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<char> Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value) {
+Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value, ps_ptr<char>& redirectUrl) {
 
     if (name.starts_with_icase("icy-")) {
         // —— ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————————
         m_phreh.f_icy_data = true;
+        latinToUTF8(value);
         if (name.equals_icase("icy-genre")) { info(*this, evt_genre, "{}", value); }  // Ambient, Rock, etc
         if (name.equals_icase("icy-logo")) { info(*this, evt_icylogo, "{}", value); } // https://www.0nradio.com/logos/0n-70s_600x600.jpg
         if (name.equals_icase("icy-name")) { info(*this, evt_name, "{}", value); }
@@ -5295,20 +5296,20 @@ ps_ptr<char> Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value) {
         if (name.equals_icase("icy-description")) { info(*this, evt_icydescription, "{}", value); }
         if (name.equals_icase("icy-metaint")) { m_metaint = value.to_uint32(); }
         if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
-        return {};
+        return HeaderResult::Continue;
     } // —— END ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————
 
     if (name.equals_icase("content-type")) { // content-type: text/html; charset=UTF-8
         int idx = value.index_of(';');
         if (idx > 0) value[idx] = '\0';
-        if (parseContentType(value)) { return "ct_seen"; }
+        if (parseContentType(value)) { return HeaderResult::ContentTypeSeen; }
     }
 
     else if (name.equals_icase("content-encoding")) {
         info(*this, evt_info, "{}:{}", name, value);
         if (value.contains("gzip")) {
             AUDIO_LOG_ERROR("can't extract gzip");
-            return "err";
+            return HeaderResult::Error;
         }
     }
 
@@ -5320,15 +5321,18 @@ ps_ptr<char> Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value) {
             fn.replace("\"", "");             // remove '\"' around filename if present
             info(*this, evt_info, "Filename is {}", fn.get());
         }
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("connection")) {
         if (value.contains_with_icase("close")) { m_f_connectionClose = true; }
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("content-length")) {
         m_audioFileSize = value.to_uint32();
         info(*this, evt_info, "content-length: {}", m_audioFileSize);
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("transfer-encoding")) {
@@ -5337,38 +5341,44 @@ ps_ptr<char> Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value) {
             info(*this, evt_info, "chunked data transfer");
             m_chunkcount = 0; // Expect chunkcount in DATA
         }
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("accept-ranges")) {
         if (value.ends_with_icase("bytes")) m_f_acceptRanges = true;
         AUDIO_LOG_INFO("{}:{}", name, value);
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("content-range")) {
         AUDIO_LOG_INFO("{}:{}", name, value);
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("www-authenticate")) {
         AUDIO_LOG_WARN("authentification failed, wrong credentials?");
+        return HeaderResult::Continue;
     }
 
     else if (name.starts_with_icase("http/")) { // HTTP status error code
         int sc = atoi(name.get() + 9);
         if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently, HTTP/1.1 302 Found
             info(*this, evt_streamtitle, "{}", name.get());
-            return "err";
+            return HeaderResult::Error;
         }
+        return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("location")) {
-        return value;
+        redirectUrl = value;
+        return HeaderResult::Redirect;
     }
 
     else {
         ;
     }
 
-    return {};
+    return HeaderResult::Continue;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
@@ -5381,6 +5391,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     int          pos = 0;
     ps_ptr<char> name;
     ps_ptr<char> value;
+    ps_ptr<char> redirectUrl;
 
     auto header = readHeader();
     if (header.empty()) goto exit;
@@ -5394,27 +5405,15 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         } else {
             name = rhl.substr(0, colon);
             value = rhl.substr(colon + 1);
-            latinToUTF8(value);
             value.trim();
         }
-        ps_ptr<char> res = parseHeaderLine(name, value);
-        if (!res.valid()) continue;
-        if (res.equals("ct_seen")) {
-            ct_seen = true;
-            AUDIO_LOG_ERROR("ct seen");
-            continue;
+        switch (parseHeaderLine(name, value, redirectUrl)) {
+            case HeaderResult::Continue: break;
+            case HeaderResult::ContentTypeSeen: ct_seen = true; break;
+            case HeaderResult::Redirect: httpPrint(redirectUrl.c_get()); return true;
+            case HeaderResult::Error: goto exit;
         }
-        if (res.equals("err")) {
-            AUDIO_LOG_ERROR("err");
-            goto exit;
-        }
-        if (res.starts_with("http")) {
-            httpPrint(res.c_get());
-            return true;
-            ;
-        }
-
-        AUDIO_LOG_INFO("name: {}, value; {}", name, value);
+        AUDIO_LOG_DEBUG("name: {}, value; {}", name, value);
     }
 
     if (ct_seen) {
@@ -5446,7 +5445,7 @@ lastToDo:
         goto exit;
     }
 
-    AUDIO_LOG_WARN("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
+    AUDIO_LOG_DEBUG("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

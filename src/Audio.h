@@ -331,6 +331,14 @@ class Audio {
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
+
+    enum class HeaderResult {
+        Continue,
+        ContentTypeSeen,
+        Redirect,
+        Error,
+    };
+
     bool                      i2s_config();
     std::unique_ptr<Decoder>  createDecoder(const std::string& type);
     void                      destroy_decoder();
@@ -389,7 +397,7 @@ class Audio {
     void                      showstreamtitle(char* ml);
     bool                      parseContentType(ps_ptr<char> ct);
     std::vector<ps_ptr<char>> readHeader();
-    ps_ptr<char>              parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value);
+    HeaderResult              parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value, ps_ptr<char>& redirectUrl);
     bool                      parseHttpResponseHeader();
     bool                      parseHttpRangeHeader();
     bool                      initializeDecoder();
