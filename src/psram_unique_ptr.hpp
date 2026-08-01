@@ -897,6 +897,28 @@ class ps_ptr {
         return strcmp(myStr, other) == 0;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  E Q U A L S _ I C A S E  📌📌📌
+
+    bool equals_icase(const char* other) const {
+        if (!this->valid()) return false;
+
+        const char* s1 = this->get();
+        const char* s2 = other;
+
+        if (!s1 || !s2) return false;
+
+        while (*s1 && *s2) {
+            if (tolower((uint8_t)*s1) != tolower((uint8_t)*s2)) return false;
+            ++s1;
+            ++s2;
+        }
+
+        return (*s1 == '\0' && *s2 == '\0');
+    }
+
+    bool equals_icase(const ps_ptr<T>& other) const { return equals_icase(other.get()); }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A S S I G N F   📌📌📌
 
     // ps_ptr<char> message;

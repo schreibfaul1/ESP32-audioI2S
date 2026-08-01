@@ -1068,8 +1068,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         return false;
     } // max length in Chrome DevTools
 
-    const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     bool     res = false;   // return value
     uint16_t port = 0;      // port number
@@ -1122,7 +1122,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept: */*\r\n");
-    rqh.appendf("User-Agent: {}\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
+    rqh.appendf("User-Agent: {}\r\n", user_agent);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
         rqh.append(authorization);
@@ -1297,7 +1297,7 @@ bool Audio::httpPrint(const char* host) {
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
     m_f_chunked = false;
-    AUDIO_LOG_DEBUG("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
+    AUDIO_LOG_WARN("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3869,7 +3869,8 @@ void Audio::loop() {
                         const char* retryHost = m_currentHost.valid() ? m_currentHost.get() : m_lastHost.get();
                         m_f_timeout = false;
                         m_lVar.count++;
-                        connecttohost(retryHost);
+                        m_f_running = true; // keep running
+                        httpPrint(retryHost);
                     }
                 } else {
                     m_lVar.count = 0;
@@ -3893,7 +3894,8 @@ void Audio::loop() {
                 if (!parseHttpResponseHeader()) {
                     if (m_lVar.count < 3) {
                         m_lVar.count++;
-                        connecttohost(m_lastHost.get());
+                        m_f_running = true; // keep running
+                        httpPrint(m_lastHost.get());
                     } else {
                         stopSong();
                     }
@@ -5245,222 +5247,188 @@ exit:
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
+std::vector<ps_ptr<char>> Audio::readHeader() {
 
-    if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
-    m_icy_items.reset();
-    m_metaint = 0; // no metaint yet
-
-    m_phreh.reset();
-    m_phreh.ctime = millis();
-    m_phreh.timeout = 5000; // ms
+    uint16_t                  pos = 0;
+    std::vector<ps_ptr<char>> hdr_lines;
     m_httpRespHdrBuff.clear();
-    uint16_t pos = 0;
 
     while (true) { // read the header first and store it in m_httpRespHdrBuff
-        if (m_client->available()) { m_httpRespHdrBuff[pos++] = audioFileRead(); }
-        if (m_httpRespHdrBuff.ends_with("\r\n\r\n")) break;
-        if (m_httpRespHdrBuff.ends_with("\n\n")) break;
-        if (pos == m_httpRespHdrBuff.size()) {
+        int c = audioFileRead(5000);
+        if (c < 0) {
+            AUDIO_LOG_ERROR("timeout");
+            hdr_lines.clear();
+            return hdr_lines;
+        }
+
+        if (pos >= m_httpRespHdrBuff.size() - 1) {
             AUDIO_LOG_WARN("responseHeaderline overflow");
-            m_httpRespHdrBuff[pos - 1] = '\0';
+            m_httpRespHdrBuff[pos] = '\0';
             break;
         }
-        if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
-            AUDIO_LOG_ERROR("timeout");
-            m_f_timeout = true;
-            m_phreh.f_time = false;
-            if (m_client && m_client->connected()) m_client->stop();
-            return false;
+        m_httpRespHdrBuff[pos++] = c;
+        if (m_httpRespHdrBuff.ends_with("\r\n\r\n") || m_httpRespHdrBuff.ends_with("\n\n")) break;
+    }
+
+    pos = 0;
+
+    while (true) {
+        int idx = m_httpRespHdrBuff.index_of('\n', pos);
+        if (idx < 0) break;
+        ps_ptr<char> line = m_httpRespHdrBuff.substr(pos, idx - pos);
+        line.remove_chars("\r");
+        if (line.valid()) hdr_lines.push_back(std::move(line));
+        pos = idx + 1;
+    }
+    return hdr_lines;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+ps_ptr<char> Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value) {
+
+    if (name.starts_with_icase("icy-")) {
+        // —— ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————————
+        m_phreh.f_icy_data = true;
+        if (name.equals_icase("icy-genre")) { info(*this, evt_genre, "{}", value); }  // Ambient, Rock, etc
+        if (name.equals_icase("icy-logo")) { info(*this, evt_icylogo, "{}", value); } // https://www.0nradio.com/logos/0n-70s_600x600.jpg
+        if (name.equals_icase("icy-name")) { info(*this, evt_name, "{}", value); }
+        if (name.equals_icase("icy-url")) { info(*this, evt_icyurl, "{}", value); }
+        if (name.equals_icase("icy-description")) { info(*this, evt_icydescription, "{}", value); }
+        if (name.equals_icase("icy-metaint")) { m_metaint = value.to_uint32(); }
+        if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
+        return {};
+    } // —— END ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————
+
+    if (name.equals_icase("content-type")) { // content-type: text/html; charset=UTF-8
+        int idx = value.index_of(';');
+        if (idx > 0) value[idx] = '\0';
+        if (parseContentType(value)) { return "ct_seen"; }
+    }
+
+    else if (name.equals_icase("content-encoding")) {
+        info(*this, evt_info, "{}:{}", name, value);
+        if (value.contains("gzip")) {
+            AUDIO_LOG_ERROR("can't extract gzip");
+            return "err";
         }
     }
 
-    ps_ptr<char> rhl;
+    else if (name.equals_icase("content-disposition")) { // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
+        int idx = value.index_of_icase("filename=");
+        if (idx >= 0) {
+            ps_ptr<char> fn;
+            fn.assign(value.get() + idx + 9); // Position directly after "filename="
+            fn.replace("\"", "");             // remove '\"' around filename if present
+            info(*this, evt_info, "Filename is {}", fn.get());
+        }
+    }
+
+    else if (name.equals_icase("connection")) {
+        if (value.contains_with_icase("close")) { m_f_connectionClose = true; }
+    }
+
+    else if (name.equals_icase("content-length")) {
+        m_audioFileSize = value.to_uint32();
+        info(*this, evt_info, "content-length: {}", m_audioFileSize);
+    }
+
+    else if (name.equals_icase("transfer-encoding")) {
+        if (value.ends_with_icase("chunked")) { // Station provides chunked transfer
+            m_f_chunked = true;
+            info(*this, evt_info, "chunked data transfer");
+            m_chunkcount = 0; // Expect chunkcount in DATA
+        }
+    }
+
+    else if (name.equals_icase("accept-ranges")) {
+        if (value.ends_with_icase("bytes")) m_f_acceptRanges = true;
+        AUDIO_LOG_INFO("{}:{}", name, value);
+    }
+
+    else if (name.equals_icase("content-range")) {
+        AUDIO_LOG_INFO("{}:{}", name, value);
+    }
+
+    else if (name.equals_icase("www-authenticate")) {
+        AUDIO_LOG_WARN("authentification failed, wrong credentials?");
+    }
+
+    else if (name.starts_with_icase("http/")) { // HTTP status error code
+        int sc = atoi(name.get() + 9);
+        if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently, HTTP/1.1 302 Found
+            info(*this, evt_streamtitle, "{}", name.get());
+            return "err";
+        }
+    }
+
+    else if (name.equals_icase("location")) {
+        return value;
+    }
+
+    else {
+        ;
+    }
+
+    return {};
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
+
+    if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
+    m_metaint = 0; // no metaint yet
+
+    m_phreh.reset();
     bool         ct_seen = false;
+    int          pos = 0;
+    ps_ptr<char> name;
+    ps_ptr<char> value;
 
-    // m_httpRespHdrBuff.println();
+    auto header = readHeader();
+    if (header.empty()) goto exit;
 
-    pos = 0;
-    while (true) { // read the header line for line
-        int idx = m_httpRespHdrBuff.index_of('\n', pos);
-        if (idx > pos) {
-            rhl = m_httpRespHdrBuff.substr(pos, idx - pos);
-            rhl.set_name("rhl");
-            rhl.remove_chars("\r");
-            pos = idx + 1;
-            if (rhl.strlen() == 0) continue;
-        } else { // done?
-            if (ct_seen)
-                goto lastToDo;
-            else { goto exit; }
-        }
-
-        //    rhl.println();
-
-        if (rhl.starts_with_icase("icy-")) { // —— ICY BLOCK ——————————————————————————————————————————————————————————
-            m_phreh.f_icy_data = true;
-
-            if (rhl.starts_with_icase("icy-genre:")) {
-                m_icy_items.icy_genre.copy_from(rhl.get() + 10); // Ambient, Rock, etc
-                m_icy_items.icy_genre.trim();
-                latinToUTF8(m_icy_items.icy_genre);
-            }
-
-            if (rhl.starts_with_icase("icy-logo:")) {
-                m_icy_items.icy_logo.copy_from(rhl.get() + 9); // https://www.0nradio.com/logos/0n-70s_600x600.jpg
-                m_icy_items.icy_logo.trim();
-                latinToUTF8(m_icy_items.icy_logo);
-            }
-
-            if (rhl.starts_with_icase("icy-name:")) {
-                m_icy_items.icy_name.copy_from(rhl.get() + 9);
-                m_icy_items.icy_name.trim();
-                latinToUTF8(m_icy_items.icy_name);
-            }
-
-            if (rhl.starts_with_icase("icy-url:")) {
-                m_icy_items.icy_url.copy_from(rhl.get() + 8);
-                m_icy_items.icy_url.trim();
-            }
-
-            if (rhl.starts_with_icase("icy-description:")) {
-                m_icy_items.icy_description.copy_from(rhl.get() + 16);
-                m_icy_items.icy_description.trim();
-                latinToUTF8(m_icy_items.icy_description);
-            }
-
-            if (rhl.starts_with_icase("icy-metaint:")) {
-                m_icy_items.icy_metaint.copy_from(rhl.get() + 12);
-                m_icy_items.icy_metaint.trim();
-            }
-
-            if (rhl.starts_with_icase("icy-br:")) {
-                m_icy_items.icy_br.copy_from(rhl.get() + 7);
-                m_icy_items.icy_br.trim();
-            }
-        } // —— END ICY BLOCK —————————————————————————————————————————————————————————————————————————————————————————
-
-        if (rhl.starts_with_icase("HTTP/")) { // HTTP status error code
-            char statusCode[5];
-            statusCode[0] = rhl[9];
-            statusCode[1] = rhl[10];
-            statusCode[2] = rhl[11];
-            statusCode[3] = '\0';
-            int sc = atoi(statusCode);
-            if (sc == 403 && !m_f_alt_user_agent) { // HTTP/1.1 403 Forbidden
-                m_f_alt_user_agent = true;
-                AUDIO_LOG_WARN("403 Forbidden, test alternative user agent");
-                connecttohost(m_lastHost.c_get());
-                return true;
-            }
-            m_f_alt_user_agent = false;
-            if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                info(*this, evt_streamtitle, "{}", rhl.get());
-                goto exit;
-            }
-        } else if (rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
-            int idx = rhl.index_of(';', 13);
-            if (idx > 0) rhl[idx] = '\0';
-            if (parseContentType(rhl.get() + 13))
-                ct_seen = true;
-            else {
-                AUDIO_LOG_WARN("unknown contentType {}", rhl.get() + 13);
-                goto exit;
-            }
-        }
-
-        else if (rhl.starts_with_icase("location:")) {
-            int pos = rhl.index_of_icase("http", 0);
-            if (pos == -1) {
-                int doubleSlash = rhl.index_of("//");                   // e.g. location: //frontend.streamonkey.net/...  host: http://webstream.radiof.de/
-                if (doubleSlash >= 9) rhl.insert("http:", doubleSlash); // ==> http://frontend.streamonkey.net/fhn-radiof945/stream/mp3?aggregator=fh-tinyurl
-                pos = rhl.index_of_icase("http", 0);
-            }
-            if (pos >= 0) {
-                const char* c_host = (rhl.get() + pos);
-                if (!m_currentHost.equals(c_host)) { // prevent a loop
-                    int pos_slash = indexOf(c_host, "/", 9);
-                    if (pos_slash > 9) {
-                        if (!strncmp(c_host, m_currentHost.get(), pos_slash)) {
-                            info(*this, evt_info, "redirect to new extension at existing host \"{}\"", c_host);
-                            if (m_playlistFormat == FORMAT_M3U8) {
-                                //    m_lastHost.assign(c_host);
-                                m_f_m3u8data = true;
-                            }
-                            httpPrint(c_host);
-                            while (m_client->available()) audioFileRead(); // empty client buffer
-                            return true;
-                        }
-                    }
-                    info(*this, evt_info, "redirect to new host \"{}\"", c_host);
-                    httpPrint(c_host);
-                    return true;
-                }
-            } else {
-                AUDIO_LOG_WARN("unknown redirection: {}", rhl.c_get());
-            }
-        }
-
-        else if (rhl.starts_with_icase("content-encoding:")) {
-            info(*this, evt_info, "{}", rhl.get());
-            if (rhl.contains("gzip")) {
-                AUDIO_LOG_ERROR("can't extract gzip");
-                goto exit;
-            }
-        }
-
-        else if (rhl.starts_with_icase("content-disposition:")) { // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
-            int idx = rhl.index_of_icase("filename=");
-            if (idx >= 0) {
-                ps_ptr<char> fn;
-                fn.assign(rhl.get() + idx + 9); // Position directly after "filename="
-                fn.replace("\"", "");           // remove '\"' around filename if present
-                info(*this, evt_info, "Filename is {}", fn.get());
-            }
-        } else if (rhl.starts_with_icase("connection:")) {
-            if (rhl.contains_with_icase("close")) { m_f_connectionClose = true; /* AUDIO_LOG_ERROR("connection will be closed"); */ } // ends after ogg last Page is set
-        }
-
-        else if (rhl.starts_with_icase("content-length:")) {
-            const char* c_cl = (rhl.get() + 15);
-            int32_t     i_cl = atoi(c_cl);
-            m_audioFileSize = i_cl;
-            // info(*this, evt_info, "content-length: {}", m_audioFileSize);
-        }
-
-        else if (rhl.starts_with_icase("transfer-encoding:")) {
-            if (rhl.ends_with_icase("chunked")) { // Station provides chunked transfer
-                m_f_chunked = true;
-                info(*this, evt_info, "chunked data transfer");
-                m_chunkcount = 0; // Expect chunkcount in DATA
-            }
-        }
-
-        else if (rhl.starts_with_icase("accept-ranges:")) {
-            if (rhl.ends_with_icase("bytes")) m_f_acceptRanges = true;
-            //    AUDIO_LOG_INFO("{}", rhl.c_get());
-        }
-
-        else if (rhl.starts_with_icase("content-range:")) {
-            AUDIO_LOG_INFO("{}", rhl.c_get());
-        }
-
-        else if (rhl.starts_with_icase("www-authenticate:")) {
-            AUDIO_LOG_WARN("authentification failed, wrong credentials?");
-            goto exit;
+    for (auto& rhl : header) { // read the header line for line
+        // rhl.println();
+        int colon = rhl.index_of(':');
+        if (colon < 0) {
+            name = rhl;
+            value.reset();
         } else {
+            name = rhl.substr(0, colon);
+            value = rhl.substr(colon + 1);
+            latinToUTF8(value);
+            value.trim();
+        }
+        ps_ptr<char> res = parseHeaderLine(name, value);
+        if (!res.valid()) continue;
+        if (res.equals("ct_seen")) {
+            ct_seen = true;
+            AUDIO_LOG_ERROR("ct seen");
+            continue;
+        }
+        if (res.equals("err")) {
+            AUDIO_LOG_ERROR("err");
+            goto exit;
+        }
+        if (res.starts_with("http")) {
+            httpPrint(res.c_get());
+            return true;
             ;
         }
-    } // outer while
+
+        AUDIO_LOG_INFO("name: {}, value; {}", name, value);
+    }
+
+    if (ct_seen) {
+        goto lastToDo;
+    } else {
+        goto exit;
+    }
 
 exit: // termination condition
-    m_f_alt_user_agent = false;
     m_dataMode = AUDIO_NONE;
     stopSong();
     return false;
 
 lastToDo:
-    m_f_alt_user_agent = false;
     m_streamType = ST_WEBSTREAM;
     if (m_audioFileSize > 0) m_streamType = ST_WEBFILE; // content length found
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
@@ -5478,17 +5446,7 @@ lastToDo:
         goto exit;
     }
 
-    if (m_phreh.f_icy_data) {
-        if (m_icy_items.icy_description.valid()) info(*this, evt_icydescription, "{}", m_icy_items.icy_description);
-        if (m_icy_items.icy_genre.valid()) info(*this, evt_genre, "{}", m_icy_items.icy_genre);
-        if (m_icy_items.icy_logo.valid()) info(*this, evt_icylogo, "{}", m_icy_items.icy_logo);
-        if (m_icy_items.icy_name.valid()) info(*this, evt_name, "{}", m_icy_items.icy_name);
-        if (m_icy_items.icy_url.valid()) info(*this, evt_icyurl, "{}", m_icy_items.icy_url);
-        if (m_icy_items.icy_metaint.valid()) m_metaint = m_icy_items.icy_metaint.to_uint32();
-        if (m_icy_items.icy_br.valid()) m_nominal_bitrate = m_icy_items.icy_br.to_uint32() * 1000;
-    }
-
-    AUDIO_LOG_DEBUG("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
+    AUDIO_LOG_WARN("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
