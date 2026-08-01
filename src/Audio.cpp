@@ -5,7 +5,7 @@
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
     Version 4.0.0-alpha1                                                                                                                           ";
-/*  Updated on: Jul 18, 2026
+/*  Updated on: Aug 01, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5272,7 +5272,7 @@ std::vector<ps_ptr<char>> Audio::readHeader() {
 
     pos = 0;
 
-    while (true) {
+    while (true) { // m_httpRespHdrBuff -> vec hdr_lines
         int idx = m_httpRespHdrBuff.index_of('\n', pos);
         if (idx < 0) break;
         ps_ptr<char> line = m_httpRespHdrBuff.substr(pos, idx - pos);
@@ -5340,23 +5340,30 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
             m_f_chunked = true;
             info(*this, evt_info, "chunked data transfer");
             m_chunkcount = 0; // Expect chunkcount in DATA
+            return HeaderResult::Continue;
         }
+        AUDIO_LOG_WARN("{}: {}", name, value); // gzip, deflae,br ?
         return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("accept-ranges")) {
         if (value.ends_with_icase("bytes")) m_f_acceptRanges = true;
-        AUDIO_LOG_INFO("{}:{}", name, value);
+        // AUDIO_LOG_INFO("{}:{}", name, value);
         return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("content-range")) {
-        AUDIO_LOG_INFO("{}:{}", name, value);
+        info(*this, evt_info, "{}: {}", name,  value);
         return HeaderResult::Continue;
     }
 
     else if (name.equals_icase("www-authenticate")) {
         AUDIO_LOG_WARN("authentification failed, wrong credentials?");
+        return HeaderResult::Continue;
+    }
+
+    else if (name.equals_icase("server:")) {
+        info(*this, evt_info, "{}; {}", name, value);
         return HeaderResult::Continue;
     }
 
@@ -5451,87 +5458,34 @@ lastToDo:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
 
-    ps_ptr<char> rhl;
-    rhl.alloc(1024, "rhl"); // responseHeaderline
-    bool ct_seen = false;
+    if (m_dataMode != HTTP_RANGE_HEADER) return false;
 
-    if (m_dataMode != HTTP_RANGE_HEADER) {
-        AUDIO_LOG_ERROR("wrong datamode {}", m_dataMode);
-        goto exit;
-    }
+    ps_ptr<char> name;
+    ps_ptr<char> value;
+    ps_ptr<char> redirectUrl;
 
-    m_phrah.ctime = millis();
-    m_phrah.timeout = 4500; // ms
+    auto header = readHeader();
+    if (header.empty()) goto exit;
 
-    if (m_client->available() == 0) {
-        if (!m_phrah.f_time) {
-            m_phrah.stime = millis();
-            m_phrah.f_time = true;
+    for (auto& rhl : header) { // read the header line for line
+        // rhl.println();
+        int colon = rhl.index_of(':');
+        if (colon < 0) {
+            name = rhl;
+            value.reset();
+        } else {
+            name = rhl.substr(0, colon);
+            value = rhl.substr(colon + 1);
+            value.trim();
         }
-        if ((millis() - m_phrah.stime) > m_phrah.timeout) {
-            AUDIO_LOG_ERROR("timeout");
-            m_phrah.f_time = false;
-            return false;
-        }
-    }
-    m_phrah.f_time = false;
-
-    rhl.clear();
-
-    while (true) { // outer while
-        uint16_t pos = 0;
-        if ((millis() - m_phrah.ctime) > m_phrah.timeout) {
-            AUDIO_LOG_ERROR("timeout");
-            m_f_timeout = true;
-            goto exit;
-        }
-        while (m_client->available()) {
-            uint8_t b = audioFileRead();
-            if (b == '\n') {
-                if (!pos) { // empty line received, is the last line of this responseHeader
-                    goto lastToDo;
-                }
-                break;
-            }
-            if (b == '\r') rhl[pos] = 0;
-            if (b < 0x20) continue;
-            rhl[pos] = b;
-            pos++;
-            if (pos == 1023) {
-                pos = 1022;
-                continue;
-            }
-            if (pos == 1022) {
-                rhl[pos] = '\0';
-                AUDIO_LOG_WARN("responseHeaderline overflow");
-            }
-        } // inner while
-        if (!pos) {
-            vTaskDelay(5);
-            continue;
-        }
-        // AUDIO_LOG_WARN("rh {}", rhl.c_get());
-        if (rhl.starts_with_icase("HTTP/")) { // HTTP status error code
-            char statusCode[5];
-            statusCode[0] = rhl[9];
-            statusCode[1] = rhl[10];
-            statusCode[2] = rhl[11];
-            statusCode[3] = '\0';
-            int sc = atoi(statusCode);
-            if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                info(*this, evt_name, "{}", rhl.get());
-                goto exit;
-            }
-        }
-        if (rhl.starts_with_icase("Server:")) { info(*this, evt_info, "{}", rhl.c_get()); }
-        if (rhl.starts_with_icase("Content-Length:")) {
-            //    info(*this, evt_info, "{}", rhl.c_get());
-        }
-        if (rhl.starts_with_icase("Content-Range:")) { info(*this, evt_info, "{}", rhl.c_get()); }
-        if (rhl.starts_with_icase("Content-Type:")) {
-            //    info(*this, evt_info, "{}", rhl.c_get());
+        switch (parseHeaderLine(name, value, redirectUrl)) {
+            case HeaderResult::Continue: break;
+            case HeaderResult::Error: goto exit;
+            default: break;
         }
     }
+    goto lastToDo;
+
 exit:
     return false;
 lastToDo:
@@ -6625,7 +6579,7 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
             bool r;
             if (len == 0) len = UINT32_MAX;
             r = httpRange(position, len);
-            if (res == false) {
+            if (r == false) {
                 AUDIO_LOG_ERROR("http range request was not successful");
                 return 0;
             }
