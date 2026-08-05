@@ -121,10 +121,13 @@ struct m4aHdr_t { // used in read_M4A_Header
 };
 
 struct plCh_t { // used in playChunk
-    uint32_t  count = 0;
-    size_t    i2s_bytesConsumed;
     esp_err_t err;
-    int32_t* sourceBuff = nullptr;
+    bool      firstCall = false;
+};
+
+struct caSa_t { // used in cacheSamples
+    size_t sourceWordsConsumed = 0;
+    bool   firstCall = false;
 };
 
 struct lVar_t { // used in loop
@@ -283,6 +286,9 @@ struct rwh_t { // used in read_WAV_Header
     size_t   headerSize;
     uint32_t cs = 0;
     uint8_t  bts = 0;
+    uint16_t channels = 0;
+    uint16_t bitsPerSample = 0;
+    uint32_t sampleRate = 0;
 };
 
 typedef struct _rflh { // used in read_FLAC_Header
@@ -342,7 +348,7 @@ struct fnsy_t { // used in findNextSync
 
 struct audioItems_t {
     float   gain_ls_db = 0.0;  // lowshelf
-    float   gain_peq_db = 0.0; // peakingEQ
+    float   gain_peq_db = 0.0; // peakingEQudio_process_i2s
     float   gain_hs_db = 0.0;  // highshelf
     float   pre_gain = 0.0;    // correction factor for level adjustment
     float   coeffs[3][5] = {0};
@@ -362,33 +368,47 @@ struct i2s_items_t {
 };
 
 struct vu_items_t {
-    ps_ptr<int32_t> delay_l;
-    ps_ptr<int32_t> delay_r;
-    uint16_t        delay_line_index = 0;
-    float           left = 0;  // average value of samples, left channel
-    float           right = 0; // average value of samples, right channel
-    uint8_t         left_peak = 0;
-    uint8_t         right_peak = 0;
-    uint16_t        left_hold = 0;
-    uint16_t        right_hold = 0;
+    uint16_t              samps_50ms = {};
+    uint16_t              samps_count = {};
+    uint8_t               attackStep = {};
+    uint8_t               releaseStep = {};
+    uint8_t               maxLeft = {};
+    uint8_t               maxRight = {};
+    uint8_t               measuredLeft;  // Average value of the current 50-ms window
+    uint8_t               measuredRight; // Average value of the current 50-ms window
+    uint8_t               displayLeft;   // current displayed value
+    uint8_t               displayRight;  // current displayed value
+    uint8_t               peakLeft;      // Peak display
+    uint8_t               peakRight;     // Peak display
+    uint8_t               barsHoldLeft_tmp;
+    uint8_t               barsHoldRight_tmp;
+    uint8_t               peakHoldLeft_tmp;
+    uint8_t               peakHoldRight_tmp;
+    uint64_t              sumL = {};
+    uint64_t              sumR = {};
+    ps_ptr<uint8_t>       vuCurve = {};
+    ps_ptr<uint8_t>       delay_bars_left = {};
+    ps_ptr<uint8_t>       delay_bars_right = {};
+    ps_ptr<uint8_t>       delay_peak_left = {};
+    ps_ptr<uint8_t>       delay_peak_right = {};
+    std::vector<uint32_t> lrvec = {};
 };
 
-#define FFT_BANDS 6
-#define FFT_SIZE  256
 struct fft_items_t {
-    const uint16_t SIZE = FFT_SIZE;
-    const uint16_t BANDS = FFT_BANDS;
-    ps_ptr<float>  buffer; // FFT input (real)
-    ps_ptr<float>  window; // FFT window
-    uint16_t       buffer_index = 0;
-    uint16_t       pos = 0;
-    bool           initialized = false;          // FFT state
-    float          spec_smooth[FFT_BANDS] = {0}; // smoothing
-    uint32_t       last_ms = 0;                  // timing (10 Hz)
-    float          gain = 1.0f;                  // AGC in process()
-    bool           lr_switch = false;            // start/stop
-    ps_ptr<float>  work;                         // FFT work buffer (complex interleaved)
-    uint8_t        spectrum[FFT_BANDS] = {0};    // output
+    size_t                count = 0;
+    size_t                samps_x_ms = 0;
+    ps_ptr<int16_t>       samples_buffer;
+    size_t                samples_buffer_index = 0;
+    const uint16_t        FFT_SIZE = 512;
+    const uint16_t        NUM_BANDS = 16;
+    ps_ptr<float>         window;
+    ps_ptr<float>         fft_in;
+    ps_ptr<float>         spectrum;
+    std::vector<uint32_t> measured_vec = {};
+    std::vector<uint32_t> display_vec = {};
+    std::vector<uint32_t> peak_vec = {};
+    std::vector<uint8_t>  bars_hold_vec = {};
+    std::vector<uint8_t>  peak_hold_vec = {};
 };
 
 struct Biquad {
@@ -419,27 +439,14 @@ struct resampler_t {
     bool    hasLast = false; // First frame has no “last”
 };
 
-struct info_queue_t {
-    std::deque<ps_ptr<char>>          msg = {};
-    std::deque<ps_ptr<char>>          s = {};
-    std::deque<uint8_t>               e = {}; // event type
-    std::deque<int32_t>               arg1 = {};
-    std::deque<int32_t>               arg2 = {};
-    std::deque<std::vector<uint32_t>> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
-
-    void reset() { *this = info_queue_t{}; }
-};
-
-struct icy_items_t {
-    ps_ptr<char> icy_genre = {};
-    ps_ptr<char> icy_logo = {};
-    ps_ptr<char> icy_name = {};
-    ps_ptr<char> icy_description = {};
-    ps_ptr<char> icy_url = {};
-    ps_ptr<char> icy_metaint = {};
-    ps_ptr<char> icy_br = {};
-
-    void reset() { *this = icy_items_t{}; }
+struct InfoItem {
+    ps_ptr<char>          msg;
+    ps_ptr<char>          s;
+    uint8_t               e = 0; // event type
+    int32_t               arg1 = 0;
+    int32_t               arg2 = 0;
+    std::vector<uint32_t> vec1; // apic [pos, len, pos, len, pos, len, ....] or spectrum (bars)
+    std::vector<uint32_t> vec2; // spectrum peaks
 };
 
 } // namespace audiolib
