@@ -85,9 +85,12 @@ class ps_ptr {
   private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t                             allocated_size = 0;
-    char*                              name = nullptr; // member for object name
-    static inline T                    dummy{};        // For invalid accesses
-    size_t                             length_ = 0;    // actual number of characters
+    char*                              name = nullptr;  // member for object name
+    static inline T                    dummy{};         // For invalid accesses
+    size_t                             length_ = 0;     // actual number of characters
+    size_t                             m_fifoWrite = 0; // fifo functionality for arrays
+    size_t                             m_fifoRead = 0;  // fifo functionality for arrays
+
   public:
     // Auxiliary function for setting the name
     void set_name(const char* new_name) {
@@ -545,6 +548,7 @@ class ps_ptr {
     //   url = "A+Test.mp3"; url.urldecode(); // → "A Test.mp3"
 
     void urldecode() {
+        if(strlen() == 0) return;
         static_assert(std::is_same_v<T, char>, "urldecode() is only valid for ps_ptr<char>");
         if (!mem || !get()) {
             log_e("urldecode: No valid string data");
@@ -893,6 +897,28 @@ class ps_ptr {
         if (!myStr || !other) return false;
         return strcmp(myStr, other) == 0;
     }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  E Q U A L S _ I C A S E  📌📌📌
+
+    bool equals_icase(const char* other) const {
+        if (!this->valid()) return false;
+
+        const char* s1 = this->get();
+        const char* s2 = other;
+
+        if (!s1 || !s2) return false;
+
+        while (*s1 && *s2) {
+            if (tolower((uint8_t)*s1) != tolower((uint8_t)*s2)) return false;
+            ++s1;
+            ++s2;
+        }
+
+        return (*s1 == '\0' && *s2 == '\0');
+    }
+
+    bool equals_icase(const ps_ptr<T>& other) const { return equals_icase(other.get()); }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A S S I G N F   📌📌📌
 
@@ -1286,7 +1312,7 @@ class ps_ptr {
         if (!src) return ps_ptr<char>{};
 
         size_t len = std::strlen(src);
-        if (pos >= len) return ps_ptr<char>{}; // leer zurück
+        if (pos >= len) return ps_ptr<char>{}; // empty back
 
         size_t n = (count == std::string::npos || pos + count > len) ? (len - pos) : count;
 
@@ -2234,6 +2260,48 @@ class ps_ptr {
     bool valid() const { return mem != nullptr; }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ P U S H   📌📌📌
+
+    // ps_ptr<uint8_t> delay_line = {};
+    // delay_line.calloc(128);
+    // delay_line.fifo_reset();
+    // for(int i = 0; i < 128) delay_line.fifo_push(i);
+    // uint a = delay_line.fifo_pop();
+    // uint b = delay_line.fifo_pop();
+
+    template <typename U> void fifo_push(const U& value) {
+        if (!mem || !allocated_size) return;
+
+        mem[m_fifoWrite] = value;
+
+        if (++m_fifoWrite == allocated_size) m_fifoWrite = 0;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ P O P   📌📌📌
+    template <typename U = T> U fifo_pop() {
+        if (!mem || !allocated_size) return U{};
+
+        U value = mem[m_fifoRead];
+
+        if (++m_fifoRead == allocated_size) m_fifoRead = 0;
+
+        return value;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O  📌📌📌
+    // fifo_push() and fifo(pop) in one line
+    template <typename U = T> U fifo(const T& value) {
+        U out = fifo_pop<U>();
+        fifo_push(value);
+        return out;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F I F O _ R E S E T  📌📌📌
+    void fifo_reset() {
+        m_fifoRead = 0;
+        m_fifoWrite = 0;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E S E T   📌📌📌
 
     void reset() {
@@ -2486,6 +2554,12 @@ class ps_ptr {
                     continue;
                 }
 
+                // Nur {} oder {:...} sind Platzhalter
+                if (fmt[1] != '}' && fmt[1] != ':') {
+                    out += *fmt++;
+                    continue;
+                }
+
                 // Ende suchen
                 const char* end = std::strchr(fmt, '}');
 
@@ -2668,20 +2742,23 @@ class ps_ptr {
                 fmt += 2;
                 continue;
             }
+
             // escaped }}
             if (fmt[0] == '}' && fmt[1] == '}') {
                 fmt += 2;
                 continue;
             }
 
-            // echtes {
+            // Nur wenn wirklich '{'
             if (*fmt == '{') {
-                const char* end = std::strchr(fmt, '}');
-
-                if (end) {
-                    ++count;
-                    fmt = end + 1;
-                    continue;
+                // Nur {} oder {:...} sind Platzhalter
+                if (fmt[1] == '}' || fmt[1] == ':') {
+                    const char* end = std::strchr(fmt, '}');
+                    if (end) {
+                        ++count;
+                        fmt = end + 1;
+                        continue;
+                    }
                 }
             }
             ++fmt;

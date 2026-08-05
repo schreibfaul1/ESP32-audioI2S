@@ -122,6 +122,7 @@ class OpusDecoder : public Decoder {
     bool            m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
     bool            m_f_opusStereoFlag = false;
     bool            m_f_continuedPage = false;
+    bool            m_f_packetContinuesAfterPage = false;
     bool            m_f_firstPage = false;
     bool            m_f_lastPage = false;
     bool            m_f_nextChunk = false;
