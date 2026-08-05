@@ -548,6 +548,7 @@ class ps_ptr {
     //   url = "A+Test.mp3"; url.urldecode(); // → "A Test.mp3"
 
     void urldecode() {
+        if(strlen() == 0) return;
         static_assert(std::is_same_v<T, char>, "urldecode() is only valid for ps_ptr<char>");
         if (!mem || !get()) {
             log_e("urldecode: No valid string data");
@@ -1311,7 +1312,7 @@ class ps_ptr {
         if (!src) return ps_ptr<char>{};
 
         size_t len = std::strlen(src);
-        if (pos >= len) return ps_ptr<char>{}; // leer zurück
+        if (pos >= len) return ps_ptr<char>{}; // empty back
 
         size_t n = (count == std::string::npos || pos + count > len) ? (len - pos) : count;
 
