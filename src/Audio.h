@@ -516,6 +516,12 @@ class Audio {
         uint8_t  VU_PEAK_RELEASE_STEP = 10;        // vu-meter:   peak falling steps
         uint8_t  VU_PEAK_HOLD_CYCLES = 2;          // vu-meter:   peak hold_cycles
         bool     VU_LEVEL = false;                 // vu-meter:   true -> vu meter is enabled
+        uint8_t  SP_BARS_ATTACK_STEP = 100;        // spectrum:   bars rising steps
+        uint8_t  SP_BARS_RELEASE_STEP = 20;        // spectrum:   bars falling steps
+        uint8_t  SP_BARS_HOLD_CYCLES = 1;          // spectrum:   bars hold_cycles
+        uint8_t  SP_PEAK_ATTACK_STEP = 200;        // spectrum:   peak rising steps
+        uint8_t  SP_PEAK_RELEASE_STEP = 10;        // spectrum:   peak falling steps
+        uint8_t  SP_PEAK_HOLD_CYCLES = 2;          // spectrum:   peak hold_cycles
         bool     SPECTRUM = false;                 // true: spectrum analyzer is enabled
         bool     VOLUME_CONTROL = true;            // true: volume and balance control is enabled
         float    VOL_FADING_SPEED = 50.0;          // mute, volume fading 1.0f (fast) ... 100.0f (slow)

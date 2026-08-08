@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0a1                                                                                                                         ";
+    Version 4.0.0a2                                                                                                                         ";
 /*  Updated on: Aug 08, 2026
 
     Author: Wolle (schreibfaul1)
@@ -7128,7 +7128,6 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
             m_fft_items.peak_hold_vec.push_back(0);
             m_fft_items.delayed_display_vec.push_back(0);
             m_fft_items.delayed_peak_vec.push_back(0);
-
         }
 
         //--------------------------------------------------------------------------
@@ -7154,12 +7153,13 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         if (err != ESP_OK) { AUDIO_LOG_ERROR("err {}", err); }
     }
 
-    uint8_t bars_attack_step = 100; // bars rising steps
-    uint8_t bars_release_step = 20; // bars falling steps
-    uint8_t peak_attack_step = 200; // peak rising steps
-    uint8_t peak_release_step = 10; // peak falling steps
-    uint8_t bars_hold_cycles = 1;   // bars hold_cycles * x ms
-    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * x ms
+    // dynamics
+    uint8_t bars_attack_step = settings.SP_BARS_ATTACK_STEP;   // bars rising steps
+    uint8_t bars_release_step = settings.SP_BARS_RELEASE_STEP; // bars falling steps
+    uint8_t peak_attack_step = settings.SP_PEAK_ATTACK_STEP;   // peak rising steps
+    uint8_t peak_release_step = settings.SP_PEAK_RELEASE_STEP; // peak falling steps
+    uint8_t bars_hold_cycles = settings.SP_BARS_HOLD_CYCLES;   // bars hold_cycles * x ms
+    uint8_t peak_hold_cycles = settings.SP_PEAK_HOLD_CYCLES;   // peak hold_cycles * x ms
 
     if (m_decoder) {
         for (int i = 0; i < len / 2; i++) { // always stereo
