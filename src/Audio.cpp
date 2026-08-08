@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0                                                                                                                          ";
-/*  Updated on: Aug 06, 2026
+    Version 4.0.0a                                                                                                                         ";
+/*  Updated on: Aug 08, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5353,7 +5353,7 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
     }
 
     else if (name.equals_icase("content-range")) {
-        info(*this, evt_info, "{}: {}", name,  value);
+        info(*this, evt_info, "{}: {}", name, value);
         return HeaderResult::Continue;
     }
 
@@ -6704,11 +6704,11 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* buff, size_t len) {
 
-    auto newVal = [&](uint8_t* display, uint8_t measured, uint8_t max, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
+    auto newVal = [](uint8_t* display, uint8_t measured, uint8_t max, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
         if (measured > *display) { // attack
             *tmpHold = hold;
-            *display = std::min<uint8_t>(min(*display + attackStep, 255), max);
-        } else { // release left
+            *display = std::min<uint8_t>(std::min<uint16_t>(*display + attackStep, 255), max);
+        } else { // release
             if (*tmpHold == 0) {
                 uint8_t diff = *display - measured;
                 *display -= std::min<uint8_t>(diff, releaseStep);
@@ -6718,76 +6718,145 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
         }
     };
 
-    uint8_t bars_attack_step = 200; // bars rising steps
-    uint8_t bars_release_step = 30; // bars falling steps
-    uint8_t peak_attack_step = 200; // peak rising steps
-    uint8_t peak_release_step = 10; // peak falling steps
-    uint8_t bars_hold_cycles = 1;   // bars hold_cycles * 20ms
-    uint8_t peak_hold_cycles = 2;   // peak hold_cycles * 20ms
+    // VU dynamics
+    uint8_t bars_attack_step = settings.VU_BARS_ATTACK_STEP;   // bars rising steps
+    uint8_t bars_release_step = settings.VU_BARS_RELEASE_STEP; // bars falling steps
+    uint8_t peak_attack_step = settings.VU_PEAK_ATTACK_STEP;   // peak rising steps
+    uint8_t peak_release_step = settings.VU_PEAK_RELEASE_STEP; // peak falling steps
+    uint8_t bars_hold_cycles = settings.VU_BARS_HOLD_CYCLES;   // bars hold_cycles
+    uint8_t peak_hold_cycles = settings.VU_PEAK_HOLD_CYCLES;   // peak hold_cycles
+
+    //--------------------------------------------------------------------------------------------------
+    // Initialization
+    //--------------------------------------------------------------------------------------------------
 
     if (m_f_first_vu_call) {
+
         m_f_first_vu_call = false;
+
         m_vu_items.maxLeft = 0;
         m_vu_items.maxRight = 0;
+
         m_vu_items.sumL = 0;
         m_vu_items.sumR = 0;
+
         m_vu_items.samps_count = 0;
+
         m_vu_items.barsHoldLeft_tmp = 0;
         m_vu_items.barsHoldRight_tmp = 0;
+
         m_vu_items.peakHoldLeft_tmp = 0;
         m_vu_items.peakHoldRight_tmp = 0;
-        m_vu_items.samps_50ms = m_i2s_items.sampleRate / 20; // every 50ms one output
-        m_vu_items.delay_bars_left.calloc(1 + (m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num) / m_vu_items.samps_50ms);
-        m_vu_items.delay_bars_right.calloc(1 + (m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num) / m_vu_items.samps_50ms);
+
+        //--------------------------------------------------------------------------
+        // VU update period
+        // DMA contains:   dma_desc_num * dma_frame_num, e.g. 16 * 256
+        // We use half of the DMA buffer for one VU measurement window.
+        //
+        // Example:
+        //     16 * 256 = 4096 samples
+        //     VU window = 2048 samples
+        //
+        // At 44.1 kHz:
+        //     2048 / 44100 = 46.44 ms
+        //
+        //--------------------------------------------------------------------------
+
+        const size_t dmaSamples = static_cast<size_t>(m_i2s_chan_cfg.dma_desc_num) * static_cast<size_t>(m_i2s_chan_cfg.dma_frame_num);
+        m_vu_items.samps_vu = static_cast<uint16_t>(dmaSamples / 2);
+
+        //--------------------------------------------------------------------------
+        // FIFO delay
+        // DMA delay = 2 VU cycles
+        // Therefore the FIFO needs two VU values of delay.
+        //
+        // +1 because the FIFO implementation needs one additional element.
+        //--------------------------------------------------------------------------
+
+        constexpr size_t VU_DELAY = 2;
+        m_vu_items.delay_bars_left.calloc(VU_DELAY + 1);
+        m_vu_items.delay_bars_right.calloc(VU_DELAY + 1);
+        m_vu_items.delay_peak_left.calloc(VU_DELAY + 1);
+        m_vu_items.delay_peak_right.calloc(VU_DELAY + 1);
         m_vu_items.delay_bars_left.fifo_reset();
         m_vu_items.delay_bars_right.fifo_reset();
-        m_vu_items.delay_peak_left.calloc(1 + (m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num) / m_vu_items.samps_50ms);
-        m_vu_items.delay_peak_right.calloc(1 + (m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num) / m_vu_items.samps_50ms);
         m_vu_items.delay_peak_left.fifo_reset();
         m_vu_items.delay_peak_right.fifo_reset();
+
+        //--------------------------------------------------------------------------
+        // Output vector
+        //--------------------------------------------------------------------------
         m_vu_items.lrvec.clear();
-        for (int i = 0; i < 4; i++) m_vu_items.lrvec.push_back(0);
+        for (int i = 0; i < 4; i++) { m_vu_items.lrvec.push_back(0); }
+
+        //--------------------------------------------------------------------------
+        // VU compression curve
+        //--------------------------------------------------------------------------
         m_vu_items.vuCurve.alloc(256, "vuCurve");
-        for (int i = 0; i < 256; i++) { // Compression characteristic curve
+
+        for (int i = 0; i < 256; i++) {
             double x = i / 255.0;
-            int    y = std::lround(255.0 * std::pow(x, 0.5)); // curve: 1.0 linear, 0.8 soft, 0.7 classic, 0.5 punchy
+            int y = std::lround(255.0 * std::pow(x, 0.5));
             m_vu_items.vuCurve[i] = y;
         }
+        // Send initial value
         info(*this, evt_vu, m_vu_items.lrvec);
     }
 
-    if (m_decoder) {
+    //--------------------------------------------------------------------------------------------------
+    // Audio data available
+    //--------------------------------------------------------------------------------------------------
 
-        for (int i = 0; i < len / 2; i++) {      // always stereo
-            uint8_t l = sampleToVU(buff[i * 2]); // int32_t to uint8_t
+    if (m_decoder) {
+        for (size_t i = 0; i < len / 2; i++) {
+
+            // Always stereo
+            uint8_t l = sampleToVU(buff[i * 2]);
             uint8_t r = sampleToVU(buff[i * 2 + 1]);
+
+            // Accumulate average
             m_vu_items.sumL += l;
             m_vu_items.sumR += r;
-            if (l > m_vu_items.maxLeft) m_vu_items.maxLeft = l;
-            if (r > m_vu_items.maxRight) m_vu_items.maxRight = r;
 
+            // Track peak within measurement window
+            if (l > m_vu_items.maxLeft) { m_vu_items.maxLeft = l; }
+            if (r > m_vu_items.maxRight) { m_vu_items.maxRight = r; }
             m_vu_items.samps_count++;
-            if (m_vu_items.samps_count >= m_vu_items.samps_50ms) { // every 20ms
 
+            //--------------------------------------------------------------------------
+            // One VU measurement window complete
+            //--------------------------------------------------------------------------
+            if (m_vu_items.samps_count >= m_vu_items.samps_vu) {
+
+                // Average level
                 m_vu_items.measuredLeft = m_vu_items.sumL / m_vu_items.samps_count;
                 m_vu_items.measuredRight = m_vu_items.sumR / m_vu_items.samps_count;
 
-                //--------------------------------------------------------------------------------------------------
+                //--------------------------------------------------------------------------
+                // Bars
+                //--------------------------------------------------------------------------
                 newVal(&m_vu_items.displayLeft, m_vu_items.measuredLeft, m_vu_items.maxLeft, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldLeft_tmp);
                 newVal(&m_vu_items.displayRight, m_vu_items.measuredRight, m_vu_items.maxRight, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldRight_tmp);
 
+                //--------------------------------------------------------------------------
+                // Peak
+                //--------------------------------------------------------------------------
                 newVal(&m_vu_items.peakLeft, m_vu_items.measuredLeft, m_vu_items.maxLeft, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldLeft_tmp);
                 newVal(&m_vu_items.peakRight, m_vu_items.measuredRight, m_vu_items.maxRight, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldRight_tmp);
-                //--------------------------------------------------------------------------------------------------
 
-                // output
+                //--------------------------------------------------------------------------
+                // Delay output by two VU cycles
+                //--------------------------------------------------------------------------
                 m_vu_items.lrvec[0] = m_vu_items.vuCurve[m_vu_items.delay_bars_left.fifo(m_vu_items.displayLeft)];
                 m_vu_items.lrvec[1] = m_vu_items.vuCurve[m_vu_items.delay_bars_right.fifo(m_vu_items.displayRight)];
                 m_vu_items.lrvec[2] = m_vu_items.vuCurve[m_vu_items.delay_peak_left.fifo(m_vu_items.peakLeft)];
                 m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.delay_peak_right.fifo(m_vu_items.peakRight)];
-                // AUDIO_LOG_INFO("{:03} {:03} {:03} {:03}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.lrvec[2], m_vu_items.lrvec[3]);
+
                 info(*this, evt_vu, m_vu_items.lrvec);
 
+                //--------------------------------------------------------------------------
+                // Reset measurement window
+                //--------------------------------------------------------------------------
                 m_vu_items.sumL = 0;
                 m_vu_items.sumR = 0;
                 m_vu_items.maxLeft = 0;
@@ -6795,22 +6864,24 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
                 m_vu_items.samps_count = 0;
             }
         }
-    } else { // !m_decoder, fall only
-        //--------------------------------------------------------------------------------------------------
+    }
+    //--------------------------------------------------------------------------------------------------
+    // No decoder -> let VU meter fall
+    //--------------------------------------------------------------------------------------------------
+
+    else {
         newVal(&m_vu_items.displayLeft, 0, 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldLeft_tmp);
         newVal(&m_vu_items.displayRight, 0, 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldRight_tmp);
-
         newVal(&m_vu_items.peakLeft, 0, 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldLeft_tmp);
         newVal(&m_vu_items.peakRight, 0, 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldRight_tmp);
-        //--------------------------------------------------------------------------------------------------
 
-        // output
+        // Output
         m_vu_items.lrvec[0] = m_vu_items.vuCurve[m_vu_items.delay_bars_left.fifo(m_vu_items.displayLeft)];
         m_vu_items.lrvec[1] = m_vu_items.vuCurve[m_vu_items.delay_bars_right.fifo(m_vu_items.displayRight)];
         m_vu_items.lrvec[2] = m_vu_items.vuCurve[m_vu_items.delay_peak_left.fifo(m_vu_items.peakLeft)];
         m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.delay_peak_right.fifo(m_vu_items.peakRight)];
+
         info(*this, evt_vu, m_vu_items.lrvec);
-        // AUDIO_LOG_INFO("{:03} {:03} {:03} {:03}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.lrvec[2], m_vu_items.lrvec[3]);
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

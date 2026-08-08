@@ -85,11 +85,12 @@ class ps_ptr {
   private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t                             allocated_size = 0;
-    char*                              name = nullptr;  // member for object name
-    static inline T                    dummy{};         // For invalid accesses
-    size_t                             length_ = 0;     // actual number of characters
-    size_t                             m_fifoWrite = 0; // fifo functionality for arrays
-    size_t                             m_fifoRead = 0;  // fifo functionality for arrays
+    char*                              name = nullptr;     // member for object name
+    static inline T                    dummy{};            // For invalid accesses
+    size_t                             length_ = 0;        // actual number of characters
+    size_t                             m_fifoWrite = 0;    // fifo functionality for arrays
+    size_t                             m_fifoRead = 0;     // fifo functionality for arrays
+    size_t                             m_num_elements = 0; // number of elements in calloc ->  number of T elements in FIFO
 
   public:
     // Auxiliary function for setting the name
@@ -229,31 +230,30 @@ class ps_ptr {
      * Chooses between PSRAM (if available) and DRAM.
      * @param num_elements The number of elements to allocate space for.
      */
+
     bool calloc(std::size_t num_elements, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size_t total_size = num_elements * sizeof(T);
-        total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
+        total_size = (total_size + 15) & ~15;
+        reset();
 
-        reset(); // Release of the previously held memory
         if (alloc_name) { set_name(alloc_name); }
-        void* raw_mem = nullptr;
 
-        if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
+        void* raw_mem = nullptr;
+        if (psramFound() && usePSRAM) {
             raw_mem = ps_malloc(total_size);
         } else {
             raw_mem = malloc(total_size);
         }
-
         if (raw_mem) {
-            // Initialize memory with zeros how Calloc () does it
             memset(raw_mem, 0, total_size);
-
-            // Connect the allocated memory to the Unique_PTR
             mem.reset(static_cast<T*>(raw_mem));
             allocated_size = total_size;
+            // Important: number of actual FIFO elements
+            m_num_elements = num_elements;
         } else {
-            // Error treatment for storage allocation
             printf("OOM: failed to calloc %zu bytes for %s\n", total_size, name ? name : "unnamed");
-            allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+            allocated_size = 0;
+            m_num_elements = 0;
             return false;
         }
         return true;
@@ -548,7 +548,7 @@ class ps_ptr {
     //   url = "A+Test.mp3"; url.urldecode(); // → "A Test.mp3"
 
     void urldecode() {
-        if(strlen() == 0) return;
+        if (strlen() == 0) return;
         static_assert(std::is_same_v<T, char>, "urldecode() is only valid for ps_ptr<char>");
         if (!mem || !get()) {
             log_e("urldecode: No valid string data");
@@ -2270,20 +2270,20 @@ class ps_ptr {
     // uint b = delay_line.fifo_pop();
 
     template <typename U> void fifo_push(const U& value) {
-        if (!mem || !allocated_size) return;
+        if (!mem || !allocated_size || m_num_elements == 0) return;
 
         mem[m_fifoWrite] = value;
 
-        if (++m_fifoWrite == allocated_size) m_fifoWrite = 0;
+        if (++m_fifoWrite == m_num_elements) m_fifoWrite = 0;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F I F O _ P O P   📌📌📌
     template <typename U = T> U fifo_pop() {
-        if (!mem || !allocated_size) return U{};
+        if (!mem || !allocated_size || m_num_elements == 0) return U{};
 
         U value = mem[m_fifoRead];
 
-        if (++m_fifoRead == allocated_size) m_fifoRead = 0;
+        if (++m_fifoRead == m_num_elements) m_fifoRead = 0;
 
         return value;
     }

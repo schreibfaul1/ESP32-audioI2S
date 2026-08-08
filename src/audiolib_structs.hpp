@@ -368,7 +368,7 @@ struct i2s_items_t {
 };
 
 struct vu_items_t {
-    uint16_t              samps_50ms = {};
+    uint16_t              samps_vu = {};
     uint16_t              samps_count = {};
     uint8_t               attackStep = {};
     uint8_t               releaseStep = {};

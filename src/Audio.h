@@ -502,14 +502,20 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 16;                // number of I2S DMA buffer
-        uint16_t DMA_FRAME_NUM = 256;              // number of frames in one DMA buffer
-        uint16_t FREQ_LS_HZ = 500;                 // IIR Filter, lowshelf
-        uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter, peakingEQ
-        uint16_t FREQ_HS_HZ = 6000;                // IIR Filter, highshelf
-        float    QUALITY_SLOPE = 0.707;            // Quality (all shelfes)
-        bool     VU_LEVEL = false;                 // true: vu meter is enabled
-        bool     IIR_FILTER = true;                // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
+        uint16_t DMA_DESC_NUM = 16;                // i2s - dma;  number of I2S DMA buffer
+        uint16_t DMA_FRAME_NUM = 256;              // i2s - dma;  number of frames in one DMA buffer
+        uint16_t FREQ_LS_HZ = 500;                 // IIR Filter: lowshelf
+        uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter: peakingEQ
+        uint16_t FREQ_HS_HZ = 6000;                // IIR Filter: highshelf
+        float    QUALITY_SLOPE = 0.707;            // IIR Filter: quality (all shelfes)
+        bool     IIR_FILTER = true;                // IIR Filter: true -> IIR filter (highshelf, bandpass, lowshelf) are enabled
+        uint8_t  VU_BARS_ATTACK_STEP = 200;        // vu-meter:   bars rising steps
+        uint8_t  VU_BARS_RELEASE_STEP = 30;        // vu-meter:   bars falling steps
+        uint8_t  VU_BARS_HOLD_CYCLES = 1;          // vu-meter:   bars hold_cycles
+        uint8_t  VU_PEAK_ATTACK_STEP = 200;        // vu-meter:   peak rising steps
+        uint8_t  VU_PEAK_RELEASE_STEP = 10;        // vu-meter:   peak falling steps
+        uint8_t  VU_PEAK_HOLD_CYCLES = 2;          // vu-meter:   peak hold_cycles
+        bool     VU_LEVEL = false;                 // vu-meter:   true -> vu meter is enabled
         bool     SPECTRUM = false;                 // true: spectrum analyzer is enabled
         bool     VOLUME_CONTROL = true;            // true: volume and balance control is enabled
         float    VOL_FADING_SPEED = 50.0;          // mute, volume fading 1.0f (fast) ... 100.0f (slow)
