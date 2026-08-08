@@ -161,8 +161,14 @@ class ps_ptr {
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
         allocated_size = other.allocated_size;
+        m_num_elements = other.m_num_elements;
+        m_fifoRead = other.m_fifoRead;
+        m_fifoWrite = other.m_fifoWrite;
         name = other.name;
         other.allocated_size = 0;
+        other.m_num_elements = 0;
+        other.m_fifoRead = 0;
+        other.m_fifoWrite = 0;
         other.name = nullptr;
     }
 
@@ -2398,8 +2404,7 @@ class ps_ptr {
         return *this;
     }
 
-    // Move-Assignment-Operator
-    ps_ptr& operator=(ps_ptr&& other) noexcept {
+    ps_ptr& operator=(ps_ptr&& other) noexcept { // Move-Assignment-Operator
         if (this != &other) {
             if (name) {
                 free(name);
@@ -2407,8 +2412,14 @@ class ps_ptr {
             }
             mem = std::move(other.mem);
             allocated_size = other.allocated_size;
+            m_num_elements = other.m_num_elements;
+            m_fifoRead = other.m_fifoRead;
+            m_fifoWrite = other.m_fifoWrite;
             name = other.name;
             other.allocated_size = 0;
+            other.m_num_elements = 0;
+            other.m_fifoRead = 0;
+            other.m_fifoWrite = 0;
             other.name = nullptr;
         }
         return *this;

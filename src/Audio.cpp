@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0a                                                                                                                         ";
+    Version 4.0.0a1                                                                                                                         ";
 /*  Updated on: Aug 08, 2026
 
     Author: Wolle (schreibfaul1)
@@ -6796,7 +6796,7 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
 
         for (int i = 0; i < 256; i++) {
             double x = i / 255.0;
-            int y = std::lround(255.0 * std::pow(x, 0.5));
+            int    y = std::lround(255.0 * std::pow(x, 0.5));
             m_vu_items.vuCurve[i] = y;
         }
         // Send initial value
@@ -7058,31 +7058,67 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
     const uint16_t  NUM_BANDS = 15;
     constexpr float DB_MIN = 90.0f;
     constexpr float DB_MAX = 120.0f;
-    float           pw[16];
-    uint16_t        timer_ms = 50; // every 50ms one output
 
     if (m_f_first_fft_call) {
         m_f_first_fft_call = false;
         m_fft_items.count = 0;
-        m_fft_items.samps_x_ms = m_i2s_items.sampleRate / (1000 / timer_ms);
+
+        //--------------------------------------------------------------------------
+        // Spectrum update interval
+        //
+        // One output every half DMA buffer.
+        //
+        // 16 * 256 = 4096 samples
+        // 4096 / 2 = 2048 samples
+        // 2048 / 44100 = 46.44 ms
+        //--------------------------------------------------------------------------
+        const size_t dmaSamples = static_cast<size_t>(m_i2s_chan_cfg.dma_desc_num) * static_cast<size_t>(m_i2s_chan_cfg.dma_frame_num);
+        m_fft_items.samps_x_ms = static_cast<uint16_t>(dmaSamples / 2);
+
+        //--------------------------------------------------------------------------
+        // Sample buffer
+        //--------------------------------------------------------------------------
+
         if (!m_fft_items.samples_buffer.valid()) { m_fft_items.samples_buffer.alloc_array(m_fft_items.FFT_SIZE, "samples_buffer"); }
         m_fft_items.samples_buffer.clear();
         m_fft_items.samples_buffer_index = 0;
+
+        //--------------------------------------------------------------------------
+        // Hann window
+        //--------------------------------------------------------------------------
+
         if (!m_fft_items.window.valid()) {
             m_fft_items.window.alloc_array(m_fft_items.FFT_SIZE, "fft_window");
             for (uint16_t i = 0; i < m_fft_items.FFT_SIZE; i++) { m_fft_items.window[i] = 0.5f * (1.0f - cosf(2.0f * PI * i / (m_fft_items.FFT_SIZE - 1))); }
         }
+
+        //--------------------------------------------------------------------------
+        // FFT input
+        //--------------------------------------------------------------------------
+
         if (!m_fft_items.fft_in.valid()) { m_fft_items.fft_in.alloc_array(m_fft_items.FFT_SIZE * 2, "fft_in"); }
+
+        //--------------------------------------------------------------------------
+        // Spectrum
+        //--------------------------------------------------------------------------
+
         if (!m_fft_items.spectrum.valid()) { m_fft_items.spectrum.alloc_array(m_fft_items.NUM_BANDS, "spectrum"); }
         m_fft_items.fft_in.clear();
         m_fft_items.spectrum.clear();
+
+        //--------------------------------------------------------------------------
+        // Vectors
+        //--------------------------------------------------------------------------
+
         m_fft_items.measured_vec.clear();
         m_fft_items.display_vec.clear();
         m_fft_items.peak_vec.clear();
+        m_fft_items.bars_hold_vec.clear();
         m_fft_items.peak_hold_vec.clear();
-        for (int i = 0; i < 16; i++) m_fft_items.measured_vec.push_back(0);
-        esp_err_t err = dsps_fft2r_init_fc32(nullptr, m_fft_items.FFT_SIZE);
-        if (err != ESP_OK) AUDIO_LOG_ERROR("err {}", err);
+        m_fft_items.delay_display_vec.clear();
+        m_fft_items.delay_peak_vec.clear();
+        m_fft_items.delayed_display_vec.clear();
+        m_fft_items.delayed_peak_vec.clear();
 
         for (int i = 0; i < m_fft_items.NUM_BANDS; i++) {
             m_fft_items.measured_vec.push_back(0);
@@ -7090,7 +7126,32 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
             m_fft_items.peak_vec.push_back(0);
             m_fft_items.bars_hold_vec.push_back(0);
             m_fft_items.peak_hold_vec.push_back(0);
+            m_fft_items.delayed_display_vec.push_back(0);
+            m_fft_items.delayed_peak_vec.push_back(0);
+
         }
+
+        //--------------------------------------------------------------------------
+        // Spectrum delay
+        //--------------------------------------------------------------------------
+        constexpr size_t FFT_DELAY = 3;
+
+        for (int i = 0; i < m_fft_items.NUM_BANDS; i++) {
+            ps_ptr<uint8_t> displayDelay;
+            displayDelay.calloc(FFT_DELAY, nullptr, false);
+            displayDelay.fifo_reset();
+            m_fft_items.delay_display_vec.push_back(std::move(displayDelay));
+            ps_ptr<uint8_t> peakDelay;
+            peakDelay.calloc(FFT_DELAY, nullptr, false);
+            peakDelay.fifo_reset();
+            m_fft_items.delay_peak_vec.push_back(std::move(peakDelay));
+        }
+
+        //--------------------------------------------------------------------------
+        // FFT initialization
+        //--------------------------------------------------------------------------
+        esp_err_t err = dsps_fft2r_init_fc32(nullptr, m_fft_items.FFT_SIZE);
+        if (err != ESP_OK) { AUDIO_LOG_ERROR("err {}", err); }
     }
 
     uint8_t bars_attack_step = 100; // bars rising steps
@@ -7142,8 +7203,11 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
 
                         newVal(&m_fft_items.display_vec[b], m_fft_items.measured_vec[b], bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
                         newVal(&m_fft_items.peak_vec[b], m_fft_items.measured_vec[b], peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+
+                        m_fft_items.delayed_display_vec[b] = m_fft_items.delay_display_vec[b].fifo(m_fft_items.display_vec[b]);
+                        m_fft_items.delayed_peak_vec[b] = m_fft_items.delay_peak_vec[b].fifo(m_fft_items.peak_vec[b]);
                     }
-                    info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
+                    info(*this, evt_spectrum, m_fft_items.delayed_display_vec, m_fft_items.delayed_peak_vec);
                 }
             }
         }
@@ -7151,8 +7215,10 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
             newVal(&m_fft_items.display_vec[b], 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
             newVal(&m_fft_items.peak_vec[b], 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
+            m_fft_items.delayed_display_vec[b] = m_fft_items.delay_display_vec[b].fifo(m_fft_items.display_vec[b]);
+            m_fft_items.delayed_peak_vec[b] = m_fft_items.delay_peak_vec[b].fifo(m_fft_items.peak_vec[b]);
         }
-        info(*this, evt_spectrum, m_fft_items.display_vec, m_fft_items.peak_vec);
+        info(*this, evt_spectrum, m_fft_items.delayed_display_vec, m_fft_items.delayed_peak_vec);
     }
 }
 

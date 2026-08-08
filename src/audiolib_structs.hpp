@@ -395,20 +395,24 @@ struct vu_items_t {
 };
 
 struct fft_items_t {
-    size_t                count = 0;
-    size_t                samps_x_ms = 0;
-    ps_ptr<int16_t>       samples_buffer;
-    size_t                samples_buffer_index = 0;
-    const uint16_t        FFT_SIZE = 512;
-    const uint16_t        NUM_BANDS = 16;
-    ps_ptr<float>         window;
-    ps_ptr<float>         fft_in;
-    ps_ptr<float>         spectrum;
-    std::vector<uint32_t> measured_vec = {};
-    std::vector<uint32_t> display_vec = {};
-    std::vector<uint32_t> peak_vec = {};
-    std::vector<uint8_t>  bars_hold_vec = {};
-    std::vector<uint8_t>  peak_hold_vec = {};
+    size_t                       count = 0;
+    size_t                       samps_x_ms = 0;
+    ps_ptr<int16_t>              samples_buffer;
+    size_t                       samples_buffer_index = 0;
+    const uint16_t               FFT_SIZE = 512;
+    const uint16_t               NUM_BANDS = 16;
+    ps_ptr<float>                window;
+    ps_ptr<float>                fft_in;
+    ps_ptr<float>                spectrum;
+    std::vector<uint32_t>        measured_vec = {};
+    std::vector<uint32_t>        display_vec = {};
+    std::vector<uint32_t>        peak_vec = {};
+    std::vector<uint8_t>         bars_hold_vec = {};
+    std::vector<uint8_t>         peak_hold_vec = {};
+    std::vector<ps_ptr<uint8_t>> delay_display_vec;
+    std::vector<ps_ptr<uint8_t>> delay_peak_vec;
+    std::vector<uint32_t>        delayed_display_vec = {};
+    std::vector<uint32_t>        delayed_peak_vec = {};
 };
 
 struct Biquad {
