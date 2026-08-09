@@ -710,7 +710,18 @@ class Audio {
         else
             mag = (uint32_t)sample;
         return std::min<uint32_t>(mag >> 23, 255);
-    };
+    }
+
+    inline bool isFile() {
+        if (m_dataMode == AUDIO_LOCALFILE) return true;
+        if (m_streamType == ST_WEBFILE && m_playlistFormat != FORMAT_M3U8) return true;
+        return false;
+    }
+
+    inline bool isStream() {
+        if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) return true;
+        return false;
+    }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   private:

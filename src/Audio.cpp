@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0a2                                                                                                                         ";
-/*  Updated on: Aug 08, 2026
+    Version 4.0.0a3                                                                                                                         ";
+/*  Updated on: Aug 09, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3593,8 +3593,8 @@ uint32_t Audio::stopSong() {
         if (m_f_running) {
             m_f_running = false;
             if (m_client->connected()) {
-                if (m_streamType == ST_WEBSTREAM) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
-                if (m_streamType == ST_WEBFILE) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
+                if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
+                if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
                 m_client->stop();
             }
             if (m_audiofile) {
@@ -3614,7 +3614,7 @@ uint32_t Audio::stopSong() {
 bool Audio::pauseResume() {
     xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     bool retVal = false;
-    if (m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM || m_streamType == ST_WEBFILE) {
+    if (isFile() || isStream()) {
         m_f_running = !m_f_running;
         retVal = true;
         if (!m_f_running) {
@@ -3883,8 +3883,8 @@ void Audio::loop() {
                 if (m_playlistFormat == FORMAT_ASX) httpPrint(parsePlaylist_ASX().c_get());
                 break;
             case AUDIO_DATA:
-                if (m_streamType == ST_WEBSTREAM) processWebStream();
-                if (m_streamType == ST_WEBFILE) processWebFile();
+                if (isFile()) processWebFile();
+                if (isStream()) processWebStream();
                 break;
         }
     } else { // m3u8 datastream only
@@ -5180,18 +5180,12 @@ void Audio::playAudioData() {
     }
     //--------------------------------------------------------------------------------
 
-    bool isFile = false;
-    bool isStream = false;
-
-    if (m_dataMode == AUDIO_LOCALFILE) isFile = true;
-    if (m_streamType == ST_WEBFILE && m_playlistFormat != FORMAT_M3U8) isFile = true; // local file or webfile but not m3u8 file
-    if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) isStream = true;
-    if (!isFile && !isStream) return;
+    if (!isFile() && !isStream()) return;
 
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     {
         m_pad.bytesDecoded = 0;
-        if (isFile) {
+        if (isFile()) {
             if (!m_audioDataSize) goto exit; // no data to decode if filesize is 0
             if (m_audioDataSize - m_audioDataReadPtr == 128) {
                 m_f_ID3v1TagFound = true;
@@ -5215,7 +5209,7 @@ void Audio::playAudioData() {
             }
         }
 
-        if (isStream) {
+        if ((isStream())) {
             if (m_f_allDataReceived) { // Google TTS, OpenAI
                 m_pad.lastFrames = true;
                 if (m_f_tts && !InBuff.bufferFilled()) {
@@ -6365,8 +6359,8 @@ uint32_t Audio::getAudioFilePosition() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setAudioFilePosition(uint32_t pos) {
-    if (!m_f_stream) return false;
-    if ((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)) {
+    if (!m_f_stream) return false; // stream ready?
+    if (!isFile()) {
         AUDIO_LOG_WARN("audio is not a file");
         return false;
     }
@@ -8078,9 +8072,7 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
             idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
             if (idx >= 28) { res = CODEC_VORBIS; }
 
-            if (m_streamType == ST_WEBFILE || m_dataMode == AUDIO_LOCALFILE) { // is file?
-                m_lastGranulePosition = getLastGranulePosition(res);           // VORBIS or OPUS only
-            }
+            if (isFile()) { m_lastGranulePosition = getLastGranulePosition(res); } // VORBIS or OPUS only
             AUDIO_LOG_DEBUG("lastGranulePosition {}", m_lastGranulePosition);
         }
         return res;
