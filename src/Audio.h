@@ -373,6 +373,7 @@ class Audio {
     uint32_t                  decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, int32_t* bytesLeft);
     int                       sendBytes(uint8_t* data, size_t len);
     void                      setDecoderItems();
+    uint32_t                  calculate_average_bitrate(uint64_t sum_samples);
     void                      calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
     void                      showID3Tag(const char* tag, const char* val);
     size_t                    readAudioHeader(uint32_t bytes);
@@ -676,6 +677,7 @@ class Audio {
     audiolib::caSa_t       m_caSa;
     audiolib::lVar_t       m_lVar;
     audiolib::prlf_t       m_prlf;
+    audiolib::cab_t        m_cab;
     audiolib::cat_t        m_cat;
     audiolib::ifCh_t       m_ifCh;
     audiolib::tspp_t       m_tspp;
