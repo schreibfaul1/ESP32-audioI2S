@@ -2522,11 +2522,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             ps_ptr<char> content_descriptor;
             ps_ptr<char> syltBuff;
             bool         isBigEndian = true;
-            size_t       len = 0;
             int          idx = 0;
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-            if (m_ID3Hdr.SYLT.size < len) return 0;
+            if (m_ID3Hdr.SYLT.size > len) return 0; // not enough data buffered yet, wait for more
             syltBuff.copy_from(data, m_ID3Hdr.SYLT.size);
             m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
             if (m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
@@ -2625,12 +2624,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 ps_ptr<char> content_descriptor;
                 ps_ptr<char> syltBuff;
                 bool         isBigEndian = true;
-                size_t       len = 0;
                 int          idx = 0;
 
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.v22_tag_length;
-                if (m_ID3Hdr.SYLT.size < len) return 0;
+                if (m_ID3Hdr.SYLT.size > len) return 0; // not enough data buffered yet, wait for more
                 syltBuff.copy_from(data, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
@@ -2641,13 +2639,14 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
                 idx = 6;
 
+                size_t descLen = 0;
                 if (m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3) { // utf-8
-                    len = content_descriptor.copy_from(syltBuff.get() + idx);
+                    descLen = content_descriptor.copy_from(syltBuff.get() + idx);
                 } else { // utf-16
-                    len = content_descriptor.copy_from_utf16(syltBuff.get() + idx, isBigEndian);
+                    descLen = content_descriptor.copy_from_utf16(syltBuff.get() + idx, isBigEndian);
                 }
-                if (len > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
-                idx += len;
+                if (descLen > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
+                idx += descLen;
 
                 while (idx < m_ID3Hdr.SYLT.size) {
                     // UTF-16LE, UTF-16BE
