@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0b                                                                                                                         ";
-/*  Updated on: Aug 09, 2026
+    Version 4.0.0b1                                                                                                                         ";
+/*  Updated on: Aug 11, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4642,6 +4642,10 @@ void Audio::processLocalFile() {
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
+        if (SamplesBuff.bufferFilled()) { // something to play before stopSong()
+            playChunk();
+            return;
+        }
         if (m_f_ID3v1TagFound) readID3V1Tag();
     exit:
         ps_ptr<char> afn;                                // audio file name
@@ -4751,6 +4755,10 @@ void Audio::processWebStream() {
     }
 
     if (m_f_eof) {
+        if (SamplesBuff.bufferFilled()) { // something to play before stopSong()
+            playChunk();
+            return;
+        }
         info(*this, evt_eof, "{}", m_lastHost.c_get());
         stopSong();
     }
@@ -5160,7 +5168,6 @@ void Audio::playAudioData() {
         m_pad.oldAudioDataSize = 0;
         m_bytesNotConsumed = 0;
         m_pad.lastFrames = false;
-        m_f_eof = false;
     }
     //--------------------------------------------------------------------------------
 
@@ -8367,8 +8374,6 @@ void Audio::performAudioTask() {
         gain_ramp();
         return;
     } else {
-        int32_t c[2] = {0};
-        //   calculateVUlevel(c);
         gain_ramp();
         if (SamplesBuff.bufferFilled()) { playChunk(); }
         vTaskDelay(50);
