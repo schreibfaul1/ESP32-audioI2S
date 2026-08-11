@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0b1                                                                                                                         ";
+    Version 4.0.0b2                                                                                                                         ";
 /*  Updated on: Aug 11, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3575,6 +3575,7 @@ uint32_t Audio::stopSong() {
     bool pdTrue = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
     {
         if (m_f_running) {
+            m_audio_items.mute = true;
             m_f_running = false;
             if (m_client->connected()) {
                 if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
@@ -3773,6 +3774,7 @@ void Audio::playChunk() {
     if (m_f_firstChunkCall) {
         m_f_firstChunkCall = false;
         m_dmaFreeDesc = 0;
+        m_audio_items.mute = m_f_mute;
     }
     bool continueI2S = true;
     m_plCh.err = ESP_OK;
@@ -6457,11 +6459,12 @@ uint8_t Audio::getVolumeSteps() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setMute(bool mute) {
+    m_f_mute = mute;
     m_audio_items.mute = mute;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::getMute() {
-    return m_audio_items.mute;
+    return m_f_mute;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t Audio::audioFileRead() {
