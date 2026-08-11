@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0a4                                                                                                                         ";
+    Version 4.0.0b                                                                                                                         ";
 /*  Updated on: Aug 09, 2026
 
     Author: Wolle (schreibfaul1)
@@ -466,13 +466,11 @@ void AudioBuffer::bytesWasRead(size_t bytes) {
 }
 
 void AudioBuffer::showStatus() {
-    xSemaphoreTake(m_mutex, portMAX_DELAY);
     m_log.assignf("\nfilled {}, free {}\n", bufferFilled(), freeSpace());
     m_log.appendf("writeSpace {}, readSpace {}\n", writeSpace(), readSpace());
     m_log.appendf("writePtr {}, readPtr {}\n", m_writePtr - m_bufferBegin, m_readPtr - m_bufferBegin);
     m_log.appendf("isEmpty {}, isFull {}\n\n", m_isEmpty, m_isFull);
     m_log.print();
-    xSemaphoreGive(m_mutex);
 }
 
 void AudioBuffer::sanityCheck() {
@@ -3034,9 +3032,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                                                               pre_defined;       2 Bytes offset 22 */
         m_m4aHdr.timescale = bigEndian((uint8_t*)mdhd_buffer.get() + 12, 4);
         m_m4aHdr.duration = bigEndian((uint8_t*)mdhd_buffer.get() + 16, 4);
-        if (m_m4aHdr.timescale) {
-            m_audioFileDuration = m_m4aHdr.duration / m_m4aHdr.timescale;
-        }
+        if (m_m4aHdr.timescale) { m_audioFileDuration = m_m4aHdr.duration / m_m4aHdr.timescale; }
         m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdhd;
         m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdhd;
         m_controlCounter = M4A_MDIA;
@@ -3513,9 +3509,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
         m_stsz_position = m_m4aHdr.stsz_table_pos;
-        if (m_audioFileDuration) {
-            m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
-        }
+        if (m_audioFileDuration) { m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration; }
 
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
@@ -6626,7 +6620,7 @@ uint32_t Audio::getBitRate() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 uint64_t Audio::getLastGranulePosition(uint8_t codec) {
     if (codec != CODEC_OPUS && codec != CODEC_VORBIS && codec != CODEC_FLAC) return 0;
-    if (m_audioFileSize == 0) { return 0; }                     // only files
+    if (m_audioFileSize == 0) { return 0; } // only files
     uint32_t     afp = m_audioFilePosition;
     uint64_t     granulePos = 0;
     ps_ptr<char> buff;
@@ -7826,12 +7820,19 @@ fail:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 boolean Audio::streamDetection(uint32_t bytesAvail) {
 
+    if (!m_client->connected()) {
+        info(*this, evt_info, "Stream lost");
+        connecttohost(m_lastHost.get());
+        return false;
+    }
+
     if (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
         if (m_sdet.cnt_slow == 0) m_sdet.tmr_slow = millis();
         m_sdet.cnt_slow++;
     } else {
         m_sdet.cnt_slow = 0;
         m_sdet.cnt_lost = 0;
+        return true;
     }
 
     // if within one second the content of the audio buffer falls below the size of an audio frame 100 times,
@@ -7852,7 +7853,6 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         connecttohost(m_lastHost.get());
         m_sdet.cnt_slow = 0;
         m_sdet.cnt_lost = 0;
-        return false;
     }
     return false;
 }
