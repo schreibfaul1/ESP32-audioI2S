@@ -161,8 +161,6 @@ typedef struct _cat { // used in calculateAudioTime
     uint32_t counter{};
     uint32_t timeStamp{};
     uint32_t deltaBytesIn{};
-    uint32_t nominalBitRate{};
-    uint32_t tota_samples{};
     uint32_t avrBitRate{};
     uint16_t syltIdx{};
     uint32_t avrBitrateStable{};
