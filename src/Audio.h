@@ -373,6 +373,7 @@ class Audio {
     uint32_t                  decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, int32_t* bytesLeft);
     int                       sendBytes(uint8_t* data, size_t len);
     void                      setDecoderItems();
+    uint32_t                  calculate_average_bitrate(uint64_t sumBytesIn, uint64_t sum_samples);
     void                      calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
     void                      showID3Tag(const char* tag, const char* val);
     size_t                    readAudioHeader(uint32_t bytes);
@@ -577,8 +578,6 @@ class Audio {
 
     const uint16_t m_plsBuffEntryLen = 256;           // length of each entry in playlistBuff
     int            m_LFcount = 0;                     // Detection of end of header
-    uint32_t       m_avr_bitrate = 0;                 // average bitrate, median calculated by VBR
-    uint32_t       m_nominal_bitrate = 0;             // given br from header
     uint32_t       m_audioFilePosition = 0;           // current position, counts every readed byte
     uint32_t       m_audioDataReadPtr = 0;            // used in playAudioData
     uint32_t       m_audioFileSize = 0;               // local and web files
@@ -610,7 +609,14 @@ class Audio {
     uint32_t       m_t0 = 0;                          // store millis(), is needed for a small delay
     uint32_t       m_bytesNotConsumed = 0;            // pictures or something else that comes with the stream
     uint64_t       m_lastGranulePosition = 0;         // necessary to calculate the duration in OPUS and VORBIS
-    uint32_t       m_total_samples_in_file = 0;     //
+
+    uint32_t       m_nominal_bitrate = 0;             // given br from header
+    uint32_t       m_avr_bitrate = 0;                 // average bitrate, median calculated by VBR
+    uint32_t       m_total_samples_in_file = 0;       // given or calculated from header
+    uint32_t       m_avr_samples_in_file = 0;         // average total samples in file, estimated
+    uint32_t       m_audio_file_duration = 0;         // seconds
+    uint32_t       m_avr_file_duration = 0;           // average duration in seconds, estimated
+
     int32_t        m_resumeFilePos = -1;              // the return value from stopSong(), (-1) is idle
     int32_t        m_fileStartTime = -1;              // may be set in connecttoFS()
     uint16_t       m_m3u8_targetDuration = 10;        //
@@ -655,14 +661,13 @@ class Audio {
     bool           m_f_connectionClose = false;       // set in parseHttpResponseHeader
     bool           m_f_i2s_channel_enabled = false;   // true if enabled
     bool           m_f_mute = false;
-    uint32_t       m_audioFileDuration = 0;           // seconds
-    uint32_t       m_audioCurrentTime = 0;            // seconds
-    uint32_t       m_audioDataStart = 0;              // in bytes
-    OutputSR_t     m_output_sr = SR_ORIGIN;           // output samplerate
-    size_t         m_audioDataSize = 0;               //
-    size_t         m_ibuffSize = 0;                   // log buffer size for audio_info()
-    size_t         m_i2s_bytesWritten = 0;            // set in i2s_write() but not used
-    size_t         m_work_words = 0;                  // calculated in setPinout()
+    uint32_t       m_audioCurrentTime = 0;  // seconds
+    uint32_t       m_audioDataStart = 0;    // in bytes
+    OutputSR_t     m_output_sr = SR_ORIGIN; // output samplerate
+    size_t         m_audioDataSize = 0;     //
+    size_t         m_ibuffSize = 0;         // log buffer size for audio_info()
+    size_t         m_i2s_bytesWritten = 0;  // set in i2s_write() but not used
+    size_t         m_work_words = 0;        // calculated in setPinout()
 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
@@ -678,6 +683,7 @@ class Audio {
     audiolib::caSa_t       m_caSa;
     audiolib::lVar_t       m_lVar;
     audiolib::prlf_t       m_prlf;
+    audiolib::cab_t        m_cab;
     audiolib::cat_t        m_cat;
     audiolib::ifCh_t       m_ifCh;
     audiolib::tspp_t       m_tspp;
