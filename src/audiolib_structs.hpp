@@ -157,8 +157,9 @@ struct prlf_t { // used in processLocalFile
 
 typedef struct _cab { // used in calculate_average_bitrate
     uint32_t counter{};
-    uint32_t avrBitRate{};
+    uint32_t average_bitrate{};
     uint32_t oldAvrBitrate{};
+    uint32_t estimated_bitrate{};
     uint32_t brCounter{};
     void reset() { *this = _cab{}; }
 } cab_t;

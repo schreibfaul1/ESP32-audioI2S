@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c                                                                                                                         ";
-/*  Updated on: Aug 13, 2026
+    Version 4.0.0c1                                                                                                                         ";
+/*  Updated on: Aug 16, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -801,6 +801,7 @@ void Audio::setDefaults() {
     m_streamURL.reset();
     m_playlistBuff.reset();
     m_m3u8_host.reset();
+    m_cab.reset();
 
     m_outBuff.clear();       // Clear OutputBuffer
     m_resamplesBuff.clear(); // Clear ResamplesBuff
@@ -6148,29 +6149,37 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     return bytesDecoded;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t Audio::calculate_average_bitrate(uint64_t sumBytesIn, uint64_t sum_samples) {
-    if (!sum_samples) return 0;
-    m_cab.avrBitRate = (uint64_t)sumBytesIn * 8 * m_i2s_items.sampleRate / sum_samples;
-    int32_t diff = m_cab.avrBitRate - m_cab.oldAvrBitrate;
-    m_cab.oldAvrBitrate = m_cab.avrBitRate;
+uint32_t Audio::calculate_average_bitrate(uint64_t sum_bytes_in, uint64_t sum_samples) {
+    if (m_cab.counter == 0) {
+        m_cab.estimated_bitrate = m_channels * m_i2s_items.sampleRate * m_bitsPerSample / est_compression[m_codec];
+        AUDIO_LOG_DEBUG("estimated bitrate {}", m_cab.estimated_bitrate);
+    }
+    m_cab.counter++;
+
+    if (sum_samples) m_cab.average_bitrate = sum_bytes_in * 8 * m_i2s_items.sampleRate / sum_samples;
+
+    int32_t diff = m_cab.average_bitrate - m_cab.oldAvrBitrate;
+    m_cab.oldAvrBitrate = m_cab.average_bitrate;
     if (abs(diff) < 100) m_cab.brCounter++;
-    if (m_cab.brCounter > 10) return m_cab.avrBitRate;
+    // if(m_cab.brCounter % 100 == 0) AUDIO_LOG_DEBUG("avr bitrate {}", m_cab.average_bitrate);
+    if (m_cab.brCounter > 10) return m_cab.average_bitrate;
+    // return m_cab.estimated_bitrate;
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder_out) {
+void Audio::calculateAudioTime(uint16_t bytes_decoder_in, uint16_t samples_decoder_out) {
 
     if (m_cat.firstCall) { // first call
         m_cat.firstCall = false;
         m_cat.reset();
     }
 
-    m_cat.sumBytesIn += bytesDecoderIn;
-    m_cat.deltaBytesIn += bytesDecoderIn;
+    m_cat.sumBytesIn += bytes_decoder_in;
+    m_cat.deltaBytesIn += bytes_decoder_in;
     m_cat.sum_samples += samples_decoder_out;
 
     m_avr_bitrate = calculate_average_bitrate(m_cat.sumBytesIn, m_cat.sum_samples);
-    if(m_avr_bitrate){
+    if (m_avr_bitrate) {
         m_avr_file_duration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         m_avr_samples_in_file = m_avr_file_duration * m_i2s_items.sampleRate;
     }
@@ -6324,10 +6333,11 @@ uint32_t Audio::getFileSize() { // returns the size of webfile or local file
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getAudioFileDuration() {
     if (!getBitRate()) return 0;
-    if (m_playlistFormat == FORMAT_M3U8) return 0;
-    if (!m_audioDataSize) return 0;
-    if(m_audio_file_duration) return m_audio_file_duration;
-    if(m_avr_file_duration) return m_avr_file_duration;
+    if (!isFile()) return 0;
+    //    if (m_playlistFormat == FORMAT_M3U8) return 0;
+    //    if (!m_audioDataSize) return 0;
+    if (m_audio_file_duration) return m_audio_file_duration;
+    if (m_avr_file_duration) return m_avr_file_duration;
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6358,6 +6368,11 @@ bool Audio::setAudioFilePosition(uint32_t pos) {
         AUDIO_LOG_WARN("given position is too large");
         return false;
     }
+    if (!getBitRate()) {
+        AUDIO_LOG_WARN("bitrate is unknown");
+        return false;
+    }
+
     if (pos < m_audioDataStart) {
         AUDIO_LOG_WARN("set audiodatastart at {}", m_audioDataStart);
         m_resumeFilePos = m_audioDataStart;
