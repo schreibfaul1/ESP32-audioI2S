@@ -161,21 +161,14 @@ typedef struct _cab { // used in calculate_average_bitrate
     uint32_t oldAvrBitrate{};
     uint32_t estimated_bitrate{};
     uint32_t brCounter{};
+    bool     valid{};
     void reset() { *this = _cab{}; }
 } cab_t;
 
 typedef struct _cat { // used in calculateAudioTime
-    uint64_t sumBytesIn{};
+    uint64_t sum_bytes_in{};
     uint64_t sum_samples{};
-    uint32_t counter{};
-    uint32_t timeStamp{};
-    uint32_t deltaBytesIn{};
-    uint32_t avrBitRate{};
     uint16_t syltIdx{};
-    uint32_t avrBitrateStable{};
-    uint32_t oldAvrBitrate{};
-    uint32_t brCounter{};
-    bool     firstCall{};
 
     void reset() { *this = _cat{}; }
 } cat_t;

@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c1                                                                                                                         ";
-/*  Updated on: Aug 16, 2026
+    Version 4.0.0c2                                                                                                                         ";
+/*  Updated on: Aug 17, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -802,6 +802,7 @@ void Audio::setDefaults() {
     m_playlistBuff.reset();
     m_m3u8_host.reset();
     m_cab.reset();
+    m_cat.reset();
 
     m_outBuff.clear();       // Clear OutputBuffer
     m_resamplesBuff.clear(); // Clear ResamplesBuff
@@ -829,7 +830,6 @@ void Audio::setDefaults() {
     m_f_playing = false;
     m_f_tts = false;
     m_f_firstCall = true;             // InitSequence for processWebstream and processLocalFile
-    m_cat.firstCall = true;           // InitSequence for calculateAudioTime
     m_pplM3U8.firstCall = true;       // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;         // InitSequence for playAudioData
     m_f_firstChunkCall = true;        // InitSequence for playChunk
@@ -4660,7 +4660,6 @@ void Audio::processLocalFile() {
         ps_ptr<char> afn;                                // audio file name
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
         m_audioCurrentTime = 0;
-        m_audio_file_duration = 0;
         m_resumeFilePos = -1;
         m_haveNewFilePos = 0;
         m_codec = CODEC_NONE;
@@ -4864,7 +4863,6 @@ void Audio::processWebFile() {
         info(*this, evt_eof, "{}", m_lastHost.c_get());
 
         m_audioCurrentTime = 0;
-        m_audio_file_duration = 0;
         m_resumeFilePos = -1;
         m_haveNewFilePos = 0;
         m_codec = CODEC_NONE;
@@ -6162,40 +6160,46 @@ uint32_t Audio::calculate_average_bitrate(uint64_t sum_bytes_in, uint64_t sum_sa
     m_cab.oldAvrBitrate = m_cab.average_bitrate;
     if (abs(diff) < 100) m_cab.brCounter++;
     // if(m_cab.brCounter % 100 == 0) AUDIO_LOG_DEBUG("avr bitrate {}", m_cab.average_bitrate);
-    if (m_cab.brCounter > 10) return m_cab.average_bitrate;
-    // return m_cab.estimated_bitrate;
+    if (m_cab.brCounter > 10) {
+        if (!m_cab.valid) {
+            m_cab.valid = true;
+            if (m_nominal_bitrate == 0) {
+                info(*this, evt_bitrate, "{}", m_cab.average_bitrate);
+                if (isFile()) {
+                    uint32_t duration = round(((float)m_audioDataSize * 8 / m_cab.average_bitrate));
+                    uint32_t total_samples = duration * m_i2s_items.sampleRate;
+                    info(*this, evt_info, "Duration (s): {}", round(((float)m_audioDataSize * 8 / m_cab.average_bitrate)));
+                    info(*this, evt_info, "Total samples in file: {}", total_samples);
+                }
+            }
+        }
+        return m_cab.average_bitrate;
+    }
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateAudioTime(uint16_t bytes_decoder_in, uint16_t samples_decoder_out) {
 
-    if (m_cat.firstCall) { // first call
-        m_cat.firstCall = false;
-        m_cat.reset();
-    }
-
-    m_cat.sumBytesIn += bytes_decoder_in;
-    m_cat.deltaBytesIn += bytes_decoder_in;
+    m_cat.sum_bytes_in += bytes_decoder_in;
     m_cat.sum_samples += samples_decoder_out;
 
-    m_avr_bitrate = calculate_average_bitrate(m_cat.sumBytesIn, m_cat.sum_samples);
+    m_avr_bitrate = calculate_average_bitrate(m_cat.sum_bytes_in, m_cat.sum_samples);
     if (m_avr_bitrate) {
         m_avr_file_duration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         m_avr_samples_in_file = m_avr_file_duration * m_i2s_items.sampleRate;
     }
     m_audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_i2s_items.sampleRate);
 
-    if (m_haveNewFilePos && (m_cat.avrBitRate || m_nominal_bitrate)) {
+    if (m_haveNewFilePos && (m_avr_bitrate || m_nominal_bitrate)) {
         uint32_t posWhithinAudioBlock = m_haveNewFilePos - m_audioDataStart;
         float    newTime = 0;
         if (m_nominal_bitrate) {
             newTime = (float)posWhithinAudioBlock / (m_nominal_bitrate / 8);
         } else {
-            newTime = (float)posWhithinAudioBlock / (m_cat.avrBitRate / 8);
-            m_avr_bitrate = m_cat.avrBitRate;
+            newTime = (float)posWhithinAudioBlock / (m_avr_bitrate / 8);
         }
         m_audioCurrentTime = round(newTime);
-        m_cat.sumBytesIn = posWhithinAudioBlock;
+        m_cat.sum_bytes_in = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
         m_cat.syltIdx = 0;
         if (m_syltLines.size()) {
@@ -6332,10 +6336,6 @@ uint32_t Audio::getFileSize() { // returns the size of webfile or local file
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getAudioFileDuration() {
-    if (!getBitRate()) return 0;
-    if (!isFile()) return 0;
-    //    if (m_playlistFormat == FORMAT_M3U8) return 0;
-    //    if (!m_audioDataSize) return 0;
     if (m_audio_file_duration) return m_audio_file_duration;
     if (m_avr_file_duration) return m_avr_file_duration;
     return 0;
