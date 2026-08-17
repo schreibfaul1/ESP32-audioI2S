@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c2                                                                                                                         ";
+    Version 4.0.0c3                                                                                                                         ";
 /*  Updated on: Aug 17, 2026
 
     Author: Wolle (schreibfaul1)
@@ -853,6 +853,7 @@ void Audio::setDefaults() {
     m_f_acceptRanges = false;
     m_f_connectionClose = false;
     m_f_allDataReceived = false;
+    m_f_haveNewFilePos = false;
 
     m_codec = CODEC_NONE;
     m_dataMode = AUDIO_NONE;
@@ -865,6 +866,7 @@ void Audio::setDefaults() {
     m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_audioFileSize = 0;
+    m_samples_since_start = 0;
 
     m_nominal_bitrate = 0;
     m_avr_bitrate = 0;
@@ -879,7 +881,6 @@ void Audio::setDefaults() {
     m_controlCounter = 0;   // Status within readID3data() and readWaveHeader()
     m_channels = 2;         // assume stereo
     m_ID3Size = 0;
-    m_haveNewFilePos = 0;
     m_M4A_chConfig = 0;
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
@@ -4597,7 +4598,7 @@ void Audio::processLocalFile() {
     if (m_resumeFilePos >= 0) { // we have a resume file position
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-        m_haveNewFilePos = m_prlf.newFilePos;
+        else m_f_haveNewFilePos = true;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4661,7 +4662,7 @@ void Audio::processLocalFile() {
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
         m_audioCurrentTime = 0;
         m_resumeFilePos = -1;
-        m_haveNewFilePos = 0;
+        m_f_haveNewFilePos = false;
         m_codec = CODEC_NONE;
         stopSong();
 
@@ -4801,7 +4802,7 @@ void Audio::processWebFile() {
     if (m_resumeFilePos >= 0) { // we have a resume file position
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-        m_haveNewFilePos = m_pwf.newFilePos;
+        else m_f_haveNewFilePos = true;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4864,7 +4865,7 @@ void Audio::processWebFile() {
 
         m_audioCurrentTime = 0;
         m_resumeFilePos = -1;
-        m_haveNewFilePos = 0;
+        m_f_haveNewFilePos = false;
         m_codec = CODEC_NONE;
         return;
     }
@@ -6182,32 +6183,26 @@ void Audio::calculateAudioTime(uint16_t bytes_decoder_in, uint16_t samples_decod
 
     m_cat.sum_bytes_in += bytes_decoder_in;
     m_cat.sum_samples += samples_decoder_out;
+    m_samples_since_start += samples_decoder_out;
 
     m_avr_bitrate = calculate_average_bitrate(m_cat.sum_bytes_in, m_cat.sum_samples);
     if (m_avr_bitrate) {
         m_avr_file_duration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         m_avr_samples_in_file = m_avr_file_duration * m_i2s_items.sampleRate;
     }
-    m_audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_i2s_items.sampleRate);
+    m_audioCurrentTime = m_samples_since_start / m_i2s_items.sampleRate;
 
-    if (m_haveNewFilePos && (m_avr_bitrate || m_nominal_bitrate)) {
-        uint32_t posWhithinAudioBlock = m_haveNewFilePos - m_audioDataStart;
-        float    newTime = 0;
-        if (m_nominal_bitrate) {
-            newTime = (float)posWhithinAudioBlock / (m_nominal_bitrate / 8);
-        } else {
-            newTime = (float)posWhithinAudioBlock / (m_avr_bitrate / 8);
-        }
-        m_audioCurrentTime = round(newTime);
-        m_cat.sum_bytes_in = posWhithinAudioBlock;
-        m_haveNewFilePos = 0;
-        m_cat.syltIdx = 0;
-        if (m_syltLines.size()) {
-            while (m_cat.syltIdx < m_syltLines.size()) {
-                if (m_audioCurrentTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
-                m_cat.syltIdx++;
+    if (m_f_haveNewFilePos) {
+        m_f_haveNewFilePos = 0;
+        if (getBitRate() && isFile()) {
+            m_cat.syltIdx = 0;
+            if (m_syltLines.size()) {
+                while (m_cat.syltIdx < m_syltLines.size()) {
+                    if (m_audioCurrentTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
+                    m_cat.syltIdx++;
+                }
+                if (m_cat.syltIdx) m_cat.syltIdx--;
             }
-            if (m_cat.syltIdx) m_cat.syltIdx--;
         }
     }
 
@@ -6379,11 +6374,11 @@ bool Audio::setAudioFilePosition(uint32_t pos) {
     }
     m_resumeFilePos = pos;
 
-    /*   m_cat.tota_samples             m_cat.sum_samples
-         ------------------  =  ----------------------------------
-         m_audioDataSize        m_resumeFilePos - m_audioDataStart                                                  */
+    /*   m_total_samples_in_file            m_samples_since_start
+         -----------------------  =  ----------------------------------
+            m_audioDataSize          m_resumeFilePos - m_audioDataStart                                                  */
 
-    m_cat.sum_samples = (float)m_total_samples_in_file * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
+    m_samples_since_start = (float)get_total_samples_in_file() * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6400,7 +6395,7 @@ bool Audio::setAudioPlayTime(uint16_t sec) {
     }
     uint32_t filepos = m_audioDataStart + (getBitRate() * sec / 8);
     m_resumeFilePos = filepos;
-    m_cat.sum_samples = (float)m_total_samples_in_file * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
+    m_samples_since_start = (float)get_total_samples_in_file() * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6427,12 +6422,12 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     // Rewinding by more seconds than have already elapsed (e.g. seeking backwards near the start
     // of the track) can push pos below m_audioDataStart. Without this clamp, m_resumeFilePos ends
     // up smaller than m_audioDataStart, and (m_resumeFilePos - m_audioDataStart) below underflows
-    // (int32_t - uint32_t promotes to unsigned) to a huge value that corrupts m_cat.sum_samples and,
+    // (int32_t - uint32_t promotes to unsigned) to a huge value that corrupts m_samples_since_start and,
     // downstream, the reported playback position/duration. setAudioFilePosition() already guards
     // against this same case; setTimeOffset() needs the same floor.
     if (pos < (int32_t)m_audioDataStart) pos = m_audioDataStart;
     m_resumeFilePos = pos;
-    m_cat.sum_samples = (float)m_total_samples_in_file * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
+    m_samples_since_start = (float)get_total_samples_in_file() * ((float)(m_resumeFilePos - m_audioDataStart) / m_audioDataSize);
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6633,6 +6628,12 @@ uint8_t Audio::getChannels() {
 uint32_t Audio::getBitRate() {
     if (m_nominal_bitrate) return m_nominal_bitrate;
     return m_avr_bitrate;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t Audio::get_total_samples_in_file() {
+    if (!isFile()) return 0;
+    if (m_total_samples_in_file) return m_total_samples_in_file;
+    return m_avr_samples_in_file;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 uint64_t Audio::getLastGranulePosition(uint8_t codec) {

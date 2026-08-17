@@ -313,6 +313,7 @@ class Audio {
     uint8_t          getBitsPerSample();
     uint8_t          getChannels();
     uint32_t         getBitRate();
+    uint32_t         get_total_samples_in_file();
     uint32_t         getAudioFileDuration();
     uint32_t         getAudioCurrentTime();
     uint32_t         getAudioFilePosition();
@@ -617,13 +618,15 @@ class Audio {
     uint32_t m_avr_samples_in_file = 0;   // average total samples in file, estimated
     uint32_t m_audio_file_duration = 0;   // seconds
     uint32_t m_avr_file_duration = 0;     // average duration in seconds, estimated
+    uint32_t m_samples_since_start = 0;   //
 
     int32_t    m_resumeFilePos = -1;              // the return value from stopSong(), (-1) is idle
     int32_t    m_fileStartTime = -1;              // may be set in connecttoFS()
     uint16_t   m_m3u8_targetDuration = 10;        //
     uint32_t   m_stsz_numEntries = 0;             // num of entries inside stsz atom (uint32_t)
     uint32_t   m_stsz_position = 0;               // pos of stsz atom within file
-    uint32_t   m_haveNewFilePos = 0;              // user changed the file position
+
+    bool       m_f_haveNewFilePos = false;        // user changed the file position
     bool       m_f_I2S_init = false;              //
     bool       m_f_unsync = false;                // set within ID3 tag but not used
     bool       m_f_exthdr = false;                // ID3 extended header
