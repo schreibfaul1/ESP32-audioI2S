@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c4                                                                                                                         ";
+    Version 4.0.0c5                                                                                                                         ";
 /*  Updated on: Aug 19, 2026
 
     Author: Wolle (schreibfaul1)
@@ -2742,8 +2742,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             int spf = samples_per_frame[versionID][layerIndex];
 
             // Xing or Info Header present?
-            int8_t mp3_xing = specialIndexOf(data, "Xing", 50);
-            int8_t mp3_info = specialIndexOf(data, "Info", 50);
+            int8_t mp3_xing = specialIndexOf(data, "Xing", 50); // VBR
+            int8_t mp3_info = specialIndexOf(data, "Info", 50); // CBR
 
             uint8_t xingPos = 0;
             if (mp3_xing > 0) xingPos = mp3_xing;
@@ -2754,8 +2754,62 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 AUDIO_LOG_DEBUG("frames {}", frames);
                 uint32_t bytes = bigEndian(data + xingPos + 12, 4);
                 AUDIO_LOG_DEBUG("bytes {}", bytes);
-                m_audio_file_duration = frames * spf / samplerate;
-                m_nominal_bitrate = bytes * 8 / m_audio_file_duration;
+                m_audio_file_duration = (static_cast<uint64_t>(frames) * spf) / samplerate;
+                m_nominal_bitrate = (static_cast<uint64_t>(bytes) * 8) / m_audio_file_duration;
+            }
+
+            if (m_nominal_bitrate == 0 && layerIndex == 1) { // no Xing/Info, Layer III
+                uint64_t totalBytes = 0;
+                uint64_t totalSamples = 0;
+                size_t   pos = 0;
+                int      frameCount = 0;
+
+                while (pos + 4 <= len && frameCount < 100) {
+                    uint32_t h = bigEndian(data + pos, 4);
+
+                    if ((h & 0xFFE00000) != 0xFFE00000) break;   // check sync
+
+                    int ver = (h >> 19) & 0x3;
+                    int layer = (h >> 17) & 0x3;
+                    int brIdx = (h >> 12) & 0xF;
+                    int srIdx = (h >> 10) & 0x3;
+                    int padding = (h >> 9) & 0x1;
+
+                    if (layer != 1 || brIdx == 0 || brIdx == 15 || srIdx == 3) break;
+
+                    int sr = samplerate_table[ver][srIdx];
+                    int samples = samples_per_frame[ver][layer];
+
+                    uint32_t bitrate;
+
+                    if (ver == 3) { // MPEG1
+                        static constexpr uint16_t brTable[] = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
+                        bitrate = brTable[brIdx];
+                    } else { // MPEG2 / MPEG2.5
+                        static constexpr uint16_t brTable[] = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160};
+                        bitrate = brTable[brIdx];
+                    }
+
+                    uint32_t frameSize; // Frame size in bytes
+
+                    if (ver == 3) { // MPEG1 Layer III
+                        frameSize = (144000ULL * bitrate) / sr + padding;
+                    } else { // MPEG2/2.5 Layer III
+                        frameSize = (72000ULL * bitrate) / sr + padding;
+                    }
+
+                    if (frameSize < 4 || pos + frameSize > len) break;
+
+                    totalBytes += frameSize;
+                    totalSamples += samples;
+                    frameCount++;
+                    pos += frameSize;
+                }
+
+                if (frameCount > 0 && totalSamples > 0) {
+                    m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / (totalSamples * 1000ULL);
+                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} kbit/s", frameCount, totalBytes, m_nominal_bitrate);
+                }
             }
 
             if (m_ID3Hdr.APIC_vec.size()) { // if we have a APIC
@@ -3345,11 +3399,13 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const TagInfo tags[] = {
             // List of all usual tags
-            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},        {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},    {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},           {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},
-            {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},      {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},   {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},         {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},
-            {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"}, {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},      {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
-            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},        {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"}, {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},      {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},
-            {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},    {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},  {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"},       {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
+            {{0xA9, 0x6E, 0x61, 0x6D}, "©nam", "Title"},      {{0xA9, 0x41, 0x52, 0x54}, "©ART", "Artist"},           {{0xA9, 0x61, 0x72, 0x74}, "©art", "Artist"},
+            {{0xA9, 0x61, 0x6C, 0x62}, "©alb", "Album"},      {{0xA9, 0x74, 0x6F, 0x6F}, "©too", "Encoder"},          {{0xA9, 0x63, 0x6D, 0x74}, "©cmt", "Comment"},
+            {{0xA9, 0x77, 0x72, 0x74}, "©wrt", "Composer"},   {{0x74, 0x6D, 0x70, 0x6F}, "tmpo", "Tempo (BPM)"},      {{0x74, 0x72, 0x6B, 0x6E}, "trkn", "Track-Number"},
+            {{0xA9, 0x64, 0x61, 0x79}, "©day", "Year"},       {{0x63, 0x70, 0x69, 0x6C}, "cpil", "Compilation-Flag"}, {{0x61, 0x41, 0x52, 0x54}, "aART", "Album Artist"},
+            {{0xA9, 0x67, 0x65, 0x6E}, "©gen", "Genre"},      {{0x63, 0x6F, 0x76, 0x72}, "covr", "Cover Art"},        {{0x64, 0x69, 0x73, 0x6B}, "disk", "Disk-Nummer"},
+            {{0xA9, 0x6C, 0x79, 0x72}, "©lyr", "Songtext"},   {{0xA9, 0x70, 0x72, 0x74}, "cprt", "Copyright"},        {{0x67, 0x6E, 0x72, 0x65}, "gnre", "Genre-ID"},
+            {{0x72, 0x74, 0x6E, 0x67}, "rtng", "Evaluation"}, {{0x70, 0x67, 0x61, 0x70}, "pgap", "Gapless Playback"},
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
@@ -4597,8 +4653,10 @@ void Audio::processLocalFile() {
 
     if (m_resumeFilePos >= 0) { // we have a resume file position
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
-        if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-        else m_f_haveNewFilePos = true;
+        if (m_prlf.newFilePos < 0)
+            AUDIO_LOG_WARN("skip to new position was not successful");
+        else
+            m_f_haveNewFilePos = true;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -7035,8 +7093,9 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         uint16_t lastBin;
         float    invCount;
     };
-    const FFTBand fftBands[16] = {{1, 1, 0.10f / 1.0f},   {3, 3, 0.2f / 1.0f},    {5, 7, 0.30f / 3.0f},    {8, 11, 0.40f / 4.0f},    {12, 16, 0.50f / 5.0f},   {17, 23, 0.70f / 7.0f},   {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},
-                                  {45, 60, 1.0f / 16.0f}, {61, 80, 1.0f / 20.0f}, {81, 104, 1.1f / 24.0f}, {105, 132, 1.2f / 28.0f}, {133, 164, 1.3f / 32.0f}, {165, 200, 1.4f / 36.0f}, {201, 228, 1.5f / 28.0f}, {229, 255, 1.6f / 27.0f}};
+    const FFTBand fftBands[16] = {{1, 1, 0.10f / 1.0f},     {3, 3, 0.2f / 1.0f},      {5, 7, 0.30f / 3.0f},     {8, 11, 0.40f / 4.0f},   {12, 16, 0.50f / 5.0f},  {17, 23, 0.70f / 7.0f},
+                                  {24, 32, 1.0f / 9.0f},    {33, 44, 1.0f / 12.0f},   {45, 60, 1.0f / 16.0f},   {61, 80, 1.0f / 20.0f},  {81, 104, 1.1f / 24.0f}, {105, 132, 1.2f / 28.0f},
+                                  {133, 164, 1.3f / 32.0f}, {165, 200, 1.4f / 36.0f}, {201, 228, 1.5f / 28.0f}, {229, 255, 1.6f / 27.0f}};
 
     auto newVal = [](uint32_t* display, uint32_t measured, uint8_t attackStep, uint8_t releaseStep, uint8_t hold, uint8_t* tmpHold) -> void {
         if (measured > *display) { // attack
@@ -7130,7 +7189,7 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
         //--------------------------------------------------------------------------
         // Spectrum delay
         //--------------------------------------------------------------------------
-        constexpr size_t FFT_DELAY = 3;
+        constexpr size_t FFT_DELAY = 2;
 
         for (int i = 0; i < m_fft_items.NUM_BANDS; i++) {
             ps_ptr<uint8_t> displayDelay;
@@ -7297,9 +7356,10 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_peakingEQ_f32(m_audio_items.coeffs[PEAKINGEQ], normFreqPEQ, m_audio_items.gain_peq_db, QS); // my own calc.
     dsps_biquad_gen_highShelf_f32(m_audio_items.coeffs[HIFGSHELF], normFreqHS, m_audio_items.gain_hs_db, QS);
 
-    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0], m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3],
-                    m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1], m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2], m_audio_items.coeffs[2][3],
-                    m_audio_items.coeffs[2][4]);
+    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
+                    m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3], m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1],
+                    m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2],
+                    m_audio_items.coeffs[2][3], m_audio_items.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_audio_items.pre_gain {}", m_audio_items.pre_gain);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
