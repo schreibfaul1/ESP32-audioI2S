@@ -536,6 +536,7 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
         hDecoder->downSampledSBR = 1;
     }
 #endif
+    if (can_decode_ot(hDecoder->object_type) < 0) return -1;
     /* must be done before frameLength is divided by 2 for LD */
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
@@ -546,10 +547,6 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
 #ifdef LD_DEC
     if (hDecoder->object_type == LD) hDecoder->frameLength >>= 1;
 #endif
-    if (can_decode_ot(hDecoder->object_type) < 0) {
-        ret = -1;
-        goto exit;
-    }
     ret = bits;
     goto exit;
 exit:
