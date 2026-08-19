@@ -8249,16 +8249,6 @@ bool Audio::b64encode(const char* source, uint16_t sourceLength, char* dest) {
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t Audio::simpleHash(const char* str) {
-    if (str == NULL) return 0;
-    uint32_t hash = 0;
-    for (int i = 0; i < strlen(str); i++) {
-        if (str[i] < 32) continue; // ignore control sign
-        hash += (str[i] - 31) * i * 32;
-    }
-    return hash;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 ps_ptr<char> Audio::urlencode(const char* str, bool spacesOnly) {
     if (!str) { return {}; } // Enter is zero
 
