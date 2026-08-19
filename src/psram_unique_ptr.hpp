@@ -184,6 +184,139 @@ class ps_ptr {
 
     // 🆕 alloc constructor, e.g. ps_ptr<char>buff(1024)
     explicit ps_ptr(size_t n) { alloc(n); }
+
+  private:
+    // template for to_int8/16/32/64 and for to_uint8/16/32/64  (base 10 or 16)
+    template <typename U> U to_integer(int base = 10) const {
+        static_assert(std::is_same_v<T, char>, "to_integer is only valid for ps_ptr<char>");
+
+        using Limits = std::numeric_limits<U>;
+        using Unsigned = std::make_unsigned_t<U>;
+
+        if (!mem || !get()) {
+            log_e("to_integer: No valid string data");
+            return 0;
+        }
+
+        if (base != 10 && base != 16) {
+            log_e("to_integer: Unsupported base %i", base);
+            return 0;
+        }
+
+        const char* str = get();
+        const char* p = str;
+
+        if (*p == '\0') {
+            log_e("to_integer: Empty string");
+            return 0;
+        }
+
+        // -------------------------------------------------------------
+        // Sign
+        // -------------------------------------------------------------
+
+        bool negative = false;
+
+        if (*p == '+' || *p == '-') {
+            negative = (*p == '-');
+            ++p;
+        }
+
+        // -------------------------------------------------------------
+        // Automatically recognise 0x / 0X as hexadecimal
+        // -------------------------------------------------------------
+
+        if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+
+            base = 16;
+            p += 2;
+        }
+
+        // A sign or 0x must be followed by at least one digit
+        if (*p == '\0') {
+            log_e("to_integer: Invalid numeric value in '%s'", str);
+            return 0;
+        }
+
+        // -------------------------------------------------------------
+        // Negative values are not permitted for unsigned types
+        // -------------------------------------------------------------
+
+        if constexpr (std::is_unsigned_v<U>) {
+            if (negative) {
+                log_e("to_integer: Negative value '%s' is not valid", str);
+                return 0;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // Maximum permitted positive value
+        //
+        // For signed integers, +INT_MAX may be used.
+        // For negative numbers, INT_MIN may also be used.
+        // -------------------------------------------------------------
+
+        Unsigned limit;
+
+        if constexpr (std::is_signed_v<U>) {
+            if (negative) {
+                // Absolute value of INT_MIN
+                limit = static_cast<Unsigned>(-(Limits::min() + 1)) + 1;
+            } else {
+                limit = static_cast<Unsigned>(Limits::max());
+            }
+        } else {
+            limit = Limits::max();
+        }
+
+        Unsigned result = 0;
+
+        // -------------------------------------------------------------
+        // Evaluate characters whilst checking for overflow
+        // -------------------------------------------------------------
+
+        for (; *p; ++p) {
+            Unsigned digit;
+
+            if (*p >= '0' && *p <= '9') {
+                digit = static_cast<Unsigned>(*p - '0');
+            } else if (base == 16 && *p >= 'a' && *p <= 'f') {
+                digit = static_cast<Unsigned>(*p - 'a' + 10);
+            } else if (base == 16 && *p >= 'A' && *p <= 'F') {
+                digit = static_cast<Unsigned>(*p - 'A' + 10);
+            } else {
+                log_e("to_integer: Invalid numeric value in '%s' for base %i", str, base);
+                return 0;
+            }
+
+            if (result > (limit - digit) / base) {
+                log_e("to_integer: Value in '%s' exceeds range", str);
+                return 0;
+            }
+
+            result = result * base + digit;
+        }
+
+        // -------------------------------------------------------------
+        // Return result
+        // -------------------------------------------------------------
+
+        if constexpr (std::is_signed_v<U>) {
+
+            if (negative) {
+                // Sonderfall INT_MIN
+                if (result == limit) { return Limits::min(); }
+
+                return static_cast<U>(-static_cast<std::make_signed_t<Unsigned>>(result));
+            }
+
+            return static_cast<U>(result);
+        } else {
+            return static_cast<U>(result);
+        }
+    }
+
+  public:
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C  📌📌📌
 
@@ -1778,7 +1911,9 @@ class ps_ptr {
     // 📌📌📌   A T    📌📌📌
 
     // Special method for ps_ptr<ps_ptr<T>>
-    template <typename U = T> auto at(size_t index) -> typename std::enable_if<std::is_same<U, ps_ptr<typename U::element_type>>::value, ps_ptr<typename U::element_type>&>::type { return static_cast<ps_ptr<typename U::element_type>*>(get())[index]; }
+    template <typename U = T> auto at(size_t index) -> typename std::enable_if<std::is_same<U, ps_ptr<typename U::element_type>>::value, ps_ptr<typename U::element_type>&>::type {
+        return static_cast<ps_ptr<typename U::element_type>*>(get())[index];
+    }
     using element_type = T;
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A S  📌📌📌
@@ -1842,9 +1977,8 @@ class ps_ptr {
         this->assign(temp.get());
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  T O _ U I N T 6 4  📌📌📌
-    // Retrieves the numeric value (uint64_t) from the stored string, parsing it as a number in the specified base (default: 16 for hexadecimal).
-    // Example: If the stored string is "0x12345678", returns 0x12345678.
+    // 📌📌📌  T O _ U I N T 8 / 1 6 / 3 2 / 6 4  📌📌📌
+    // Retrieves the numeric value (e.g. uint64_t) from the stored string, parsing it as a number in the specified base (default: 16 for hexadecimal).
     // If the string is empty, null, or invalid, returns 0 and logs an error.
 
     // ps_ptr<char> mediaSeqStr = "227213779";
@@ -1853,123 +1987,25 @@ class ps_ptr {
     // ps_ptr<char> addr = "0x1A3B";
     // uint64_t val = addr.to_uint64(16);
 
-    template <typename U = T>
-        requires std::is_same_v<U, char>
-    uint64_t to_uint64(int base = 10) const {
-        static_assert(std::is_same_v<T, char>, "to_uint64 is only valid for ps_ptr<char>");
-        if (!mem || !get()) {
-            log_e("to_uint64: No valid string data");
-            return 0;
-        }
-        const char* str = get();
-        char*       end = nullptr;
-        uint64_t    result = std::strtoull(str, &end, base);
-        if (end == str) {
-            log_e("to_uint64: Invalid numeric value in '%s' for base %d", str, base);
-            return 0;
-        }
-        return result;
-    }
+    uint64_t to_uint64(int base = 10) const { return to_integer<uint64_t>(base); }
+    uint32_t to_uint32(int base = 10) const { return to_integer<uint32_t>(base); }
+    uint16_t to_uint16(int base = 10) const { return to_integer<uint16_t>(base); }
+    uint8_t  to_uint8(int base = 10) const { return to_integer<uint8_t>(base); }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  T O _ U I N T 3 2  📌📌📌
-    // Retrieves the numeric value (uint32_t) from the stored string, parsing it as a number in the specified base (default: 10 for decimal).
-    // Example: If the stored string is "0x1A3B", returns 0x1A3B (6715) for base 16.
-    // If the string is empty, null, invalid, or exceeds UINT32_MAX (4294967295), returns 0 and logs an error.
-    // Usage:
-    //   ps_ptr<char> size = "227213779"; uint32_t val = size.to_uint32(10); // Returns 227213779
-    //   ps_ptr<char> addr = "0x1A3B"; uint32_t val = addr.to_uint32(16); // Returns 6715
-    uint32_t to_uint32(int base = 10) const {
-        static_assert(std::is_same_v<T, char>, "to_uint32 is only valid for ps_ptr<char>");
-        if (!mem || !get()) {
-            log_e("to_uint32: No valid string data");
-            return 0;
-        }
-        const char*   str = get();
-        char*         end = nullptr;
-        unsigned long result = std::strtoul(str, &end, base);
-        if (end == str) {
-            log_e("to_uint32: Invalid numeric value in '%s' for base %i", str, base);
-            return 0;
-        }
-        if (result > UINT32_MAX) {
-            log_e("to_uint32: Value in '%s' exceeds UINT32_MAX (%u) for base %i", str, UINT32_MAX, base);
-            return 0;
-        }
-        return static_cast<uint32_t>(result);
-    }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  T O _ I N T 3 2  📌📌📌
+    // 📌📌📌  T O _ I N T 8 / 1 6/ 3 2 / 6 4  📌📌📌
     // Retrieves the numeric value (int32_t) from the stored string, parsing it as a number in the specified base (default: 10 for decimal).
     // Example:
     //   ps_ptr<char> temp = "-12345"; int32_t val = temp.to_int32(10); // Returns -12345
     //   ps_ptr<char> hex  = "0x7FFF"; int32_t val = hex.to_int32(16); // Returns 32767
     // If the string is empty, null, invalid, or exceeds INT32 range (-2147483648 ... 2147483647), returns 0 and logs an error.
 
-    int32_t to_int32(int base = 10) const {
-        static_assert(std::is_same_v<T, char>, "to_int32 is only valid for ps_ptr<char>");
-        if (!mem || !get()) {
-            log_e("to_int32: No valid string data");
-            return 0;
-        }
+    int64_t to_int64(int base = 10) const { return to_integer<int64_t>(base); }
+    int32_t to_int32(int base = 10) const { return to_integer<int32_t>(base); }
+    int16_t to_int16(int base = 10) const { return to_integer<int16_t>(base); }
+    int8_t  to_int8(int base = 10) const { return to_integer<int8_t>(base); }
 
-        const char* str = get();
-        char*       end = nullptr;
-        long        result = std::strtol(str, &end, base);
-        if (result == 0 && errno == EINVAL) {
-            log_e("invalid content %s", str);
-            return 0;
-        }
-
-        if (end == str) {
-            log_e("to_int32: Invalid numeric value in '%s' for base %i", str, base);
-            return 0;
-        }
-
-        if (result < INT32_MIN || result > INT32_MAX) {
-            log_e("to_int32: Value in '%s' exceeds INT32 range (%ld..%ld) for base %i", str, (long)INT32_MIN, (long)INT32_MAX, base);
-            return 0;
-        }
-
-        return static_cast<int32_t>(result);
-    }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  T O _ I N T 6 4  📌📌📌
-    // Retrieves the numeric value (int64_t) from the stored string, parsing it as a number
-    // in the specified base (default: 10 for decimal).
-    //
-    // Examples:
-    //   ps_ptr<char> val1 = "9223372036854775807"; int64_t v1 = val1.to_int64();  // OK
-    //   ps_ptr<char> val2 = "-1234567890123";     int64_t v2 = val2.to_int64();  // OK
-    //   ps_ptr<char> val3 = "0x7FFFFFFFFFFFFFFF"; int64_t v3 = val3.to_int64(16); // OK
-    //
-    // If the string is empty, invalid, or exceeds INT64 range (-9223372036854775808 .. 9223372036854775807),
-    // returns 0 and logs an error.
-
-    int64_t to_int64(int base = 10) const {
-        static_assert(std::is_same_v<T, char>, "to_int64 is only valid for ps_ptr<char>");
-        if (!mem || !get()) {
-            log_e("to_int64: No valid string data");
-            return 0;
-        }
-
-        const char* str = get();
-        char*       end = nullptr;
-        long long   result = std::strtoll(str, &end, base);
-
-        if (end == str) {
-            log_e("to_int64: Invalid numeric value in '%s' for base %i", str, base);
-            return 0;
-        }
-
-        if (result < INT64_MIN || result > INT64_MAX) {
-            log_e("to_int64: Value in '%s' exceeds INT64 range (%lld..%lld) for base %i", str, (long long)INT64_MIN, (long long)INT64_MAX, base);
-            return 0;
-        }
-
-        return static_cast<int64_t>(result);
-    }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
     // 📌📌📌  B I G _ E N D I A N  📌📌📌
     // Reads up to 8 bytes from a uint8_t array in big-endian order and stores the value as a hexadecimal string (e.g., "0x12345678").
     // Example: uint8_t data[] = {0x12, 0x34, 0x56, 0x78}; → stores "0x12345678"
@@ -2338,7 +2374,8 @@ class ps_ptr {
 
         uint8_t items_per_line = 30;
 
-        static const char* sym[32] = {"NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL", "BS ", "TAB", "LF ", "VT ", "FF ", "CR ", "SO ", "SI ", "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB", "CAN", "EM ", "SUB", "ESC", "FS ", "GS ", "RS ", "US "};
+        static const char* sym[32] = {"NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL", "BS ", "TAB", "LF ", "VT ", "FF ", "CR ", "SO ", "SI ",
+                                      "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB", "CAN", "EM ", "SUB", "ESC", "FS ", "GS ", "RS ", "US "};
 
         const uint8_t* buff = reinterpret_cast<const uint8_t*>(get());
         if (!name)
