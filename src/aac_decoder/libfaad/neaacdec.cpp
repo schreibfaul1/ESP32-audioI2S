@@ -6677,6 +6677,7 @@ uint8_t NeaacDecoder::window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* 
 #ifdef LD_DEC
             }
 #endif
+            if (ics->num_swb > 0 && ics->swb_offset[ics->num_swb] < ics->swb_offset[ics->num_swb - 1]) { return 32; }
             return 0;
         case EIGHT_SHORT_SEQUENCE:
             ics->num_windows = 8;
@@ -6810,6 +6811,12 @@ uint8_t NeaacDecoder::quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, in
         for (sfb = 0; sfb < ics->num_swb; sfb++) {
             int32_t exp, frac;
             width = ics->swb_offset[sfb + 1] - ics->swb_offset[sfb];
+            if (width + 3 >= 1024) {
+                // quant_data contains 1024 uint16_t, the k iterator + 3
+                // should never reach more 1024
+                error = 17;
+                continue;
+            }
             /* this could be scalefactor for IS or PNS, those can be negative or bigger then 255 */
             /* just ignore them */
             if (ics->scale_factors[g][sfb] < 0 || ics->scale_factors[g][sfb] > 255) {
@@ -11858,7 +11865,8 @@ uint8_t NeaacDecoder::sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qm
             for (k = 0; k < kx_band + bsco_band; k++) { QMF_RE(X[l][k]) = QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][k]); }
             for (k = kx_band + bsco_band; k < min(kx_band + M_band, 63); k++) { QMF_RE(X[l][k]) = QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][k]); }
             for (k = max(kx_band + bsco_band, kx_band + M_band); k < 64; k++) { QMF_RE(X[l][k]) = 0; }
-            /* kx_band can be 0 (kx_prev on the first frame's leading slots),  which would make kx_band - 1 + bsco_band index X[l][-1]. There is no band below 0 to add in that case, so skip the overlap. */
+            /* kx_band can be 0 (kx_prev on the first frame's leading slots),  which would make kx_band - 1 + bsco_band index X[l][-1]. There is no band below 0 to add in that case, so skip the
+             * overlap. */
             if (kx_band + bsco_band > 0) { QMF_RE(X[l][kx_band - 1 + bsco_band]) += QMF_RE(sbr->Xsbr[ch][l + sbr->tHFAdj][kx_band - 1 + bsco_band]); }
     #endif
         }
