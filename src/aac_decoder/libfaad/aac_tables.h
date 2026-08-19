@@ -104,6 +104,7 @@ static error_info_t err_msg[] = {
     {"Bitstream value not allowed by specification", AAC_ERROR},                   /*32*/
     {"MAIN prediction not initialised", AAC_ERROR},                                /*33*/
     {"Unknown AAC_ERROR", AAC_ERROR},                                              /*34*/
+    {"Long term prediction not initialised", AAC_ERROR},                           /*35*/
 };
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
