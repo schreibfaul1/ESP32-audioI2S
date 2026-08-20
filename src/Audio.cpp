@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c5                                                                                                                         ";
-/*  Updated on: Aug 19, 2026
+    Version 4.0.0c6                                                                                                                         ";
+/*  Updated on: Aug 20, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -2740,6 +2740,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             int mode = (hdr >> 6) & 0x3; // 0=stereo,3=mono
             int samplerate = samplerate_table[versionID][samplerateIdx];
             int spf = samples_per_frame[versionID][layerIndex];
+            AUDIO_LOG_DEBUG("spf {}, versionID {}, layerIndex {}", spf, versionID, layerIndex);
 
             // Xing or Info Header present?
             int8_t mp3_xing = specialIndexOf(data, "Xing", 50); // VBR
@@ -2754,8 +2755,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 AUDIO_LOG_DEBUG("frames {}", frames);
                 uint32_t bytes = bigEndian(data + xingPos + 12, 4);
                 AUDIO_LOG_DEBUG("bytes {}", bytes);
-                m_audio_file_duration = (static_cast<uint64_t>(frames) * spf) / samplerate;
-                m_nominal_bitrate = (static_cast<uint64_t>(bytes) * 8) / m_audio_file_duration;
+                m_audio_file_duration = (static_cast<uint64_t>(frames) * spf) / samplerate; // may be 0 (if duration < 1s)
+                if(m_audio_file_duration) m_nominal_bitrate = (static_cast<uint64_t>(bytes) * 8) / m_audio_file_duration;
             }
 
             if (m_nominal_bitrate == 0 && layerIndex == 1) { // no Xing/Info, Layer III
@@ -2764,7 +2765,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 size_t   pos = 0;
                 int      frameCount = 0;
 
-                while (pos + 4 <= len && frameCount < 100) {
+                while (pos + 4 <= len) {
                     uint32_t h = bigEndian(data + pos, 4);
 
                     if ((h & 0xFFE00000) != 0xFFE00000) break;   // check sync
@@ -2807,8 +2808,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 }
 
                 if (frameCount > 0 && totalSamples > 0) {
-                    m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / (totalSamples * 1000ULL);
-                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} kbit/s", frameCount, totalBytes, m_nominal_bitrate);
+                    if(totalSamples) m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / totalSamples;
+                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} bit/s", frameCount, totalBytes, m_nominal_bitrate);
                 }
             }
 
