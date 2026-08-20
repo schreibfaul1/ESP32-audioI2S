@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c6                                                                                                                         ";
+    Version 4.0.0c7                                                                                                                         ";
 /*  Updated on: Aug 20, 2026
 
     Author: Wolle (schreibfaul1)
@@ -2636,7 +2636,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
-                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}",
+                     m_ID3Hdr.SYLT.text_encoding == 0   ? "ASCII"
+                     : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8"
+                                                        : "?",
+                     m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
                 m_ID3Hdr.SYLT.content_type = syltBuff[5];
 
@@ -2756,7 +2760,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t bytes = bigEndian(data + xingPos + 12, 4);
                 AUDIO_LOG_DEBUG("bytes {}", bytes);
                 m_audio_file_duration = (static_cast<uint64_t>(frames) * spf) / samplerate; // may be 0 (if duration < 1s)
-                if(m_audio_file_duration) m_nominal_bitrate = (static_cast<uint64_t>(bytes) * 8) / m_audio_file_duration;
+                if (m_audio_file_duration) m_nominal_bitrate = (static_cast<uint64_t>(bytes) * 8) / m_audio_file_duration;
+                m_total_samples_in_file = m_audio_file_duration * samplerate;
             }
 
             if (m_nominal_bitrate == 0 && layerIndex == 1) { // no Xing/Info, Layer III
@@ -2768,7 +2773,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 while (pos + 4 <= len) {
                     uint32_t h = bigEndian(data + pos, 4);
 
-                    if ((h & 0xFFE00000) != 0xFFE00000) break;   // check sync
+                    if ((h & 0xFFE00000) != 0xFFE00000) break; // check sync
 
                     int ver = (h >> 19) & 0x3;
                     int layer = (h >> 17) & 0x3;
@@ -2808,8 +2813,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 }
 
                 if (frameCount > 0 && totalSamples > 0) {
-                    if(totalSamples) m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / totalSamples;
-                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} bit/s", frameCount, totalBytes, m_nominal_bitrate);
+                    if (totalSamples) m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / totalSamples;
+                    if(m_nominal_bitrate) m_audio_file_duration = (static_cast<uint64_t>(m_audioDataSize) * 8ULL) / (static_cast<uint64_t>(m_nominal_bitrate));
+                    m_total_samples_in_file = m_audio_file_duration * samplerate;
+                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} bit/s, duration {} s",frameCount, totalBytes, m_nominal_bitrate, m_audio_file_duration);
                 }
             }
 
@@ -2920,7 +2927,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if (!m_m4aHdr.progressive) {
                 m_m4aHdr.mdat_startPos = m_m4aHdr.headerSize + 8;
                 m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16);
-                if (atom_struct) { AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat); }
+                if (atom_struct) {
+                    AUDIO_LOG_WARN("atom {} @ {}, size: {}, ends @ {}", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat);
+                }
                 info(*this, evt_info, "Audiofile is non progressive");
                 m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
                 m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
@@ -4860,8 +4869,10 @@ void Audio::processWebFile() {
 
     if (m_resumeFilePos >= 0) { // we have a resume file position
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
-        if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-        else m_f_haveNewFilePos = true;
+        if (m_pwf.newFilePos < 0)
+            AUDIO_LOG_WARN("skip to new position was not successful");
+        else
+            m_f_haveNewFilePos = true;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
