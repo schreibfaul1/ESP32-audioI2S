@@ -162,7 +162,7 @@ typedef struct _cab { // used in calculate_average_bitrate
     uint32_t estimated_bitrate{};
     uint32_t brCounter{};
     bool     valid{};
-    void reset() { *this = _cab{}; }
+    void     reset() { *this = _cab{}; }
 } cab_t;
 
 typedef struct _cat { // used in calculateAudioTime
@@ -367,32 +367,37 @@ struct i2s_items_t {
     bool     commFMT = false;
 };
 
-struct vu_items_t {
-    uint16_t              samps_vu = {};
-    uint16_t              samps_count = {};
-    uint8_t               attackStep = {};
-    uint8_t               releaseStep = {};
-    uint8_t               maxLeft = {};
-    uint8_t               maxRight = {};
-    uint8_t               measuredLeft;  // Average value of the current 50-ms window
-    uint8_t               measuredRight; // Average value of the current 50-ms window
-    uint8_t               displayLeft;   // current displayed value
-    uint8_t               displayRight;  // current displayed value
-    uint8_t               peakLeft;      // Peak display
-    uint8_t               peakRight;     // Peak display
-    uint8_t               barsHoldLeft_tmp;
-    uint8_t               barsHoldRight_tmp;
-    uint8_t               peakHoldLeft_tmp;
-    uint8_t               peakHoldRight_tmp;
-    uint64_t              sumL = {};
-    uint64_t              sumR = {};
-    ps_ptr<uint8_t>       vuCurve = {};
-    ps_ptr<uint8_t>       delay_bars_left = {};
-    ps_ptr<uint8_t>       delay_bars_right = {};
-    ps_ptr<uint8_t>       delay_peak_left = {};
-    ps_ptr<uint8_t>       delay_peak_right = {};
-    std::vector<uint32_t> lrvec = {};
-};
+typedef struct _vu_items_t {
+    uint16_t              samps_vu{};
+    uint16_t              samps_count{};
+    uint8_t               attackStep{};
+    uint8_t               releaseStep{};
+    uint8_t               maxLeft{};
+    uint8_t               maxRight{};
+    uint8_t               measuredLeft{};  // Average value of the current 50-ms window
+    uint8_t               measuredRight{}; // Average value of the current 50-ms window
+    uint8_t               displayLeft{};   // current displayed value
+    uint8_t               displayRight{};  // current displayed value
+    uint8_t               peakLeft{};      // Peak display
+    uint8_t               peakRight{};     // Peak display
+    uint8_t               barsHoldLeft_tmp{};
+    uint8_t               barsHoldRight_tmp{};
+    uint8_t               peakHoldLeft_tmp{};
+    uint8_t               peakHoldRight_tmp{};
+    uint64_t              sumL{};
+    uint64_t              sumR{};
+    ps_ptr<uint8_t>       vuCurve{};
+    ps_ptr<uint8_t>       delay_bars_left{};
+    ps_ptr<uint8_t>       delay_bars_right{};
+    ps_ptr<uint8_t>       delay_peak_left{};
+    ps_ptr<uint8_t>       delay_peak_right{};
+    std::vector<uint32_t> lrvec{};
+
+    void reset() {
+        // Default-initialize alles neu (inklusive Array)
+        *this = _vu_items_t{};
+    }
+} vu_items_t;
 
 struct fft_items_t {
     size_t                       count = 0;

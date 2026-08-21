@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c7                                                                                                                         ";
-/*  Updated on: Aug 20, 2026
+    Version 4.0.0c8                                                                                                                         ";
+/*  Updated on: Aug 21, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -2814,9 +2814,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
                 if (frameCount > 0 && totalSamples > 0) {
                     if (totalSamples) m_nominal_bitrate = (totalBytes * 8ULL * samplerate) / totalSamples;
-                    if(m_nominal_bitrate) m_audio_file_duration = (static_cast<uint64_t>(m_audioDataSize) * 8ULL) / (static_cast<uint64_t>(m_nominal_bitrate));
+                    if (m_nominal_bitrate) m_audio_file_duration = (static_cast<uint64_t>(m_audioDataSize) * 8ULL) / (static_cast<uint64_t>(m_nominal_bitrate));
                     m_total_samples_in_file = m_audio_file_duration * samplerate;
-                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} bit/s, duration {} s",frameCount, totalBytes, m_nominal_bitrate, m_audio_file_duration);
+                    AUDIO_LOG_DEBUG("MP3 frame analysis: {} frames, {} bytes, bitrate {} bit/s, duration {} s", frameCount, totalBytes, m_nominal_bitrate, m_audio_file_duration);
                 }
             }
 
@@ -6801,19 +6801,7 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
 
         m_f_first_vu_call = false;
 
-        m_vu_items.maxLeft = 0;
-        m_vu_items.maxRight = 0;
-
-        m_vu_items.sumL = 0;
-        m_vu_items.sumR = 0;
-
-        m_vu_items.samps_count = 0;
-
-        m_vu_items.barsHoldLeft_tmp = 0;
-        m_vu_items.barsHoldRight_tmp = 0;
-
-        m_vu_items.peakHoldLeft_tmp = 0;
-        m_vu_items.peakHoldRight_tmp = 0;
+        m_vu_items.reset();
 
         //--------------------------------------------------------------------------
         // VU update period
@@ -6841,10 +6829,10 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
         //--------------------------------------------------------------------------
 
         constexpr size_t VU_DELAY = 2;
-        m_vu_items.delay_bars_left.calloc(VU_DELAY + 1);
-        m_vu_items.delay_bars_right.calloc(VU_DELAY + 1);
-        m_vu_items.delay_peak_left.calloc(VU_DELAY + 1);
-        m_vu_items.delay_peak_right.calloc(VU_DELAY + 1);
+        m_vu_items.delay_bars_left.calloc(VU_DELAY);
+        m_vu_items.delay_bars_right.calloc(VU_DELAY);
+        m_vu_items.delay_peak_left.calloc(VU_DELAY);
+        m_vu_items.delay_peak_right.calloc(VU_DELAY);
         m_vu_items.delay_bars_left.fifo_reset();
         m_vu_items.delay_bars_right.fifo_reset();
         m_vu_items.delay_peak_left.fifo_reset();
@@ -8439,16 +8427,32 @@ void Audio::audioTask() {
     vTaskDelete(nullptr); // Delete this task
 }
 
+void Audio::fade_out_levels(bool fade) {
+    constexpr uint16_t CNT = 50;
+    if (!fade) {
+        m_fading_counter = CNT;
+        return;
+    } else {
+        if (m_fading_counter == 0) return;
+        if (m_fading_counter == CNT) { m_i2sWorkBuff.clear(); }
+        m_fading_counter--;
+        if (settings.VU_LEVEL) calculateVUlevel(m_i2sWorkBuff.get(), settings.DMA_FRAME_NUM * 2);
+        if (settings.SPECTRUM) calculateSpectrum(m_i2sWorkBuff.get(), settings.DMA_FRAME_NUM * 2);
+    }
+}
+
 void Audio::performAudioTask() {
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
         playAudioData();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
+        fade_out_levels(false);
         return;
     } else {
         gain_ramp();
         if (SamplesBuff.bufferFilled()) { playChunk(); }
+        fade_out_levels(true);
         vTaskDelay(50);
         return;
     }

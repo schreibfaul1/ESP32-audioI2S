@@ -422,6 +422,7 @@ class Audio {
     void        stopAudioTask();  // stops task for audio
     static void audioTaskWrapper(void* param);
     void        audioTask();
+    void        fade_out_levels(bool fade);
     void        performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
@@ -666,6 +667,7 @@ class Audio {
     bool       m_f_mute = false;
     uint32_t   m_audioCurrentTime = 0;  // seconds
     uint32_t   m_audioDataStart = 0;    // in bytes
+    uint16_t   m_fading_counter = 0;    // fade VU and Spectrum
     OutputSR_t m_output_sr = SR_ORIGIN; // output samplerate
     size_t     m_audioDataSize = 0;     //
     size_t     m_ibuffSize = 0;         // log buffer size for audio_info()
