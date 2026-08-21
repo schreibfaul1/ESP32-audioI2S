@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c8                                                                                                                         ";
+    Version 4.0.0c9                                                                                                                         ";
 /*  Updated on: Aug 21, 2026
 
     Author: Wolle (schreibfaul1)
@@ -6919,12 +6919,16 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
                 m_vu_items.samps_count = 0;
             }
         }
+        m_vu_items.is_down = false;
     }
     //--------------------------------------------------------------------------------------------------
     // No decoder -> let VU meter fall
     //--------------------------------------------------------------------------------------------------
 
     else {
+        if (m_vu_items.lrvec.size() != 4) return; // init first
+        if (m_vu_items.is_down) return;
+
         newVal(&m_vu_items.displayLeft, 0, 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldLeft_tmp);
         newVal(&m_vu_items.displayRight, 0, 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_vu_items.barsHoldRight_tmp);
         newVal(&m_vu_items.peakLeft, 0, 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_vu_items.peakHoldLeft_tmp);
@@ -6937,6 +6941,8 @@ void Audio::calculateVUlevel(int32_t* buff, size_t len) {
         m_vu_items.lrvec[3] = m_vu_items.vuCurve[m_vu_items.delay_peak_right.fifo(m_vu_items.peakRight)];
 
         info(*this, evt_vu, m_vu_items.lrvec);
+        if (m_vu_items.lrvec[0] + m_vu_items.lrvec[1] + m_vu_items.lrvec[2] + m_vu_items.lrvec[3] == 0) m_vu_items.is_down = true;
+        AUDIO_LOG_DEBUG("{}, {}, {}, {}", m_vu_items.lrvec[0], m_vu_items.lrvec[1], m_vu_items.lrvec[2], m_vu_items.lrvec[3]);
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7266,8 +7272,13 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
                     info(*this, evt_spectrum, m_fft_items.delayed_display_vec, m_fft_items.delayed_peak_vec);
                 }
             }
+            m_fft_items.is_down = false;
         }
     } else { // !m_decoder
+
+        if (m_fft_items.delayed_display_vec.size() != m_fft_items.NUM_BANDS) return; // init first
+        if (m_fft_items.is_down) return;
+
         for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
             newVal(&m_fft_items.display_vec[b], 0, bars_attack_step, bars_release_step, bars_hold_cycles, &m_fft_items.bars_hold_vec[b]);
             newVal(&m_fft_items.peak_vec[b], 0, peak_attack_step, peak_release_step, peak_hold_cycles, &m_fft_items.peak_hold_vec[b]);
@@ -7275,6 +7286,13 @@ void Audio::calculateSpectrum(int32_t* buff, size_t len) {
             m_fft_items.delayed_peak_vec[b] = m_fft_items.delay_peak_vec[b].fifo(m_fft_items.peak_vec[b]);
         }
         info(*this, evt_spectrum, m_fft_items.delayed_display_vec, m_fft_items.delayed_peak_vec);
+
+        uint16_t sum = 0;
+        for (int b = 0; b < m_fft_items.NUM_BANDS; b++) {
+            sum += m_fft_items.delayed_display_vec[b];
+            sum += m_fft_items.delayed_peak_vec[b];
+        }
+        if (sum == 0) m_fft_items.is_down = true;
     }
 }
 
@@ -8427,32 +8445,23 @@ void Audio::audioTask() {
     vTaskDelete(nullptr); // Delete this task
 }
 
-void Audio::fade_out_levels(bool fade) {
-    constexpr uint16_t CNT = 50;
-    if (!fade) {
-        m_fading_counter = CNT;
-        return;
-    } else {
-        if (m_fading_counter == 0) return;
-        if (m_fading_counter == CNT) { m_i2sWorkBuff.clear(); }
-        m_fading_counter--;
-        if (settings.VU_LEVEL) calculateVUlevel(m_i2sWorkBuff.get(), settings.DMA_FRAME_NUM * 2);
-        if (settings.SPECTRUM) calculateSpectrum(m_i2sWorkBuff.get(), settings.DMA_FRAME_NUM * 2);
-    }
-}
-
 void Audio::performAudioTask() {
+    int32_t dummy[2] = {0};
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
         playAudioData();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
-        fade_out_levels(false);
+        // fade_out_levels(false);
         return;
     } else {
         gain_ramp();
-        if (SamplesBuff.bufferFilled()) { playChunk(); }
-        fade_out_levels(true);
+        if (SamplesBuff.bufferFilled()) {
+            playChunk();
+        } else {
+            calculateVUlevel(dummy, 0);  // fade out
+            calculateSpectrum(dummy, 0); // fade out
+        }
         vTaskDelay(50);
         return;
     }

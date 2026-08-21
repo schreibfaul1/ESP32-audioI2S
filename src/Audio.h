@@ -422,7 +422,6 @@ class Audio {
     void        stopAudioTask();  // stops task for audio
     static void audioTaskWrapper(void* param);
     void        audioTask();
-    void        fade_out_levels(bool fade);
     void        performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
