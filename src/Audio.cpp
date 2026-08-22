@@ -5717,6 +5717,9 @@ bool Audio::parseContentType(ps_ptr<char> ct) {
             if (m_expectedPlsFmt == FORMAT_M3U) m_playlistFormat = FORMAT_M3U;
             if (m_expectedPlsFmt == FORMAT_M3U8) m_playlistFormat = FORMAT_M3U8;
             if (m_expectedPlsFmt == FORMAT_PLS) m_playlistFormat = FORMAT_PLS;
+            if (m_codec == CODEC_NONE && m_playlistFormat == FORMAT_NONE && ct == "text/html") {
+                AUDIO_LOG_ERROR("{} is probably an HTML page", m_lastHost); return false;
+            }
             break;
         default: AUDIO_LOG_ERROR("{}, unsupported audio format", ct); return false;
     }
