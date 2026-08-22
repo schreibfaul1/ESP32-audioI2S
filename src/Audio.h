@@ -575,6 +575,7 @@ class Audio {
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_streamURL;   // stores the last StreamURL
     ps_ptr<char>             m_playlistBuff;
+    ps_ptr<char>             m_content_type;
     VolumeCurveFn            m_volumeCurve = nullptr;
 
     const uint16_t m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
