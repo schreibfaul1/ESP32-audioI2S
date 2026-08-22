@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0c9                                                                                                                         ";
-/*  Updated on: Aug 21, 2026
+    Version 4.0.0d                                                                                                                         ";
+/*  Updated on: Aug 22, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1187,7 +1187,7 @@ bool Audio::httpPrint(const char* host) {
 
     ps_ptr<char> c_host = host; // copy of host
 
-    if (!c_host.valid()) {
+    if (!c_host.valid() || !c_host.strlen()) { // nullptr or empty string
         AUDIO_LOG_ERROR("Hostaddress is empty");
         stopSong();
         return false;
@@ -4197,10 +4197,10 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
         if (m_playlistContent[i].index_of("http") >= 0) {
             host = m_playlistContent[i];
             host.trim();
-            return host.c_get();
+            return host;
         }
     }
-    return "";
+    return {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 ps_ptr<char> Audio::parsePlaylist_PLS() {
@@ -4283,7 +4283,7 @@ ps_ptr<char> Audio::parsePlaylist_PLS() {
             return entries[i].file;
         }
     }
-    return "";
+    return {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 ps_ptr<char> Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
@@ -4368,10 +4368,10 @@ ps_ptr<char> Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     for (int i = 0; i < entries.size(); i++) {
         if (entries[i].url.valid()) {
             info(*this, evt_name, "{}", entries[i].title);
-            return entries[i].url.c_get();
+            return entries[i].url;
         }
     }
-    return "";
+    return {};
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
