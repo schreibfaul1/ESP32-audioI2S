@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0e                                                                                                                         ";
+    Version 4.0.0f                                                                                                                         ";
 /*  Updated on: Aug 22, 2026
 
     Author: Wolle (schreibfaul1)

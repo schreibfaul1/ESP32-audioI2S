@@ -2,6 +2,8 @@
 
 #include "Arduino.h"
 #include <algorithm>
+#include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -87,7 +89,6 @@ class ps_ptr {
     size_t                             allocated_size = 0;
     char*                              name = nullptr;     // member for object name
     static inline T                    dummy{};            // For invalid accesses
-    size_t                             length_ = 0;        // actual number of characters
     size_t                             m_fifoWrite = 0;    // fifo functionality for arrays
     size_t                             m_fifoRead = 0;     // fifo functionality for arrays
     size_t                             m_num_elements = 0; // number of elements in calloc ->  number of T elements in FIFO
@@ -872,16 +873,17 @@ class ps_ptr {
     // 📌📌📌  P U S H _ B A C K   📌📌📌
     // append individual characters
     // ps_ptr<char>s; s = "abc"; s.push_back('1); -> abc1
-
     void push_back(char c) {
-        if (length + 1 >= capacity()) {
-            // Wenn zu klein, Kapazität verdoppeln (wie std::string)
-            size_t new_cap = (capacity() == 0) ? 16 : capacity() * 2;
-            reserve(new_cap);
-        }
+        if constexpr (std::is_same_v<T, char>) {
+            if (!mem) { reserve(16); }
 
-        mem.get()[length++] = c;
-        mem.get()[length] = '\0';
+            size_t len = std::strlen(mem.get());
+
+            if (len + 1 >= capacity()) { reserve(capacity() == 0 ? 16 : capacity() * 2); }
+
+            mem.get()[len] = c;
+            mem.get()[len + 1] = '\0';
+        }
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A S S I G N _ V E C T O R  📌📌📌
@@ -892,9 +894,6 @@ class ps_ptr {
         if (mem) std::memcpy(mem.get(), out.data(), out.size());
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  L E N G T H   📌📌📌
-    size_t length() const { return length_; }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C A P A C I T Y   📌📌📌
     size_t capacity() const { return allocated_size ? allocated_size - 1 : 0; }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -903,9 +902,9 @@ class ps_ptr {
         if (new_cap + 1 <= allocated_size) return; // genug Platz vorhanden
 
         char*  old_data = mem.release();
-        size_t old_len = length();
-
+        size_t old_len = old_data ? std::strlen(old_data) : 0;
         size_t new_size = new_cap + 1; // +1 für '\0'
+
         if (psramFound())
             mem.reset(static_cast<char*>(ps_malloc(new_size)));
         else
@@ -918,15 +917,11 @@ class ps_ptr {
         }
 
         if (old_data) {
-            if (old_len > 0)
-                std::memcpy(mem.get(), old_data, old_len + 1);
-            else
-                mem.get()[0] = '\0';
+            std::memcpy(mem.get(), old_data, old_len + 1);
             free(old_data);
         } else {
             mem.get()[0] = '\0';
         }
-
         allocated_size = new_size;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2006,6 +2001,55 @@ class ps_ptr {
     int8_t  to_int8(int base = 10) const { return to_integer<int8_t>(base); }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O F L O A T  📌📌📌
+    float to_float() const {
+        static_assert(std::is_same_v<T, char>, "toFloat() is only valid for ps_ptr<char>");
+
+        if (!mem || !get()) {
+            log_e("toFloat: No valid string data");
+            return 0.0f;
+        }
+
+        const char* str = get();
+
+        // no leading spaces
+        if (std::isspace(static_cast<unsigned char>(*str))) {
+            log_e("toFloat: Leading whitespace is not allowed in '%s'", str);
+            return 0.0f;
+        }
+
+        char* end = nullptr;
+
+        errno = 0;
+        float value = std::strtof(str, &end);
+
+        // is not a number
+        if (end == str) {
+            log_e("toFloat: Invalid numeric value '%s'", str);
+            return 0.0f;
+        }
+
+        // no other chars backwards
+        if (*end != '\0') {
+            log_e("toFloat: Invalid character '%c' in '%s'", *end, str);
+            return 0.0f;
+        }
+
+        // Overflow / Underflow
+        if (errno == ERANGE) {
+            log_e("toFloat: Value out of range '%s'", str);
+            return 0.0f;
+        }
+
+        // NaN and Infinity are not allowed
+        if (!std::isfinite(value)) {
+            log_e("toFloat: Non-finite value '%s'", str);
+            return 0.0f;
+        }
+        return value;
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  B I G _ E N D I A N  📌📌📌
     // Reads up to 8 bytes from a uint8_t array in big-endian order and stores the value as a hexadecimal string (e.g., "0x12345678").
     // Example: uint8_t data[] = {0x12, 0x34, 0x56, 0x78}; → stores "0x12345678"
@@ -2281,10 +2325,7 @@ class ps_ptr {
     // 📌📌📌  C L E A R   📌📌📌
 
     void clear() {
-        if (mem && allocated_size > 0) {
-            std::memset(mem.get(), 0, allocated_size);
-            length_ = 0;
-        }
+        if (mem && allocated_size > 0) { std::memset(mem.get(), 0, allocated_size); }
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S I Z E   📌📌📌
