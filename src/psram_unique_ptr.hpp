@@ -1983,11 +1983,7 @@ class ps_ptr {
         return true;
     }
 
-    template <typename U = T>
-        requires std::is_same_v<U, char>
-    bool insert(const ps_ptr<char>& insertStr, std::size_t pos) const {
-        return insert(insertStr.c_get(), pos);
-    }
+    bool insert(const ps_ptr<char>& insertStr, std::size_t pos) { return insert(insertStr.c_get(), pos); }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S H R I N K _ T O _ F I T  📌📌📌
 
