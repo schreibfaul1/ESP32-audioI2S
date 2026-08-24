@@ -944,6 +944,12 @@ class ps_ptr {
         std::string_view sv(str); // C++17, sicherer als strlen
         return sv.starts_with(prefix);
     }
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    bool starts_with(const ps_ptr<char>& prefix) const {
+        return starts_with(prefix.c_get());
+    }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  E N D S _ W I T H   📌📌📌
 
@@ -964,6 +970,13 @@ class ps_ptr {
         std::string_view sv(str); // C++17, sicherer als strlen
         return sv.ends_with(prefix);
     }
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    bool ends_with(const ps_ptr<char>& prefix) const {
+        return ends_with(prefix.c_get());
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T A R T S _ W I T H _ I C A S E   📌📌📌
 
@@ -987,6 +1000,13 @@ class ps_ptr {
 
         return strncasecmp_local(str, prefix, prefix_len) == 0;
     }
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    bool starts_with_icase(const ps_ptr<char>& prefix) const {
+        return starts_with_icase(prefix.c_get());
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  E N D S _ W I T H _ I C A S E   📌📌📌
 
@@ -1010,6 +1030,13 @@ class ps_ptr {
 
         return strncasecmp_local(str + str_len - suffix_len, suffix, suffix_len) == 0;
     }
+
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    bool ends_with_icase(const ps_ptr<char>& prefix) const {
+        return ends_with_icase(prefix.c_get());
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  E Q U A L S   📌📌📌
     // my_ps_ptr t1, t2;
