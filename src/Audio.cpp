@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0f                                                                                                                         ";
-/*  Updated on: Aug 22, 2026
+    Version 4.0.0g                                                                                                                         ";
+/*  Updated on: Aug 26, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4882,12 +4882,7 @@ void Audio::processWebFile() {
     m_pwf.availableBytes = min(m_client->available(), (int)InBuff.writeSpace());
     m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_pwf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_pwf.bytesAddedToBuffer); }
-    if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
-        if (!m_f_allDataReceived) m_f_allDataReceived = true;
-    }
-    if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
-        if (!m_f_allDataReceived) m_f_allDataReceived = true;
-    }
+
     // AUDIO_LOG_ERROR("m_audioFilePosition {} >= m_audioDataSize {}, m_f_allDataReceived {}", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (!initializeDecoder()) return;
@@ -4917,6 +4912,17 @@ void Audio::processWebFile() {
                 }
             }
         }
+    }
+
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if (m_f_stream) {
+        if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
+            if (!m_f_allDataReceived) m_f_allDataReceived = true;
+        }
+        if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
+            if (!m_f_allDataReceived) m_f_allDataReceived = true;
+        }
+        if (!m_f_allDataReceived) { streamDetection(m_pwf.availableBytes); }
     }
 
     if (m_fileStartTime > 0 && m_nominal_bitrate) {
@@ -5267,7 +5273,7 @@ void Audio::playAudioData() {
                 goto exit;
             }
 
-            if (m_audioDataStart + m_audioDataSize >= m_audioFilePosition) m_f_allDataReceived = true;
+            if (m_audioDataStart + m_audioDataSize <= m_audioFilePosition) m_f_allDataReceived = true;
             if (m_audioDataSize - m_audioDataReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
 
             if (m_pad.lastFrames) {
