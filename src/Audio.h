@@ -706,6 +706,10 @@ class Audio {
     audiolib::sdet_t       m_sdet;
     audiolib::fnsy_t       m_fnsy;
     audiolib::audioItems_t m_audio_items;
+    // last inputs calculateVolumeLimits() ran against, so gain_ramp() can skip a repeat
+    bool  m_limiterComputed    = false;
+    float m_lastLimiterVolume  = 0.0f;
+    float m_lastLimiterBalance = 0.0f;
     audiolib::vu_items_t   m_vu_items;
     audiolib::fft_items_t  m_fft_items;
     audiolib::i2s_items_t  m_i2s_items;
