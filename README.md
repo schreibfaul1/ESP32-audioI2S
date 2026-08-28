@@ -67,7 +67,7 @@ void my_audio_info(Audio::msg_t m) {
         case Audio::evt_streamtitle:    Serial.printf("stream title: %s\n", m.msg); break;
         case Audio::evt_icylogo:        Serial.printf("icy logo: ... %s\n", m.msg); break;
         case Audio::evt_icydescription: Serial.printf("icy descr: .. %s\n", m.msg); break;
-        case Audio::evt_image: for(int i = 0; i < m.vec.size(); i += 2){
+        case Audio::evt_image: for(int i = 0; i < m.vec1.size(); i += 2){
                                         Serial.printf("cover image:  segment %02i, pos %07lu, len %05lu\n", i / 2, m.vec[i], m.vec[i + 1]);} break; // APIC
         case Audio::evt_lyrics:         Serial.printf("sync lyrics:  %s\n", m.msg); break;
         case Audio::evt_log   :         Serial.printf("audio_logs:   %s\n", m.msg); break;
