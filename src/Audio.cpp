@@ -7040,7 +7040,14 @@ void Audio::gain_ramp() {
     else if (m_audio_items.cur_volume > m_audio_items.volume_steps)
         m_audio_items.cur_volume = m_audio_items.volume_steps;
 
-    calculateVolumeLimits();
+    // calculateVolumeLimits() is expensive (powf()); skip when nothing changed since last tick
+    if (!m_limiterComputed || m_audio_items.cur_volume != m_lastLimiterVolume ||
+        m_audio_items.balance != m_lastLimiterBalance) {
+        calculateVolumeLimits();
+        m_lastLimiterVolume  = m_audio_items.cur_volume;
+        m_lastLimiterBalance = m_audio_items.balance;
+        m_limiterComputed    = true;
+    }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVolumeLimits() { // is calculated when the volume or balance changes
