@@ -6231,11 +6231,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::calculate_average_bitrate(uint64_t sum_bytes_in, uint64_t sum_samples) {
-    if (m_cab.counter == 0) {
-        m_cab.estimated_bitrate = m_channels * m_i2s_items.sampleRate * m_bitsPerSample / est_compression[m_codec];
-        AUDIO_LOG_DEBUG("estimated bitrate {}", m_cab.estimated_bitrate);
-    }
-    m_cab.counter++;
 
     if (sum_samples) m_cab.average_bitrate = sum_bytes_in * 8 * m_i2s_items.sampleRate / sum_samples;
 
