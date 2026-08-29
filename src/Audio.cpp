@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0h                                                                                                                         ";
-/*  Updated on: Aug 28, 2026
+    Version 4.0.0i                                                                                                                         ";
+/*  Updated on: Aug 29, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3662,8 +3662,11 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
-        //   while (m_validSamples) { AUDIO_LOG_DEBUG("vs {}", m_validSamples); playChunk();} // empty I2S DMA
+        m_dataMode = AUDIO_NONE;
+        m_streamType == ST_NONE;
+        m_playlistFormat = FORMAT_NONE;
         destroy_decoder();
+
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
@@ -4725,7 +4728,10 @@ void Audio::processLocalFile() {
             playChunk();
             return;
         }
-        if (m_f_ID3v1TagFound) readID3V1Tag();
+        if (m_f_ID3v1TagFound) {
+            m_f_ID3v1TagFound = false;
+            readID3V1Tag();
+        }
     exit:
         ps_ptr<char> afn;                                // audio file name
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
@@ -4893,8 +4899,8 @@ void Audio::processWebFile() {
             if (m_f_ogg) { m_controlCounter = 100; }
             if ((millis() - m_pwf.ctime) > m_pwf.timeout) {
                 AUDIO_LOG_ERROR("audioHeader reading timeout");
-                m_f_running = false;
-                goto exit;
+                stopSong();
+                return;
             }
             if (InBuff.bufferFilled() > m_pwf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
                 InBuff.bytesWasRead(readAudioHeader(InBuff.readSpace()));
@@ -4935,15 +4941,16 @@ void Audio::processWebFile() {
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
-        if (m_f_ID3v1TagFound) readID3V1Tag();
-    exit:
-        stopSong();
+        if (m_f_ID3v1TagFound)  {
+            m_f_ID3v1TagFound = false;
+            readID3V1Tag();
+        }
+        if (SamplesBuff.bufferFilled()) { // something to play before stopSong()
+            playChunk();
+            return;
+        }
         info(*this, evt_eof, "{}", m_lastHost.c_get());
-
-        m_audioCurrentTime = 0;
-        m_resumeFilePos = -1;
-        m_f_haveNewFilePos = false;
-        m_codec = CODEC_NONE;
+        stopSong();
         return;
     }
 }
