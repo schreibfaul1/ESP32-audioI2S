@@ -3663,7 +3663,7 @@ uint32_t Audio::stopSong() {
             }
         }
         m_dataMode = AUDIO_NONE;
-        m_streamType == ST_NONE;
+        m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         destroy_decoder();
 
