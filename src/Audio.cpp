@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0i                                                                                                                         ";
-/*  Updated on: Aug 29, 2026
+    Version 4.0.0j                                                                                                                         ";
+/*  Updated on: Aug 30, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6010,10 +6010,11 @@ void Audio::setDecoderItems() {
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
     }
-    if (m_audioDataStart && m_audioDataSize == m_audioFileSize) { m_audioDataSize = m_audioFileSize - m_audioDataStart; }
-
+    if (isFile() && m_audioDataSize > 0){
+        if(m_audioDataSize == m_audioFileSize) { m_audioDataSize = m_audioFileSize - m_audioDataStart; }
+        info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
+    }
     info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
-    info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
 
     if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
         AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found {}", getBitsPerSample());
