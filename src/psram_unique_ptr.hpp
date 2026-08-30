@@ -1466,19 +1466,59 @@ class ps_ptr {
 
         return -1;
     }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  S U B S T R  📌📌📌
     ps_ptr<char> substr(size_t pos, size_t count = std::string::npos) const {
         const char* src = mem.get();
         if (!src) return ps_ptr<char>{};
 
         size_t len = std::strlen(src);
-        if (pos >= len) return ps_ptr<char>{}; // empty back
+
+        if (pos > len) return ps_ptr<char>{};
 
         size_t n = (count == std::string::npos || pos + count > len) ? (len - pos) : count;
 
         return ps_ptr<char>(src + pos, n);
     }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  S P L I T  📌📌📌
+
+    // ps_ptr<char> myLoc;
+    // myLoc.assign("Africa/Djibouti&11.60|43.15");
+    // auto parts = myLoc.split("&|");
+    //
+    // if (parts.size() == 3) {
+    //     printf("location=%s", parts[0].c_get());
+    //     printf("lat=%s",      parts[1].c_get());
+    //     printf("long=%s",     parts[2].c_get());
+    // }
+    //
+    // result:
+    // parts[0] = "Africa/Djibouti"
+    // parts[1] = "11.60"
+    // parts[2] = "43.15"
+
+
+    std::vector<ps_ptr<char>> split(const char* delimiters) const {
+        std::vector<ps_ptr<char>> result;
+
+        const char* src = mem.get();
+        if (!src || !delimiters) return result;
+
+        size_t len = std::strlen(src);
+        size_t start = 0;
+
+        for (size_t i = 0; i < len; i++) {
+            // Is the current character a separator?
+            if (std::strchr(delimiters, src[i])) {
+                result.push_back(substr(start, i - start));
+                start = i + 1;
+            }
+        }
+        // Remaining text after the last separator
+        result.push_back(substr(start));
+
+        return result;
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  T O L O W E R C A S E  📌📌📌
 
