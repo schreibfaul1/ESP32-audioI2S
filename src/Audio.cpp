@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0j                                                                                                                         ";
+    Version 4.0.0k                                                                                                                         ";
 /*  Updated on: Aug 30, 2026
 
     Author: Wolle (schreibfaul1)
@@ -5732,6 +5732,7 @@ bool Audio::parseContentType(ps_ptr<char> ct) {
         case CT_TXT:
             if (m_expectedCodec == CODEC_AAC) m_codec = CODEC_AAC;
             if (m_expectedCodec == CODEC_MP3) m_codec = CODEC_MP3;
+            if (m_expectedCodec == CODEC_FLAC) m_codec = CODEC_FLAC;
             if (m_expectedPlsFmt == FORMAT_ASX) m_playlistFormat = FORMAT_ASX;
             if (m_expectedPlsFmt == FORMAT_M3U) m_playlistFormat = FORMAT_M3U;
             if (m_expectedPlsFmt == FORMAT_M3U8) m_playlistFormat = FORMAT_M3U8;
