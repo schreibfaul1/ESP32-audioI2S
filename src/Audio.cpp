@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0l                                                                                                                         ";
+    Version 4.0.0m                                                                                                                         ";
 /*  Updated on: Sep 02, 2026
 
     Author: Wolle (schreibfaul1)
@@ -5801,6 +5801,10 @@ void Audio::showstreamtitle(char* st) {
         } else if (artist.valid()) {
             streamTitle.assign(artist.get());
         }
+    }
+
+    else if (ml.starts_with("StreamTitle='';")){
+        streamTitle = "";
     }
 
     else if (ml.index_of("StreamTitle='") == 0) {
