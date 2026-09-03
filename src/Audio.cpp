@@ -7351,7 +7351,7 @@ uint32_t Audio::getInBufferSize() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::stereo2mono(int32_t* buff, size_t len) {
 
-    for (uint16_t i = 0; i < len * 2; i += 2) {
+    for (size_t i = 0; i + 1 < len; i += 2) {
         int64_t l = buff[i];
         int64_t r = buff[i + 1];
         int32_t m = (int32_t)((l + r) >> 1); // average, without overflow
