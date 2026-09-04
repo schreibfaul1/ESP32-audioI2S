@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0m                                                                                                                         ";
-/*  Updated on: Sep 02, 2026
+    Version 4.0.0n                                                                                                                         ";
+/*  Updated on: Sep 04, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1239,12 +1239,17 @@ bool Audio::httpPrint(const char* host) {
         f_equal = false;
     }
 
+    const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
     rqh.appendf("Host: {}\r\n", rqh_host);
     rqh.append("Icy-MetaData:1\r\n");
+    rqh.append("Pragma: no-cache\r\n");
+    rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Accept:*/*\r\n");
-    rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+    rqh.appendf("User-Agent: {}\r\n", user_agent);
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
 
@@ -3666,7 +3671,6 @@ uint32_t Audio::stopSong() {
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         destroy_decoder();
-
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
@@ -4941,7 +4945,7 @@ void Audio::processWebFile() {
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
-        if (m_f_ID3v1TagFound)  {
+        if (m_f_ID3v1TagFound) {
             m_f_ID3v1TagFound = false;
             readID3V1Tag();
         }
@@ -5494,7 +5498,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         switch (parseHeaderLine(name, value, redirectUrl)) {
             case HeaderResult::Continue: break;
             case HeaderResult::ContentTypeSeen: ct_seen = true; break;
-            case HeaderResult::Redirect: httpPrint(redirectUrl.c_get()); return true;
+            case HeaderResult::Redirect:
+                m_client->stop();
+                httpPrint(redirectUrl.c_get());
+                return true;
             case HeaderResult::Error: goto exit;
         }
         AUDIO_LOG_DEBUG("name: {}, value; {}", name, value);
@@ -5803,7 +5810,7 @@ void Audio::showstreamtitle(char* st) {
         }
     }
 
-    else if (ml.starts_with("StreamTitle='';")){
+    else if (ml.starts_with("StreamTitle='';")) {
         streamTitle = "";
     }
 
@@ -6015,8 +6022,8 @@ void Audio::setDecoderItems() {
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
     }
-    if (isFile() && m_audioDataSize > 0){
-        if(m_audioDataSize == m_audioFileSize) { m_audioDataSize = m_audioFileSize - m_audioDataStart; }
+    if (isFile() && m_audioDataSize > 0) {
+        if (m_audioDataSize == m_audioFileSize) { m_audioDataSize = m_audioFileSize - m_audioDataStart; }
         info(*this, evt_info, "Audio-Length: {}", m_audioDataSize);
     }
     info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
@@ -7054,12 +7061,11 @@ void Audio::gain_ramp() {
         m_audio_items.cur_volume = m_audio_items.volume_steps;
 
     // calculateVolumeLimits() is expensive (powf()); skip when nothing changed since last tick
-    if (!m_limiterComputed || m_audio_items.cur_volume != m_lastLimiterVolume ||
-        m_audio_items.balance != m_lastLimiterBalance) {
+    if (!m_limiterComputed || m_audio_items.cur_volume != m_lastLimiterVolume || m_audio_items.balance != m_lastLimiterBalance) {
         calculateVolumeLimits();
-        m_lastLimiterVolume  = m_audio_items.cur_volume;
+        m_lastLimiterVolume = m_audio_items.cur_volume;
         m_lastLimiterBalance = m_audio_items.balance;
-        m_limiterComputed    = true;
+        m_limiterComputed = true;
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
