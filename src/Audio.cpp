@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0n                                                                                                                         ";
-/*  Updated on: Sep 04, 2026
+    Version 4.0.0o                                                                                                                         ";
+/*  Updated on: Sep 06, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5042,9 +5042,13 @@ nextRound:
                 stopSong();
                 AUDIO_LOG_ERROR("song stopped");
                 return;
-            };
+            }
 
-            if (m_pwsst.ts_packetLength) {
+            if (m_pwsst.ts_packetStart == 0 && m_pwsst.ts_packetLength == 188) { // dummy packet, ttps://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8?video=false
+                AUDIO_LOG_DEBUG("dummy");
+                m_pwsst.f_nextRound = true;
+            }
+            else if (m_pwsst.ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
                 if (ws >= m_pwsst.ts_packetLength) {
                     memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + m_pwsst.ts_packetStart, m_pwsst.ts_packetLength);
@@ -6071,7 +6075,7 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
         //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
         //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
         //  This triggers error -21 because the faad2 decoder cannot switch automatically.
-        m_sbyt.channels = 0;
+        // m_sbyt.channels = 0;
         if ((data[0] == 0xFF) || ((data[1] & 0xF0) == 0xF0)) {
             int channel_config = ((data[2] & 0x01) << 2) | ((data[3] & 0xC0) >> 6);
             if (channel_config != m_sbyt.channels) {
@@ -7478,16 +7482,16 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         return false;
     }
     int PID = (packet[1] & 0x1F) << 8 | (packet[2] & 0xFF);
-    if (log) AUDIO_LOG_DEBUG("PID: 0x{:04X} ({})", PID, PID);
+    if (log) AUDIO_LOG_INFO("PID: 0x{:04X} ({})", PID, PID);
     int PUSI = (packet[1] & 0x40) >> 6;
-    if (log) AUDIO_LOG_DEBUG("Payload Unit Start Indicator: {}", PUSI);
+    if (log) AUDIO_LOG_INFO("Payload Unit Start Indicator: {}", PUSI);
     int AFC = (packet[3] & 0x30) >> 4;
-    if (log) AUDIO_LOG_DEBUG("Adaption Field Control: {}", AFC);
+    if (log) AUDIO_LOG_INFO("Adaption Field Control: {}", AFC);
 
     int AFL = -1;
     if ((AFC & 0b10) == 0b10) { // AFC '11' Adaptation Field followed
         AFL = packet[4] & 0xFF; // Adaptation Field Length
-        if (log) AUDIO_LOG_DEBUG("Adaptation Field Length: {}", AFL);
+        if (log) AUDIO_LOG_INFO("Adaptation Field Length: {}", AFL);
     }
     int PLS = PUSI ? 5 : 4;      // PayLoadStart, Payload Unit Start Indicator
     if (AFL > 0) PLS += AFL + 1; // skip adaption field
@@ -7500,21 +7504,21 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     if (PID == 0) {
         // Program Association Table (PAT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if (log) AUDIO_LOG_DEBUG("PAT");
+        if (log) AUDIO_LOG_INFO("PAT");
         m_tspp.pidNumber = 0;
         m_tspp.pidOfAAC = 0;
 
         int startOfProgramNums = 8;
         int lengthOfPATValue = 4;
         int sectionLength = ((packet[PLS + 1] & 0x0F) << 8) | (packet[PLS + 2] & 0xFF);
-        if (log) AUDIO_LOG_DEBUG("Section Length: {}", sectionLength);
+        if (log) AUDIO_LOG_INFO("Section Length: {}", sectionLength);
         int program_number, program_map_PID;
         int indexOfPids = 0;
         (void)program_number; // [-Wunused-but-set-variable]
         for (int i = startOfProgramNums; i <= sectionLength; i += lengthOfPATValue) {
             program_number = ((packet[PLS + i] & 0xFF) << 8) | (packet[PLS + i + 1] & 0xFF);
             program_map_PID = ((packet[PLS + i + 2] & 0x1F) << 8) | (packet[PLS + i + 3] & 0xFF);
-            if (log) AUDIO_LOG_DEBUG("Program Num: 0x{:04X}({}) PMT PID: 0x{:04X}({})", program_number, program_number, program_map_PID, program_map_PID);
+            if (log) AUDIO_LOG_INFO("Program Num: 0x{:04X}({}) PMT PID: 0x{:04X}({})", program_number, program_number, program_map_PID, program_map_PID);
             m_tspp.pids[indexOfPids++] = program_map_PID;
         }
         m_tspp.pidNumber = indexOfPids;
@@ -7522,18 +7526,18 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         *packetLength = 0;
         return true;
     } else if (PID == m_tspp.pidOfAAC) {
-        if (log) AUDIO_LOG_DEBUG("AAC");
+        if (log) AUDIO_LOG_INFO("AAC");
         uint8_t posOfPacketStart = 4;
         if (AFL >= 0) {
             posOfPacketStart = 5 + AFL;
-            if (log) AUDIO_LOG_DEBUG("posOfPacketStart: {}", posOfPacketStart);
+            if (log) AUDIO_LOG_INFO("posOfPacketStart: {}", posOfPacketStart);
         }
         // Packetized Elementary Stream (PES) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if (log) AUDIO_LOG_DEBUG("PES_DataLength {}", m_tspp.PES_DataLength);
+        if (log) AUDIO_LOG_INFO("PES_DataLength {}", m_tspp.PES_DataLength);
         if (m_tspp.PES_DataLength > 0) {
             *packetStart = posOfPacketStart + m_tspp.fillData;
             *packetLength = TS_PACKET_SIZE - posOfPacketStart - m_tspp.fillData;
-            if (log) AUDIO_LOG_DEBUG("packetlength {}", *packetLength);
+            if (log) AUDIO_LOG_INFO("packetlength {}", *packetLength);
             m_tspp.fillData = 0;
             m_tspp.PES_DataLength -= (*packetLength);
             return true;
@@ -7541,7 +7545,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
             int firstByte = packet[posOfPacketStart] & 0xFF;
             int secondByte = packet[posOfPacketStart + 1] & 0xFF;
             int thirdByte = packet[posOfPacketStart + 2] & 0xFF;
-            if (log) AUDIO_LOG_DEBUG("First 3 bytes: 0x{:02X}, 0x{:02X}, 0x{:02X}", firstByte, secondByte, thirdByte);
+            if (log) AUDIO_LOG_INFO("First 3 bytes: 0x{:02X}, 0x{:02X}, 0x{:02X}", firstByte, secondByte, thirdByte);
             if (firstByte == 0x00 && secondByte == 0x00 && thirdByte == 0x01) { // Packet start code prefix
                 // --------------------------------------------------------------------------------------------------------
                 // posOfPacketStart + 0...2     0x00, 0x00, 0x01                                          PES-Startcode
@@ -7562,7 +7566,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                     return false;
                 }
                 int PES_PacketLength = ((packet[posOfPacketStart + 4] & 0xFF) << 8) + (packet[posOfPacketStart + 5] & 0xFF);
-                if (log) AUDIO_LOG_DEBUG("PES PacketLength: {}", PES_PacketLength);
+                if (log) AUDIO_LOG_INFO("PES PacketLength: {}", PES_PacketLength);
                 bool PTS_flag = false;
                 bool DTS_flag = false;
                 int  flag_byte1 = packet[posOfPacketStart + 6] & 0xFF;
@@ -7570,24 +7574,24 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 (void)flag_byte2; // unused yet
                 if (flag_byte1 & 0b10000000) PTS_flag = true;
                 if (flag_byte1 & 0b00000100) DTS_flag = true;
-                if (log && PTS_flag) AUDIO_LOG_DEBUG("PTS_flag is set");
-                if (log && DTS_flag) AUDIO_LOG_DEBUG("DTS_flag is set");
+                if (log && PTS_flag) AUDIO_LOG_INFO("PTS_flag is set");
+                if (log && DTS_flag) AUDIO_LOG_INFO("DTS_flag is set");
                 uint8_t PES_HeaderDataLength = packet[posOfPacketStart + 8] & 0xFF;
-                if (log) AUDIO_LOG_DEBUG("PES_headerDataLength {}", PES_HeaderDataLength);
+                if (log) AUDIO_LOG_INFO("PES_headerDataLength {}", PES_HeaderDataLength);
 
                 m_tspp.PES_DataLength = PES_PacketLength;
                 int startOfData = PES_HeaderDataLength + 9;
                 if (posOfPacketStart + startOfData >= 188) { // only fillers in packet
-                    if (log) AUDIO_LOG_DEBUG("posOfPacketStart + startOfData {}", posOfPacketStart + startOfData);
+                    if (log) AUDIO_LOG_INFO("posOfPacketStart + startOfData {}", posOfPacketStart + startOfData);
                     *packetStart = 0;
                     *packetLength = 0;
                     m_tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
                     m_tspp.fillData = (posOfPacketStart + startOfData) - 188;
-                    if (log) AUDIO_LOG_DEBUG("fillData {}", m_tspp.fillData);
+                    if (log) AUDIO_LOG_INFO("fillData {}", m_tspp.fillData);
                     return true;
                 }
-                if (log) AUDIO_LOG_DEBUG("First AAC data byte: {:02X}", packet[posOfPacketStart + startOfData]);
-                if (log) AUDIO_LOG_DEBUG("Second AAC data byte: {:02X}", packet[posOfPacketStart + startOfData + 1]);
+                if (log) AUDIO_LOG_INFO("First AAC data byte: {:02X}", packet[posOfPacketStart + startOfData]);
+                if (log) AUDIO_LOG_INFO("Second AAC data byte: {:02X}", packet[posOfPacketStart + startOfData + 1]);
                 *packetStart = posOfPacketStart + startOfData;
                 *packetLength = TS_PACKET_SIZE - posOfPacketStart - startOfData;
                 m_tspp.PES_DataLength -= (*packetLength);
@@ -7600,10 +7604,16 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 return true;
             }
         }
+        if (posOfPacketStart == TS_PACKET_SIZE) {
+            *packetStart = 0;
+            *packetLength = 188;
+            return true; // dummy packet (maybe contains "lorem ipsum ...")
+        }
+
         *packetStart = 0;
         *packetLength = 0;
         AUDIO_LOG_ERROR("PES not found");
-        return false;
+        return true;
     } else if (m_tspp.pidNumber) {
         //  Program Map Table (PMT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         for (int i = 0; i < m_tspp.pidNumber; i++) {
