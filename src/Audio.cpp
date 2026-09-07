@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0p                                                                                                                         ";
-/*  Updated on: Sep 07, 2026
+    Version 4.0.0q                                                                                                                         ";
+/*  Updated on: Sep 08, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4847,8 +4847,8 @@ void Audio::processWebStream() {
             playChunk();
             return;
         }
-        info(*this, evt_eof, "{}", m_lastHost.c_get());
         stopSong();
+        info(*this, evt_eof, "eoof"); //"{}", m_lastHost);
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4953,8 +4953,8 @@ void Audio::processWebFile() {
             playChunk();
             return;
         }
-        info(*this, evt_eof, "{}", m_lastHost.c_get());
         stopSong();
+        info(*this, evt_eof, "{}", m_lastHost.c_get());
         return;
     }
 }
@@ -8247,13 +8247,25 @@ const char* Audio::getVersion() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::get_info() {
 
-    std::lock_guard<std::mutex> lock(mutex_info);
-    if (m_info_queue.queue.empty()) return false;
+    bool any = false;
+    while (true) {
+        // Pull one item out of the queue while holding the lock, then release
+        // the lock before invoking the callback. audio_info_callback() may call
+        // back into the Audio API (e.g. connecttohost() from an evt_eof handler),
+        // which in turn calls info()/enqueueInfo() and needs to lock mutex_info
+        // again. Holding the lock across the callback would deadlock (mutex_info
+        // is a plain std::mutex, not recursive).
+        audiolib::InfoItem item;
+        {
+            std::lock_guard<std::mutex> lock(mutex_info);
+            if (m_info_queue.queue.empty()) break;
+            item = std::move(m_info_queue.queue.front());
+            m_info_queue.queue.pop_front();
+        }
+        any = true;
 
-    while (m_info_queue.queue.size()) {
-        msg_t                     i = {0};
-        const audiolib::InfoItem& item = m_info_queue.queue.front();
-        ps_ptr<char>              msg = item.msg;
+        msg_t        i = {0};
+        ps_ptr<char> msg = item.msg;
         i.msg = msg.c_get();
         i.e = (event_t)item.e;
         ps_ptr<char> evtstr = item.s;
@@ -8265,9 +8277,8 @@ bool Audio::get_info() {
         i.vec2 = item.vec2;
 
         audio_info_callback(i);
-        m_info_queue.queue.pop_front();
     }
-    return true;
+    return any;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::trim(char* str) {
@@ -8502,8 +8513,8 @@ void Audio::performAudioTask() {
         if (SamplesBuff.bufferFilled()) {
             playChunk();
         } else {
-            calculateVUlevel(dummy, 0);  // fade out
-            calculateSpectrum(dummy, 0); // fade out
+            if (settings.VU_LEVEL) calculateVUlevel(dummy, 0);  // fade out
+            if (settings.SPECTRUM) calculateSpectrum(dummy, 0); // fade out
         }
         vTaskDelay(50);
         return;
