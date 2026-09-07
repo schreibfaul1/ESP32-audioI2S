@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0o                                                                                                                         ";
-/*  Updated on: Sep 06, 2026
+    Version 4.0.0p                                                                                                                         ";
+/*  Updated on: Sep 07, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4181,11 +4181,11 @@ ps_ptr<char> Audio::parsePlaylist_M3U() {
     bool         isM3U = false;
     ps_ptr<char> host = {};
 
-    uint8_t lines = m_playlistContent.size();
+    size_t lines = m_playlistContent.size();
 
-    // for (int i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
+    // for (size_t i = 0; i < lines; i++) { AUDIO_LOG_INFO("M3U Line {}; {}", i, m_playlistContent[i]); }
 
-    for (int i = 0; i < lines; i++) {
+    for (size_t i = 0; i < lines; i++) {
         if (m_playlistContent[i].contains("#EXTM3U")) {
             isM3U = true;
             continue;
