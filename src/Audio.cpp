@@ -4048,7 +4048,7 @@ bool Audio::readPlayListData() {
             goto exit;
         }
         plSize = chunkLen; // chunkSize is known
-    } else if (plSize) {
+    } else if (m_audioFileSize) {
         plSize = m_audioFileSize; // fileSize is known
     } else {
         plSize = m_client->available(); // only avBytes is known
@@ -4263,6 +4263,7 @@ ps_ptr<char> Audio::parsePlaylist_PLS() {
         if (isPLS) {
             if (m_playlistContent[i].starts_with_icase("File")) {
                 pos = m_playlistContent[i].index_of("=");
+                if (pos < 4) continue;   // no '=' found, or line too short — skip this line safely
                 seq_str = m_playlistContent[i].substr(4, pos - 4);
                 seqNr = m_playlistContent[i].substr(4, pos - 4).to_int32();
                 entryNr = sequenceNr_to_entryNr(seqNr);
