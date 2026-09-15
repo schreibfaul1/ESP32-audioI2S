@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0r                                                                                                                         ";
-/*  Updated on: Sep 10, 2026
+    Version 4.0.0s                                                                                                                         ";
+/*  Updated on: Sep 15, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3944,7 +3944,7 @@ void Audio::loop() {
                     m_lVar.count = 0;
                 }
                 break;
-            case AUDIO_PLAYLISTINIT: readPlayListData(); break;
+            case AUDIO_PLAYLISTINIT: if(!readPlayListData()) stopSong(); break;
             case AUDIO_PLAYLISTDATA:
                 if (m_playlistFormat == FORMAT_M3U) httpPrint(parsePlaylist_M3U().c_get());
                 if (m_playlistFormat == FORMAT_PLS) httpPrint(parsePlaylist_PLS().c_get());
