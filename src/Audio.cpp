@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0s                                                                                                                         ";
-/*  Updated on: Sep 15, 2026
+    Version 4.0.0t                                                                                                                         ";
+/*  Updated on: Sep 18, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -855,6 +855,7 @@ void Audio::setDefaults() {
     m_f_connectionClose = false;
     m_f_allDataReceived = false;
     m_f_haveNewFilePos = false;
+    m_f_alternative_user_agent = false;
 
     m_codec = CODEC_NONE;
     m_dataMode = AUDIO_NONE;
@@ -1075,7 +1076,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     } // max length in Chrome DevTools
 
     const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     bool     res = false;   // return value
     uint16_t port = 0;      // port number
@@ -1240,7 +1240,7 @@ bool Audio::httpPrint(const char* host) {
     }
 
     const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    if(m_f_alternative_user_agent) user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
@@ -5544,7 +5544,14 @@ lastToDo:
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // AUDIO_LOG_INFO("now parse playlist");
     } else {
-        if (m_content_type == "text/html") {
+        if (m_content_type == "text/html") {  // SHOUTcast http://server1.chilltrax.com:9000/
+            if(!m_f_alternative_user_agent){
+                m_f_alternative_user_agent = true;
+                m_client->stop();
+                AUDIO_LOG_INFO("The http-request was unsuccessful; use a different User-Agent");
+                httpPrint(m_currentHost.c_get());
+                return true;
+            }
             AUDIO_LOG_INFO("{} is probably an HTML page", m_currentHost.c_get());
         } else {
             AUDIO_LOG_INFO("unknown content found at: {}, content type is: {}", m_currentHost.c_get(), m_content_type);

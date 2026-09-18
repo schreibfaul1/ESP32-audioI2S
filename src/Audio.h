@@ -620,11 +620,11 @@ class Audio {
     uint32_t m_avr_file_duration = 0;     // average duration in seconds, estimated
     uint32_t m_samples_since_start = 0;   //
 
-    int32_t    m_resumeFilePos = -1;              // the return value from stopSong(), (-1) is idle
-    int32_t    m_fileStartTime = -1;              // may be set in connecttoFS()
-    uint16_t   m_m3u8_targetDuration = 10;        //
-    uint32_t   m_stsz_numEntries = 0;             // num of entries inside stsz atom (uint32_t)
-    uint32_t   m_stsz_position = 0;               // pos of stsz atom within file
+    int32_t  m_resumeFilePos = -1;       // the return value from stopSong(), (-1) is idle
+    int32_t  m_fileStartTime = -1;       // may be set in connecttoFS()
+    uint16_t m_m3u8_targetDuration = 10; //
+    uint32_t m_stsz_numEntries = 0;      // num of entries inside stsz atom (uint32_t)
+    uint32_t m_stsz_position = 0;        // pos of stsz atom within file
 
     bool       m_f_haveNewFilePos = false;        // user changed the file position
     bool       m_f_I2S_init = false;              //
@@ -664,6 +664,7 @@ class Audio {
     bool       m_f_reset_m3u8Codec = true;        // reset codec for m3u8 stream
     bool       m_f_connectionClose = false;       // set in parseHeaderLine
     bool       m_f_i2s_channel_enabled = false;   // true if enabled
+    bool       m_f_alternative_user_agent = false;
     bool       m_f_mute = false;
     uint32_t   m_audioCurrentTime = 0;  // seconds
     uint32_t   m_audioDataStart = 0;    // in bytes
@@ -707,13 +708,13 @@ class Audio {
     audiolib::fnsy_t       m_fnsy;
     audiolib::audioItems_t m_audio_items;
     // last inputs calculateVolumeLimits() ran against, so gain_ramp() can skip a repeat
-    bool  m_limiterComputed    = false;
-    float m_lastLimiterVolume  = 0.0f;
-    float m_lastLimiterBalance = 0.0f;
-    audiolib::vu_items_t   m_vu_items;
-    audiolib::fft_items_t  m_fft_items;
-    audiolib::i2s_items_t  m_i2s_items;
-    audiolib::resampler_t  m_resampler;
+    bool                  m_limiterComputed = false;
+    float                 m_lastLimiterVolume = 0.0f;
+    float                 m_lastLimiterBalance = 0.0f;
+    audiolib::vu_items_t  m_vu_items;
+    audiolib::fft_items_t m_fft_items;
+    audiolib::i2s_items_t m_i2s_items;
+    audiolib::resampler_t m_resampler;
 
     struct info_queue_t {
         std::deque<audiolib::InfoItem> queue;
@@ -804,7 +805,10 @@ class Audio {
         switch (e) {
             case evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
             case evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
-            case evt_spectrum: txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13], v[14]); break;
+            case evt_spectrum:
+                txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8],
+                            v[9], v[10], v[11], v[12], v[13], v[14]);
+                break;
             default: txt.assign("???"); break;
         }
         return enqueueInfo(instance, e, std::move(txt), 0, 0, std::vector<uint32_t>(v), std::vector<uint32_t>(p));
