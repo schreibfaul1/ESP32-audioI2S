@@ -1239,8 +1239,8 @@ bool Audio::httpPrint(const char* host) {
         f_equal = false;
     }
 
-    const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    //const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
@@ -1248,7 +1248,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
-    rqh.append("Accept:*/*\r\n");
+    rqh.append("Accept:*/*\r\n");   
     rqh.appendf("User-Agent: {}\r\n", user_agent);
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
@@ -5411,7 +5411,20 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
     }
 
     else if (name.equals_icase("connection")) {
-        if (value.contains_with_icase("close")) { m_f_connectionClose = true; }
+
+        if (value.contains_with_icase("close")) {
+
+            m_f_connectionClose = true;
+
+            info(*this,evt_info, "server connection mode: close");
+        }
+        else {
+
+            m_f_connectionClose = false;
+
+            info(*this, evt_info,"server connection mode: {}",value.c_get());
+        }
+
         return HeaderResult::Continue;
     }
 
@@ -7960,40 +7973,60 @@ fail:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 boolean Audio::streamDetection(uint32_t bytesAvail) {
 
-    if (!m_client->connected()) {
-        info(*this, evt_info, "Stream lost");
-        connecttohost(m_lastHost.get());
-        return false;
-    }
-
     if (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
-        if (m_sdet.cnt_slow == 0) m_sdet.tmr_slow = millis();
+
+        if (m_sdet.cnt_slow == 0) {
+            m_sdet.tmr_slow = millis();
+        }
+
         m_sdet.cnt_slow++;
+
     } else {
+
         m_sdet.cnt_slow = 0;
         m_sdet.cnt_lost = 0;
-        return true;
     }
 
-    // if within one second the content of the audio buffer falls below the size of an audio frame 100 times,
-    // issue a message
-    if (m_sdet.cnt_slow && m_sdet.tmr_slow + 2000 < millis()) {
+    // Buffer baixo durante 2 segundos
+    if (m_sdet.cnt_slow &&
+        m_sdet.tmr_slow + 2000 < millis()) {
+
         m_sdet.tmr_slow = millis();
+
         info(*this, evt_info, "slow stream");
+
         m_sdet.cnt_slow = 0;
         m_sdet.cnt_lost++;
     }
 
-    if (bytesAvail) { m_sdet.cnt_lost = 0; }
-    if (InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return true; // enough data available to play
-
-    // if no audio data is received within 10 seconds, a new connection attempt is started.
-    if (m_sdet.cnt_lost == 5) {
-        info(*this, evt_info, "Stream lost");
-        connecttohost(m_lastHost.get());
-        m_sdet.cnt_slow = 0;
+    // Se continuam a chegar bytes,
+    // o stream NÃO está perdido.
+    if (bytesAvail) {
         m_sdet.cnt_lost = 0;
     }
+
+    // Buffer suficientemente cheio
+    if (InBuff.bufferFilled() >
+        InBuff.getMaxBlockSize() * 2) {
+
+        return true;
+    }
+
+    // Só depois de vários períodos realmente sem áudio
+    // consideramos o stream perdido.
+    if (m_sdet.cnt_lost >= 5) {
+
+        info(*this, evt_info,
+             "Stream lost -> reconnect");
+
+        connecttohost(m_lastHost.get());
+
+        m_sdet.cnt_slow = 0;
+        m_sdet.cnt_lost = 0;
+
+        return false;
+    }
+
     return false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
