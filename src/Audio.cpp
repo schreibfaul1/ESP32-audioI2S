@@ -1239,8 +1239,8 @@ bool Audio::httpPrint(const char* host) {
         f_equal = false;
     }
 
-    //const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    // const char* user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
@@ -1248,7 +1248,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
-    rqh.append("Accept:*/*\r\n");   
+    rqh.append("Accept:*/*\r\n");
     rqh.appendf("User-Agent: {}\r\n", user_agent);
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
@@ -3944,7 +3944,9 @@ void Audio::loop() {
                     m_lVar.count = 0;
                 }
                 break;
-            case AUDIO_PLAYLISTINIT: if(!readPlayListData()) stopSong(); break;
+            case AUDIO_PLAYLISTINIT:
+                if (!readPlayListData()) stopSong();
+                break;
             case AUDIO_PLAYLISTDATA:
                 if (m_playlistFormat == FORMAT_M3U) httpPrint(parsePlaylist_M3U().c_get());
                 if (m_playlistFormat == FORMAT_PLS) httpPrint(parsePlaylist_PLS().c_get());
@@ -4263,7 +4265,7 @@ ps_ptr<char> Audio::parsePlaylist_PLS() {
         if (isPLS) {
             if (m_playlistContent[i].starts_with_icase("File")) {
                 pos = m_playlistContent[i].index_of("=");
-                if (pos < 4) continue;   // no '=' found, or line too short — skip this line safely
+                if (pos < 4) continue; // no '=' found, or line too short — skip this line safely
                 seq_str = m_playlistContent[i].substr(4, pos - 4);
                 seqNr = m_playlistContent[i].substr(4, pos - 4).to_int32();
                 entryNr = sequenceNr_to_entryNr(seqNr);
@@ -5048,8 +5050,7 @@ nextRound:
             if (m_pwsst.ts_packetStart == 0 && m_pwsst.ts_packetLength == 188) { // dummy packet, ttps://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8?video=false
                 AUDIO_LOG_DEBUG("dummy");
                 m_pwsst.f_nextRound = true;
-            }
-            else if (m_pwsst.ts_packetLength) {
+            } else if (m_pwsst.ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
                 if (ws >= m_pwsst.ts_packetLength) {
                     memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + m_pwsst.ts_packetStart, m_pwsst.ts_packetLength);
@@ -5411,20 +5412,13 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
     }
 
     else if (name.equals_icase("connection")) {
-
         if (value.contains_with_icase("close")) {
-
             m_f_connectionClose = true;
-
-            info(*this,evt_info, "server connection mode: close");
-        }
-        else {
-
+            info(*this, evt_info, "server connection mode: close");
+        } else {
             m_f_connectionClose = false;
-
-            info(*this, evt_info,"server connection mode: {}",value.c_get());
+            info(*this, evt_info, "server connection mode: {}", value.c_get());
         }
-
         return HeaderResult::Continue;
     }
 
@@ -7974,22 +7968,15 @@ fail:
 boolean Audio::streamDetection(uint32_t bytesAvail) {
 
     if (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
-
-        if (m_sdet.cnt_slow == 0) {
-            m_sdet.tmr_slow = millis();
-        }
-
+        if (m_sdet.cnt_slow == 0) { m_sdet.tmr_slow = millis(); }
         m_sdet.cnt_slow++;
-
     } else {
-
         m_sdet.cnt_slow = 0;
         m_sdet.cnt_lost = 0;
     }
 
-    // Buffer baixo durante 2 segundos
-    if (m_sdet.cnt_slow &&
-        m_sdet.tmr_slow + 2000 < millis()) {
+    // Low buffer for 2 seconds?
+    if (m_sdet.cnt_slow && m_sdet.tmr_slow + 2000 < millis()) {
 
         m_sdet.tmr_slow = millis();
 
@@ -7999,25 +7986,17 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         m_sdet.cnt_lost++;
     }
 
-    // Se continuam a chegar bytes,
-    // o stream NÃO está perdido.
-    if (bytesAvail) {
-        m_sdet.cnt_lost = 0;
-    }
+    // If bytes are still arriving the stream is NOT lost.
+    if (bytesAvail) { m_sdet.cnt_lost = 0; }
 
-    // Buffer suficientemente cheio
-    if (InBuff.bufferFilled() >
-        InBuff.getMaxBlockSize() * 2) {
-
-        return true;
-    }
+    // buffer sufficiently full
+    if (InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) { return true; }
 
     // Só depois de vários períodos realmente sem áudio
     // consideramos o stream perdido.
     if (m_sdet.cnt_lost >= 5) {
 
-        info(*this, evt_info,
-             "Stream lost -> reconnect");
+        info(*this, evt_info, "Stream lost -> reconnect");
 
         connecttohost(m_lastHost.get());
 

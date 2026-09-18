@@ -662,7 +662,7 @@ class Audio {
     bool       m_f_audioTaskIsDecoding = false;   //
     bool       m_f_acceptRanges = false;          //
     bool       m_f_reset_m3u8Codec = true;        // reset codec for m3u8 stream
-    bool       m_f_connectionClose = false;       // set in parseHttpResponseHeader
+    bool       m_f_connectionClose = false;       // set in parseHeaderLine
     bool       m_f_i2s_channel_enabled = false;   // true if enabled
     bool       m_f_mute = false;
     uint32_t   m_audioCurrentTime = 0;  // seconds
