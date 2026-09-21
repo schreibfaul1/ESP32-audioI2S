@@ -1496,7 +1496,6 @@ class ps_ptr {
     // parts[1] = "11.60"
     // parts[2] = "43.15"
 
-
     std::vector<ps_ptr<char>> split(const char* delimiters) const {
         std::vector<ps_ptr<char>> result;
 
@@ -2646,6 +2645,11 @@ class ps_ptr {
     // 📌📌📌  F O R M A T  📌📌📌 (fmt lib within class)
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+
+    // {:<20}     align left 20 chars fill up with spaces
+    // {:>20}     align right
+    // {:^20}     center
+
     template <typename V> std::string to_string_any(const V& v) {
         using Raw = std::remove_cv_t<std::remove_reference_t<V>>;
         using D = std::decay_t<V>;
@@ -2761,6 +2765,7 @@ class ps_ptr {
         int  precision = -1;
         char fill = ' ';
         char type = 0;
+        char align = 0; // '<' left, '>' right, '^' center
         bool upper = false;
         bool align_right = false;
     };
@@ -2768,11 +2773,17 @@ class ps_ptr {
     inline format_spec parse_format(const char* fmt) {
         format_spec fs;
 
-        // {:02}
+        // {:...}
         if (*fmt == ':') {
             ++fmt;
 
-            //  Right-aligned?
+            // Alignment
+            if (*fmt == '<' || *fmt == '>' || *fmt == '^') {
+                fs.align = *fmt;
+                ++fmt;
+            }
+
+            // {: -20}
             if (*fmt == '-') {
                 fs.align_right = true;
                 ++fmt;
@@ -2794,6 +2805,7 @@ class ps_ptr {
             if (*fmt == '.') {
                 ++fmt;
                 fs.precision = 0;
+
                 while (isdigit(*fmt)) {
                     fs.precision = fs.precision * 10 + (*fmt - '0');
                     ++fmt;
@@ -2803,7 +2815,8 @@ class ps_ptr {
             // type
             if (*fmt) {
                 fs.type = *fmt;
-                if (*fmt == 'X') fs.upper = true;
+
+                if (*fmt == 'X') { fs.upper = true; }
             }
         }
         return fs;
@@ -2812,80 +2825,88 @@ class ps_ptr {
     template <typename V> std::string format_value(const V& value, const format_spec& fs) {
         char buf[64];
 
-        // bool ist in C++ ein Integraltyp, soll hier aber als Text ausgegeben werden.
-        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) { return value ? "true" : "false"; }
+        using value_type = std::remove_cv_t<std::remove_reference_t<V>>;
+
+        // BOOL
+        if constexpr (std::is_same_v<value_type, bool>) {
+            std::string s = value ? "true" : "false";
+            apply_width(s, fs, false);
+            return s;
+        }
 
         // ps_ptr<char>
-        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, ps_ptr<char>>) {
+        if constexpr (std::is_same_v<value_type, ps_ptr<char>>) {
             const char* str = value.c_get();
-            return str ? std::string(str) : std::string("");
+            std::string s = str ? std::string(str) : std::string("");
+            apply_width(s, fs, false);
+            return s;
         }
 
-        // CHAR - separate Behandlung vor is_integral_v
-        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, char>) {
-            if (fs.type == 'c' || fs.type == 0) { // 'c' oder kein Specifier
+        // CHAR
+        if constexpr (std::is_same_v<value_type, char>) {
+            if (fs.type == 'c' || fs.type == 0) {
                 buf[0] = value;
                 buf[1] = '\0';
-                return buf;
+
+                std::string s = buf;
+                apply_width(s, fs, false);
+                return s;
             }
         }
 
+        // INTEGER
         if constexpr (std::is_integral_v<V>) {
+
             // HEX
-            if (fs.type == 'X') {
-                if (fs.width > 0) {
+            if (fs.type == 'X' || fs.type == 'x') {
+
+                if (fs.fill == '0' && fs.width > 0 && fs.align == 0) {
+
                     const int safe_width = (fs.width > 30) ? 30 : fs.width;
-                    snprintf(buf, sizeof(buf), "%0*llX", safe_width, (unsigned long long)value);
-                } else {
-                    snprintf(buf, sizeof(buf), "%llX", (unsigned long long)value);
+
+                    if (fs.type == 'X') {
+                        snprintf(buf, sizeof(buf), "%0*llX", safe_width, (unsigned long long)value);
+                    } else {
+                        snprintf(buf, sizeof(buf), "%0*llx", safe_width, (unsigned long long)value);
+                    }
+
+                    return std::string(buf);
                 }
-                std::string s = buf;
-                apply_width(s, fs, true);
-                return s;
-            }
-            // HEX
-            if (fs.type == 'x') {
-                if (fs.width > 0) {
-                    const int safe_width = (fs.width > 30) ? 30 : fs.width;
-                    snprintf(buf, sizeof(buf), "%0*llx", safe_width, (unsigned long long)value);
+
+                if (fs.type == 'X') {
+                    snprintf(buf, sizeof(buf), "%llX", (unsigned long long)value);
                 } else {
                     snprintf(buf, sizeof(buf), "%llx", (unsigned long long)value);
                 }
+
                 std::string s = buf;
                 apply_width(s, fs, true);
                 return s;
             }
 
-            // Integer mit Padding
-            if (fs.width > 0) {
-                const int safe_width = (fs.width > 30) ? 30 : fs.width;
-                if (fs.fill == '0') {
-                    snprintf(buf, sizeof(buf), "%0*lld", safe_width, (long long)value);
-                } else {
-                    snprintf(buf, sizeof(buf), "%*lld", safe_width, (long long)value);
-                }
-                std::string s = buf;
-                apply_width(s, fs, true);
-                return s;
-            }
-            std::string s = to_string_any(value);
-            apply_width(s, fs, true);
-            return s;
-        }
-        // FLOAT
-        if constexpr (std::is_floating_point_v<V>) {
-            if (fs.precision >= 0) {
-                snprintf(buf, sizeof(buf), "%.*f", fs.precision, value);
-                std::string s = buf;
-                apply_width(s, fs, true);
-                return s;
-            }
-            snprintf(buf, sizeof(buf), "%g", value);
+            // INTEGER
+            snprintf(buf, sizeof(buf), "%lld", (long long)value);
+
             std::string s = buf;
             apply_width(s, fs, true);
             return s;
         }
 
+        // FLOAT
+        if constexpr (std::is_floating_point_v<V>) {
+
+            if (fs.precision >= 0) {
+                snprintf(buf, sizeof(buf), "%.*f", fs.precision, value);
+            } else {
+                snprintf(buf, sizeof(buf), "%g", value);
+            }
+
+            std::string s = buf;
+            apply_width(s, fs, true);
+            return s;
+        }
+
+        // sonstige Typen
         std::string s = to_string_any(value);
         apply_width(s, fs, false);
         return s;
@@ -2926,10 +2947,30 @@ class ps_ptr {
 
     inline void apply_width(std::string& s, const format_spec& fs, bool numeric = false) {
         if (fs.width <= 0) return;
-
         if ((int)s.size() >= fs.width) return;
+
         size_t missing = fs.width - s.size();
-        // Always fill in the numbers at the top
+        // explicit alignment
+        if (fs.align == '<') {
+            s.append(missing, fs.fill);
+            return;
+        }
+
+        if (fs.align == '>') {
+            s.insert(s.begin(), missing, fs.fill);
+            return;
+        }
+
+        if (fs.align == '^') {
+            size_t left = missing / 2;
+            size_t right = missing - left;
+
+            s.insert(s.begin(), left, fs.fill);
+            s.append(right, fs.fill);
+            return;
+        }
+
+        // Numbers are right-aligned by default
         if (numeric) {
             s.insert(s.begin(), missing, fs.fill);
             return;
