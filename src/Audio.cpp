@@ -5447,6 +5447,7 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
 
     else if (name.equals_icase("content-range")) {
         info(*this, evt_info, "{}: {}", name, value);
+        m_f_acceptRanges = true;
         return HeaderResult::Continue;
     }
 
