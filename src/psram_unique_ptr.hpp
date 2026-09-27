@@ -1479,6 +1479,34 @@ class ps_ptr {
         return ps_ptr<char>(src + pos, n);
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C O U N T _ O F   📌📌📌
+
+    // ps_ptr<char> str("Nordsee");
+    // str.count_of('e');  // 2
+    // str.count_of('N');  // 1
+    // str.count_of('o');  // 1
+    // str.count_of('x');  // 0
+
+    // Specialized version: only for T = char (count occurrences of a character)
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    int count_of(char ch, std::size_t start = 0) const {
+        if (!mem) return -1;
+
+        const char* str = static_cast<const char*>(mem.get());
+        std::size_t len = std::strlen(str);
+        if (start >= len) return -1;
+
+        int count = 0;
+
+        for (std::size_t i = start; i < len; ++i) {
+            if (str[i] == ch) { ++count; }
+        }
+
+        return count;;
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S P L I T  📌📌📌
 
     // ps_ptr<char> myLoc;
@@ -2644,7 +2672,6 @@ class ps_ptr {
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F O R M A T  📌📌📌 (fmt lib within class)
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
 
     // {:<20}     align left 20 chars fill up with spaces
     // {:>20}     align right
