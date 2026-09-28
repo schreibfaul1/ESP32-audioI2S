@@ -869,12 +869,12 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
     }
 
     if (m_flacStatus == OUT_SAMPLES) { // Write the decoded samples
-        // blocksize can be much greater than outbuff, so we can't stuff all in once
-        // therefore we need often more than one loop (split outputblock into pieces)
+        // A FLAC block may be longer than m_outBuff. Emit at most FLAC_MAX_OUT_FRAMES
+        // frames per call (two int32 words each) and continue from m_offset.
         uint32_t blockSize;
-        if (m_numOfOutSamples - m_offset > FLAC_MAX_OUTBUFFSIZE) {
-            blockSize = FLAC_MAX_OUTBUFFSIZE;
-            m_flacValidSamples = FLAC_MAX_OUTBUFFSIZE;
+        if (m_numOfOutSamples - m_offset > FLAC_MAX_OUT_FRAMES) {
+            blockSize = FLAC_MAX_OUT_FRAMES;
+            m_flacValidSamples = static_cast<uint16_t>(FLAC_MAX_OUT_FRAMES);
         } else {
             blockSize = m_numOfOutSamples - m_offset;
             m_flacValidSamples = blockSize;

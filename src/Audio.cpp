@@ -31,7 +31,7 @@ constexpr size_t m_frameSizeAAC = 18000;         //  more than one icy-metaint
 constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
-constexpr size_t m_outbuffSize = 4608 * 2;
+constexpr size_t m_outbuffSize = FLAC_MAX_OUT_WORDS; // 4608 stereo frames, 9216 int32 words
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
 
 constexpr size_t AUDIO_STACK_SIZE = 3900;

@@ -28,6 +28,13 @@
 #define ANSI_ESC_CYAN    "\033[36m"
 #define ANSI_ESC_WHITE   "\033[37m"
 
+// Frames written by one decodeNative call. Each frame stores two int32 words
+// (stereo pair, or mono duplicated into both slots). This is also the word
+// capacity of Audio's m_outBuff, so the chunk limit and the buffer cannot drift.
+inline constexpr uint32_t FLAC_MAX_OUT_FRAMES = 4608;
+inline constexpr size_t   FLAC_MAX_OUT_WORDS = FLAC_MAX_OUT_FRAMES * 2;
+static_assert(FLAC_MAX_OUT_WORDS == 9216, "output buffer word capacity stays 9216");
+
 class FlacDecoder : public Decoder {
 
   public:
@@ -69,7 +76,6 @@ class FlacDecoder : public Decoder {
     Audio& audio;
 #define FLAC_MAX_CHANNELS    2
 #define FLAC_MAX_BLOCKSIZE   24576 // 24 * 1024
-#define FLAC_MAX_OUTBUFFSIZE 4096 * 2
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
