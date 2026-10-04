@@ -5498,7 +5498,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if (header.empty()) goto exit;
 
     for (auto& rhl : header) { // read the header line for line
-        rhl.println();
+        // rhl.println();
         int colon = rhl.index_of(':');
         if (colon < 0) {
             name = rhl;
