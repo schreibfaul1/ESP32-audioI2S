@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0t                                                                                                                         ";
-/*  Updated on: Sep 18, 2026
+    Version 4.0.0u                                                                                                                         ";
+/*  Updated on: Oct 04, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5498,7 +5498,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if (header.empty()) goto exit;
 
     for (auto& rhl : header) { // read the header line for line
-        // rhl.println();
+        rhl.println();
         int colon = rhl.index_of(':');
         if (colon < 0) {
             name = rhl;
@@ -5512,9 +5512,14 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             case HeaderResult::Continue: break;
             case HeaderResult::ContentTypeSeen: ct_seen = true; break;
             case HeaderResult::Redirect:
-                m_client->stop();
-                httpPrint(redirectUrl.c_get());
-                return true;
+                if(redirectUrl.starts_with("http")){
+                    m_client->stop();
+                    httpPrint(redirectUrl.c_get());
+                    return true;
+                }
+                // http://live.rockmelodic-radio.com:8124/ --> Location:index.html?sid=1
+                // so do nothing and try a different user agent
+                break;
             case HeaderResult::Error: goto exit;
         }
         AUDIO_LOG_DEBUG("name: {}, value; {}", name, value);
