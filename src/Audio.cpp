@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0v                                                                                                                         ";
-/*  Updated on: Oct 05, 2026
+    Version 4.0.0w                                                                                                                         ";
+/*  Updated on: Oct 12, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5652,7 +5652,7 @@ bool Audio::initializeDecoder() {
 
     if (type) {
         m_decoder = createDecoder(type);
-        if (!m_decoder || !m_decoder->init()) {
+        if (!m_decoder || !m_decoder->init(m_outbuffSize)) {
             AUDIO_LOG_ERROR("The {Decoder could not be initialized", type);
             stopSong();
             return false;
@@ -6105,7 +6105,7 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
             }
         }
         m_decoder->reset();
-        m_decoder->init();
+        m_decoder->init(m_outbuffSize);
         return 0;
     }
     if (m_codec == CODEC_MP3) {

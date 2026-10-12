@@ -1,11 +1,12 @@
 #include "wav_decoder.h"
 
 // created 21.09.2025
-// updated 14.02.2026
+// updated 12.10.2026
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool WavDecoder::init() {
+bool WavDecoder::init(size_t outBuffSize) {
     m_valid = true;
+    m_outBuffSize = outBuffSize;
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -68,7 +69,7 @@ int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
 
     // ------------ 8-BIT PCM unsigned ------------
     if (m_bits_per_sample == 8) {
-        if (frame > 4096) frame = 4096;
+        if (frame > m_outBuffSize) frame = m_outBuffSize;
         if (getChannels() == 1) {
             // MONO
             for (int i = 0; i < frame; i++) {

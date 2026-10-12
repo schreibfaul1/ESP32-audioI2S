@@ -3,13 +3,13 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 16.07.2026
+ *  Updated on: 12.10.2026
  */
 #include "mp3_decoder.h"
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-bool MP3Decoder::init() {
+bool MP3Decoder::init(size_t outBuffSize) {
     m_MP3DecInfo.alloc("m_MP3DecInfo");
     m_FrameHeader.alloc("m_FrameHeader");
     m_SideInfo.alloc("m_SideInfo");
@@ -27,6 +27,7 @@ bool MP3Decoder::init() {
         return false;
     }
     clear();
+    m_outBuffSize = outBuffSize;
     return true;
 }
 

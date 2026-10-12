@@ -3,8 +3,8 @@
  * Java source code from https://www.nayuki.io/page/simple-flac-implementation
  * adapted to ESP32
  *
- * Created on: Jul 03,2020
- * Updated on: Jul 16,2026
+ * Created on: 03,07.2020
+ * Updated on: 12.10.2026
  *
  * Author: Wolle
  *
@@ -20,7 +20,7 @@ constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
 //          FLAC INI SECTION
 //----------------------------------------------------------------------------------------------------------------------
 
-bool FlacDecoder::init() {
+bool FlacDecoder::init(size_t outBuffSize) {
     if (!FLACFrameHeader.alloc_array(1, "FLACFrameHeader")) {
         FLAC_LOG_ERROR("not enough memory to allocate FLAC frame header");
         m_valid = false;
@@ -48,6 +48,7 @@ bool FlacDecoder::init() {
     setDefaults();
     m_flacPageNr = 0;
     m_valid = true;
+    m_outBuffSize = outBuffSize;
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -872,9 +873,9 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
         // blocksize can be much greater than outbuff, so we can't stuff all in once
         // therefore we need often more than one loop (split outputblock into pieces)
         uint32_t blockSize;
-        if (m_numOfOutSamples - m_offset > FLAC_MAX_OUTBUFFSIZE) {
-            blockSize = FLAC_MAX_OUTBUFFSIZE;
-            m_flacValidSamples = FLAC_MAX_OUTBUFFSIZE;
+        if (m_numOfOutSamples - m_offset > m_outBuffSize / 2) {
+            blockSize = m_outBuffSize / 2;
+            m_flacValidSamples = m_outBuffSize / 2;
         } else {
             blockSize = m_numOfOutSamples - m_offset;
             m_flacValidSamples = blockSize;
@@ -899,6 +900,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = (val);
                     outbuf[i * 2 + 1] = (val);
                 }
+                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 
@@ -924,6 +926,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = l;
                     outbuf[i * 2 + 1] = r;
                 }
+                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 

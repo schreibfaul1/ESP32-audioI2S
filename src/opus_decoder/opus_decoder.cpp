@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 17.02.2026
+ *  Updated on: 12.10.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -12,7 +12,7 @@
 #include "Arduino.h"
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool OpusDecoder::init() {
+bool OpusDecoder::init(size_t outBuffSize) {
 
     if (!rangedec) {
         OPUS_LOG_ERROR("RangeDecoder is null");
@@ -50,6 +50,7 @@ bool OpusDecoder::init() {
     (void)ret;
     (void)silkDecSizeBytes;
     silkdec->silk_InitDecoder();
+    m_outBuffSize = outBuffSize;
     m_isValid = true;
     return true;
 }

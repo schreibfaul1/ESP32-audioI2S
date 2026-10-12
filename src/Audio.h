@@ -888,7 +888,7 @@ class Audio {
 class Decoder {
   public:
     virtual ~Decoder() = default;
-    virtual bool                  init() = 0;
+    virtual bool                  init(size_t outBuffSize) = 0;
     virtual void                  clear() = 0;
     virtual void                  reset() = 0;
     virtual bool                  isValid() = 0;
