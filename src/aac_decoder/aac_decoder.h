@@ -1,16 +1,14 @@
 /*
  *  aac_decoder.h
  *  faad2 - ESP32 adaptation
- *  Created on: 12.09.2023
- *  Updated on: 13.06.2026
  */
 
 #pragma once
 
 #include "../Audio.h"
+#include "libfaad/aac_defines.h"
 #include "libfaad/aac_settings.h"
 #include "libfaad/aac_structs.h"
-#include "libfaad/aac_defines.h"
 #include "libfaad/aac_tables.h"
 #include "libfaad/neaacdec.h"
 
@@ -27,7 +25,7 @@ class AACDecoder : public Decoder {
 
     AACDecoder(Audio& audioRef);
     ~AACDecoder() { reset(); }
-    bool                  init() override;
+    bool                  init(size_t outBuffSize) override;
     void                  clear() override;
     void                  reset() override;
     bool                  isValid() override;
@@ -63,6 +61,7 @@ class AACDecoder : public Decoder {
     bool                          m_f_decoderIsInit = false;
     bool                          m_f_firstCall = false;
     bool                          m_f_setRaWBlockParams = false;
+    size_t                        m_outBuffSize = 0;
     uint32_t                      m_aacSamplerate = 0;
     uint8_t                       m_aacChannels = 0;
     uint8_t                       m_aacProfile = 0;
@@ -76,6 +75,5 @@ class AACDecoder : public Decoder {
         uint8_t channelConfiguration;
     };
 
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
+    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 };

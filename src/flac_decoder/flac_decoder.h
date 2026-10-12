@@ -1,11 +1,6 @@
 /*
  * flac_decoder.h
  *
- * Created on: Jul 03,2020
- * Updated on: Apr 25,2025
- *
- *      Author: wolle
- *
  *  Restrictions:
  *  blocksize must not exceed 24576 bytes
  *  bits per sample must be 8, 16, 24 or 32
@@ -33,7 +28,7 @@ class FlacDecoder : public Decoder {
   public:
     FlacDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
     ~FlacDecoder() { reset(); }
-    bool                  init() override;
+    bool                  init(size_t outBuffSize) override;
     void                  clear() override;
     void                  reset() override;
     bool                  isValid() override;
@@ -67,9 +62,8 @@ class FlacDecoder : public Decoder {
 
   private:
     Audio& audio;
-#define FLAC_MAX_CHANNELS    2
-#define FLAC_MAX_BLOCKSIZE   24576 // 24 * 1024
-#define FLAC_MAX_OUTBUFFSIZE 4096 * 2
+#define FLAC_MAX_CHANNELS  2
+#define FLAC_MAX_BLOCKSIZE 24576 // 24 * 1024
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
@@ -92,7 +86,7 @@ class FlacDecoder : public Decoder {
         uint32_t sampleRate;      // Also, a value of 0 is invalid.
                                   //----------------------------------------------------------------------------------------
                                   // Number of channels FLAC supports from 1 to 8 channels
-        uint8_t numChannels;      // 000 : 1 channel .... 111 : 8 channels
+        uint8_t  numChannels;     // 000 : 1 channel .... 111 : 8 channels
                                   //----------------------------------------------------------------------------------------
                                   // Sample size in bits:
                                   // 000 : get from STREAMINFO metadata block
@@ -102,7 +96,7 @@ class FlacDecoder : public Decoder {
                                   // 100 : 16 bits per sample
                                   // 101 : 20 bits per sample
                                   // 110 : 24 bits per sample
-        uint8_t bitsPerSample;    // 111 : reserved
+        uint8_t  bitsPerSample;   // 111 : reserved
                                   //----------------------------------------------------------------------------------------
                                   // Total samples in stream. 'Samples' means inter-channel sample,
                                   // i.e. one second of 44.1Khz audio will have 44100 samples regardless of the number
@@ -113,60 +107,60 @@ class FlacDecoder : public Decoder {
 
     typedef struct FLACFrameHeader_t {
         // 0 : fixed-blocksize stream; frame header encodes the frame number
-        uint8_t blockingStrategy; // 1 : variable-blocksize stream; frame header encodes the sample number
-                                  //----------------------------------------------------------------------------------------
-                                  // Block size in inter-channel samples:
-                                  // 0000 : reserved
-                                  // 0001 : 192 samples
-                                  // 0010-0101 : 576 * (2^(n-2)) samples, i.e. 576/1152/2304/4608
-                                  // 0110 : get 8 bit (blocksize-1) from end of header
-                                  // 0111 : get 16 bit (blocksize-1) from end of header
-        uint8_t blockSizeCode;    // 1000-1111 : 256 * (2^(n-8)) samples, i.e. 256/512/1024/2048/4096/8192/16384/32768
-                                  //----------------------------------------------------------------------------------------
-                                  // 0000 : get from STREAMINFO metadata block
-                                  // 0001 : 88.2kHz
-                                  // 0010 : 176.4kHz
-                                  // 0011 : 192kHz
-                                  // 0100 : 8kHz
-                                  // 0101 : 16kHz
-                                  // 0110 : 22.05kHz
-                                  // 0111 : 24kHz
-                                  // 1000 : 32kHz
-                                  // 1001 : 44.1kHz
-                                  // 1010 : 48kHz
-                                  // 1011 : 96kHz
-                                  // 1100 : get 8 bit sample rate (in kHz) from end of header
-                                  // 1101 : get 16 bit sample rate (in Hz) from end of header
-                                  // 1110 : get 16 bit sample rate (in tens of Hz) from end of header
-        uint8_t sampleRateCode;   // 1111 : invalid, to prevent sync-fooling string of 1s
-                                  //----------------------------------------------------------------------------------------
-                                  // Channel assignment
-                                  // 0000 1 channel: mono
-                                  // 0001 2 channels: left, right
-                                  // 0010 3 channels
-                                  // 0011 4 channels
-                                  // 0100 5 channels
-                                  // 0101 6 channels
-                                  // 0110 7 channels
-                                  // 0111 8 channels
-                                  // 1000 : left/side stereo: channel 0 is the left channel, channel 1 is the side(difference) channel
-                                  // 1001 : right/side stereo: channel 0 is the side(difference) channel, channel 1 is the right channel
-                                  // 1010 : mid/side stereo: channel 0 is the mid(average) channel, channel 1 is the side(difference) channel
-        uint8_t chanAsgn;         // 1011-1111 : reserved
-                                  //----------------------------------------------------------------------------------------
-                                  // Sample size in bits:
-                                  // 000 : get from STREAMINFO metadata block
-                                  // 001 : 8 bits per sample
-                                  // 010 : 12 bits per sample
-                                  // 011 : reserved
-                                  // 100 : 16 bits per sample
-                                  // 101 : 20 bits per sample
-                                  // 110 : 24 bits per sample
-        uint8_t sampleSizeCode;   // 111 : reserved
-                                  //----------------------------------------------------------------------------------------
-        uint32_t totalSamples;    // totalSamplesInStream
-                                  //----------------------------------------------------------------------------------------
-        uint32_t bitrate;         // bitrate
+        uint8_t  blockingStrategy; // 1 : variable-blocksize stream; frame header encodes the sample number
+                                   //----------------------------------------------------------------------------------------
+                                   // Block size in inter-channel samples:
+                                   // 0000 : reserved
+                                   // 0001 : 192 samples
+                                   // 0010-0101 : 576 * (2^(n-2)) samples, i.e. 576/1152/2304/4608
+                                   // 0110 : get 8 bit (blocksize-1) from end of header
+                                   // 0111 : get 16 bit (blocksize-1) from end of header
+        uint8_t  blockSizeCode;    // 1000-1111 : 256 * (2^(n-8)) samples, i.e. 256/512/1024/2048/4096/8192/16384/32768
+                                   //----------------------------------------------------------------------------------------
+                                   // 0000 : get from STREAMINFO metadata block
+                                   // 0001 : 88.2kHz
+                                   // 0010 : 176.4kHz
+                                   // 0011 : 192kHz
+                                   // 0100 : 8kHz
+                                   // 0101 : 16kHz
+                                   // 0110 : 22.05kHz
+                                   // 0111 : 24kHz
+                                   // 1000 : 32kHz
+                                   // 1001 : 44.1kHz
+                                   // 1010 : 48kHz
+                                   // 1011 : 96kHz
+                                   // 1100 : get 8 bit sample rate (in kHz) from end of header
+                                   // 1101 : get 16 bit sample rate (in Hz) from end of header
+                                   // 1110 : get 16 bit sample rate (in tens of Hz) from end of header
+        uint8_t  sampleRateCode;   // 1111 : invalid, to prevent sync-fooling string of 1s
+                                   //----------------------------------------------------------------------------------------
+                                   // Channel assignment
+                                   // 0000 1 channel: mono
+                                   // 0001 2 channels: left, right
+                                   // 0010 3 channels
+                                   // 0011 4 channels
+                                   // 0100 5 channels
+                                   // 0101 6 channels
+                                   // 0110 7 channels
+                                   // 0111 8 channels
+                                   // 1000 : left/side stereo: channel 0 is the left channel, channel 1 is the side(difference) channel
+                                   // 1001 : right/side stereo: channel 0 is the side(difference) channel, channel 1 is the right channel
+                                   // 1010 : mid/side stereo: channel 0 is the mid(average) channel, channel 1 is the side(difference) channel
+        uint8_t  chanAsgn;         // 1011-1111 : reserved
+                                   //----------------------------------------------------------------------------------------
+                                   // Sample size in bits:
+                                   // 000 : get from STREAMINFO metadata block
+                                   // 001 : 8 bits per sample
+                                   // 010 : 12 bits per sample
+                                   // 011 : reserved
+                                   // 100 : 16 bits per sample
+                                   // 101 : 20 bits per sample
+                                   // 110 : 24 bits per sample
+        uint8_t  sampleSizeCode;   // 111 : reserved
+                                   //----------------------------------------------------------------------------------------
+        uint32_t totalSamples;     // totalSamplesInStream
+                                   //----------------------------------------------------------------------------------------
+        uint32_t bitrate;          // bitrate
     } FLACFrameHeader_t;
 
     const std::deque<std::deque<int>> FIXED_PREDICTION_COEFFICIENTS = {
@@ -186,6 +180,7 @@ class FlacDecoder : public Decoder {
     std::vector<int32_t>  coefs;
     std::vector<uint32_t> m_flacBlockPicItem;
 
+    size_t          m_outBuffSize = 0;
     uint64_t        m_flac_bitBuffer = 0;
     uint32_t        m_flacBitrate = 0;
     uint32_t        m_flacBlockPicLenUntilFrameEnd = 0;

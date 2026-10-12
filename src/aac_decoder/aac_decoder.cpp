@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 02.09.2026
+ *  Updated on: 12.10.2026
  */
 
 #include "aac_decoder.h"
@@ -18,7 +18,7 @@
 AACDecoder::AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef), m_neaacdec(std::make_unique<NeaacDecoder>()) {}
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool AACDecoder::init() {
+bool AACDecoder::init(size_t outBuffSize) {
     m_hAac = m_neaacdec->NeAACDecOpen();
     m_conf = m_neaacdec->NeAACDecGetCurrentConfiguration(m_hAac);
     if (m_conf) { m_conf->outputFormat = FAAD_FMT_32BIT; }
@@ -26,6 +26,7 @@ bool AACDecoder::init() {
     if (m_hAac && m_conf) m_f_decoderIsInit = true;
     m_f_firstCall = false;
     m_f_setRaWBlockParams = false;
+    m_outBuffSize = outBuffSize;
     return m_f_decoderIsInit;
 }
 void AACDecoder::clear() {

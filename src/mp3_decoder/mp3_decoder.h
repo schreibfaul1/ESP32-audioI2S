@@ -10,7 +10,7 @@ class MP3Decoder : public Decoder {
   public:
     MP3Decoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
     ~MP3Decoder() { reset(); }
-    bool                  init() override;
+    bool                  init(size_t outBuffSize) override;
     void                  clear() override;
     void                  reset() override;
     bool                  isValid() override;
@@ -63,6 +63,7 @@ class MP3Decoder : public Decoder {
     ps_ptr<char>            m_mpeg_version_str;
 
     invalid_frame m_invalid_frame;
+    size_t        m_outBuffSize = 0;
 
     // internally used
     int32_t  IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft);

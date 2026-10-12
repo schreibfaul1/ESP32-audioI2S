@@ -31,7 +31,7 @@ class VorbisDecoder : public Decoder {
   public:
     VorbisDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
     ~VorbisDecoder() { reset(); }
-    bool                  init() override;
+    bool                  init(size_t outBuffSize) override;
     void                  clear() override;
     void                  reset() override;
     bool                  isValid() override;
@@ -272,6 +272,7 @@ class VorbisDecoder : public Decoder {
     bool     m_f_parseOggDone = true;
     bool     m_f_isValid = false;
     bool     m_f_comment_done = false;
+    size_t   m_outBuffSize = 0;
     uint16_t m_identificatonHeaderLength = 0;
     uint16_t m_vorbisCommentHeaderLength = 0;
     uint8_t  m_pageNr = 0;
