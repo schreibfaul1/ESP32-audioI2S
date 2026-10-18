@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0w                                                                                                                         ";
-/*  Updated on: Oct 12, 2026
+    Version 4.0.0x                                                                                                                         ";
+/*  Updated on: Oct 18, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5382,7 +5382,7 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
         if (name.equals_icase("icy-url")) { info(*this, evt_icyurl, "{}", value); }
         if (name.equals_icase("icy-description")) { info(*this, evt_icydescription, "{}", value); }
         if (name.equals_icase("icy-metaint")) { m_metaint = value.to_uint32(); }
-        if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
+    //    if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
         return HeaderResult::Continue;
     } // —— END ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————
 
