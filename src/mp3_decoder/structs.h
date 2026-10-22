@@ -30,7 +30,12 @@
 #define MAX_NGRAN            2                // max granules
 #define MAX_NCHAN            2                // max channels
 #define MAX_NSAMP            576              // max samples per channel, per granule
-#define CLZ(x)               __builtin_clz(x) // fb
+
+// A zero-valued spectral block has all 32 leading bits available.
+inline int CLZ(uint32_t value) {
+    static_assert(sizeof(unsigned int) == sizeof(uint32_t), "CLZ requires a 32-bit unsigned int");
+    return value == 0 ? 32 : __builtin_clz(static_cast<unsigned int>(value));
+}
 
 #define CLIP_2N(y, n)       \
     {                       \
