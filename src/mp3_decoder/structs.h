@@ -27,10 +27,22 @@
 #define VBUF_LENGTH          17 * 2 * NBANDS // for double-sized vbuf FIFO
 #define MAX_SCFBD            4               // max scalefactor bands per channel
 #define MAINBUF_SIZE         1940
-#define MAX_NGRAN            2                // max granules
-#define MAX_NCHAN            2                // max channels
-#define MAX_NSAMP            576              // max samples per channel, per granule
-#define CLZ(x)               __builtin_clz(x) // fb
+#define MAX_NGRAN            2   // max granules
+#define MAX_NCHAN            2   // max channels
+#define MAX_NSAMP            576 // max samples per channel, per granule
+
+inline uint8_t CLZ(int32_t x) {
+    uint8_t numZeros;
+
+    if (!x) { return (sizeof(int32_t) * 8); }
+
+    numZeros = 0;
+    while (!(x & 0x80000000)) {
+        numZeros++;
+        x <<= 1;
+    }
+    return numZeros;
+}
 
 #define CLIP_2N(y, n)       \
     {                       \
@@ -55,7 +67,6 @@
         buf[16 + i] = b2 + b3;                              \
         buf[31 - i] = MULSHIFT32(*cptr++, b3 - b2) << (s2); \
     }
-
 
 typedef struct MP3FrameInfo {
     int32_t bitrate;
@@ -226,8 +237,7 @@ typedef struct {
 
 struct invalid_frame {
     uint32_t timer = 0;
-    bool start = true;
+    bool     start = true;
     uint32_t count1 = 0;
     uint32_t count2 = 0;
-
 };
