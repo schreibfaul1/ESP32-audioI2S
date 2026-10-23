@@ -20,7 +20,7 @@
 **/
 
 // ESP32 Version 29.07.2024
-// updated:      28.08.2026
+// updated:      23.10.2026
 
 #pragma once
 
