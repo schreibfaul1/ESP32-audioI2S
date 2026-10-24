@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0y2                                                                                                                         ";
-/*  Updated on: Oct 23, 2026
+    Version 4.0.0y3                                                                                                                         ";
+/*  Updated on: Oct 24, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4851,7 +4851,7 @@ void Audio::processWebStream() {
             return;
         }
         stopSong();
-        info(*this, evt_eof, "eoof"); //"{}", m_lastHost);
+        info(*this, evt_eof, "eof"); //"{}", m_lastHost);
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -5305,7 +5305,7 @@ void Audio::playAudioData() {
         if ((isStream())) {
             if (m_f_allDataReceived) { // Google TTS, OpenAI
                 m_pad.lastFrames = true;
-                if (m_f_tts && !InBuff.bufferFilled()) {
+                if (!InBuff.bufferFilled()) {
                     m_f_eof = true;
                     goto exit;
                 }
@@ -6165,6 +6165,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     m_sbyt.nextSync = 0;
 
     if (!m_f_playing) {
+        if(!len) return 0;
         m_sbyt.channels = 2; // assume aac stereo
         m_sbyt.isPS = 0;
         m_sbyt.f_setDecodeParamsOnce = true;
