@@ -1,7 +1,7 @@
 # ESP32-audioI2S
 
 :warning: **This library only works on multi-core chips like ESP32-S3, ESP32-S31 and ESP32-P4. <br>
-The ESP32 is suitable to a limited extent. <br>
+The ESP32 is suitable to a limited extent. <ins>PSRAM is required!</ins><br>
 It does not work on the ESP32-S2, ESP32-C3 etc** :warning:
 
 Supported codecs: wav, mp3, aac, flac, opus, vorbis <br>
