@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.0y3                                                                                                                         ";
+    Version 4.0.0y4                                                                                                                         ";
 /*  Updated on: Oct 24, 2026
 
     Author: Wolle (schreibfaul1)
@@ -721,7 +721,11 @@ Audio::Audio(uint8_t i2sPort) {
     m_f_I2S_init = false;
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
-    clientsecure.setInsecure();
+    if (ESP_ARDUINO_VERSION_MAJOR < 4) {
+        clientsecure.setInsecure();
+    } else {
+        clientsecure.useBuiltinCACertBundle();
+    }
     m_i2s_items.i2s_num = i2sPort; // i2s port number
 
     i2s_event_callbacks_t cbs = {};
@@ -1240,7 +1244,7 @@ bool Audio::httpPrint(const char* host) {
     }
 
     const char* user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
-    if(m_f_alternative_user_agent) user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+    if (m_f_alternative_user_agent) user_agent = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
@@ -5382,7 +5386,7 @@ Audio::HeaderResult Audio::parseHeaderLine(ps_ptr<char> name, ps_ptr<char> value
         if (name.equals_icase("icy-url")) { info(*this, evt_icyurl, "{}", value); }
         if (name.equals_icase("icy-description")) { info(*this, evt_icydescription, "{}", value); }
         if (name.equals_icase("icy-metaint")) { m_metaint = value.to_uint32(); }
-    //    if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
+        //    if (name.equals_icase("icy-br")) { m_nominal_bitrate = value.to_uint32() * 1000; }
         return HeaderResult::Continue;
     } // —— END ICY BLOCK ————————————————————————————————————————————————————————————————————————————————————————
 
@@ -5512,7 +5516,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             case HeaderResult::Continue: break;
             case HeaderResult::ContentTypeSeen: ct_seen = true; break;
             case HeaderResult::Redirect:
-                if(redirectUrl.starts_with("http")){
+                if (redirectUrl.starts_with("http")) {
                     m_client->stop();
                     httpPrint(redirectUrl.c_get());
                     return true;
@@ -5550,8 +5554,8 @@ lastToDo:
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // AUDIO_LOG_INFO("now parse playlist");
     } else {
-        if (m_content_type == "text/html") {  // SHOUTcast http://server1.chilltrax.com:9000/
-            if(!m_f_alternative_user_agent){
+        if (m_content_type == "text/html") { // SHOUTcast http://server1.chilltrax.com:9000/
+            if (!m_f_alternative_user_agent) {
                 m_f_alternative_user_agent = true;
                 m_client->stop();
                 AUDIO_LOG_INFO("The http-request was unsuccessful; use a different User-Agent");
@@ -6165,7 +6169,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     m_sbyt.nextSync = 0;
 
     if (!m_f_playing) {
-        if(!len) return 0;
+        if (!len) return 0;
         m_sbyt.channels = 2; // assume aac stereo
         m_sbyt.isPS = 0;
         m_sbyt.f_setDecodeParamsOnce = true;
