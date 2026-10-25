@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 23.10.2026
+ *  Updated on: 25.10.2026
  */
 #include "mp3_decoder.h"
 
@@ -3359,7 +3359,7 @@ int16_t MP3Decoder::ClipToShort(int32_t x, int32_t fracBits) {
     return x;
 #endif
 
-#if (defined CONFIG_IDF_TARGET_ESP32P4)
+#if (defined CONFIG_IDF_TARGET_ESP32P4 || defined CONFIG_IDF_TARGET_ESP32S31)
     int32_t sign;
 
     /* assumes you've already rounded (x += (1 << (fracBits-1))) */
