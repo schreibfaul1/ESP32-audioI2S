@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 12.10.2026
+ *  Updated on: 26.10.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -27,7 +27,7 @@ bool OpusDecoder::init(size_t outBuffSize) {
     silkdec->init();
 
     if (!celtdec) {
-        OPUS_LOG_ERROR("Failed to allocate CeltkDecoder");
+        OPUS_LOG_ERROR("Failed to allocate CeltDecoder");
         return false;
     }
     celtdec->init();
@@ -261,13 +261,13 @@ int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_
         case 0 ... 3:
             m_endband = 0; // OPUS_BANDWIDTH_SILK_NARROWBAND
             m_mode = MODE_SILK_ONLY;
-            m_bandWidth = OPUS_BANDWIDTH_NARROWBAND;
+            m_bandWidth = OPUS_BANDWIDTH_NARROWBAND; // (4kHz bandpass)
             m_internalSampleRate = 8000;
             break;
         case 4 ... 7:
             m_endband = 0; // OPUS_BANDWIDTH_SILK_MEDIUMBAND
             m_mode = MODE_SILK_ONLY;
-            m_bandWidth = OPUS_BANDWIDTH_MEDIUMBAND;
+            m_bandWidth = OPUS_BANDWIDTH_MEDIUMBAND; // (6kHz bandpass)
             m_internalSampleRate = 12000;
             break;
         case 8 ... 11:
@@ -294,17 +294,17 @@ int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_
         case 20 ... 23:
             m_endband = 17; // OPUS_BANDWIDTH_CELT_WIDEBAND
             m_mode = MODE_CELT_ONLY;
-            m_bandWidth = OPUS_BANDWIDTH_WIDEBAND;
+            m_bandWidth = OPUS_BANDWIDTH_WIDEBAND; // (8kHz bandpass)
             break;
         case 24 ... 27:
             m_endband = 19; // OPUS_BANDWIDTH_CELT_SUPERWIDEBAND
             m_mode = MODE_CELT_ONLY;
-            m_bandWidth = OPUS_BANDWIDTH_SUPERWIDEBAND;
+            m_bandWidth = OPUS_BANDWIDTH_SUPERWIDEBAND; // (12kHz bandpass)
             break;
         case 28 ... 31:
             m_endband = 21; // OPUS_BANDWIDTH_CELT_FULLBAND
             m_mode = MODE_CELT_ONLY;
-            m_bandWidth = OPUS_BANDWIDTH_FULLBAND;
+            m_bandWidth = OPUS_BANDWIDTH_FULLBAND; // (20kHz bandpass)
             break;
         default:
             OPUS_LOG_WARN("unknown bandwifth {}, m_odp3.configNr", m_odp3.configNr);
@@ -314,7 +314,7 @@ int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 
     //    celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, m_endband);
     if (m_mode == MODE_CELT_ONLY) {
-        celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, m_endband);
+         // celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, m_endband);
     } else if (m_mode == MODE_SILK_ONLY) {
         // silk_InitDecoder();
     }

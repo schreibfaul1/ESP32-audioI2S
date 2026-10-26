@@ -1435,7 +1435,7 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t* outbuf, int32_t frame_size) {
     const int16_t* eBands = eband5ms;
 
     start = m_celtDec.start;
-    end = m_CELTMode.effEBands;
+    end = m_celtDec.end;
     frame_size *= m_celtDec.downsample;
 
     lpc = (int16_t*)(m_decode_mem.get() + (DECODE_BUFFER_SIZE + overlap) * CC);
