@@ -54,6 +54,9 @@ class VorbisDecoder : public Decoder {
     virtual int32_t       val2() override;
 
     enum : int8_t { VORBIS_CONTINUE = 110, VORBIS_PARSE_OGG_DONE = 100, VORBIS_NONE = 0, VORBIS_ERR = -1 };
+    // Bytes reserved for one deferred Ogg segment, including a later continuation appended at an offset.
+    // 4096 is already 16-byte aligned, so ps_ptr::alloc does not round it up.
+    static constexpr uint32_t VORBIS_LAST_SEGMENT_CAPACITY = 4096;
     enum ParseResult { VORBIS_COMMENT_INVALID = -1, VORBIS_COMMENT_NEED_MORE = 100, VORBIS_COMMENT_DONE = 110 };
 
   private:

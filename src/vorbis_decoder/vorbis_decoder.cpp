@@ -26,7 +26,7 @@
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool VorbisDecoder::init(size_t outBuffSize) {
     setDefaults();
-    m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
+    m_ogg_items.lastSegmentTable.alloc(VORBIS_LAST_SEGMENT_CAPACITY, "m_lastSegmentTable");
     if (m_ogg_items.lastSegmentTable.valid()) m_f_isValid = true;
     m_outBuffSize = outBuffSize;
     return m_f_isValid;
@@ -48,7 +48,7 @@ void VorbisDecoder::reset() {
 void VorbisDecoder::clear() {
     m_bitReader.reset();
     m_ogg_items.reset();
-    m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
+    m_ogg_items.lastSegmentTable.alloc(VORBIS_LAST_SEGMENT_CAPACITY, "m_lastSegmentTable");
     m_vorbisBlockPicItem.clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -257,6 +257,18 @@ int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uin
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+namespace {
+// True when [already, already + incoming) lies inside the deferred-segment buffer.
+// incoming == capacity is accepted. The sum is not formed until this is true, so a
+// uint32_t wrap cannot hide an overflow.
+bool vorbis_last_segment_fits(uint32_t already, uint32_t incoming) {
+    constexpr uint32_t cap = VorbisDecoder::VORBIS_LAST_SEGMENT_CAPACITY;
+    if (incoming > cap) { return false; }
+    if (already > cap - incoming) { return false; }
+    return true;
+}
+}  // namespace
+
 int32_t VorbisDecoder::vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
 
     if (m_vorbisAudioDataStart == 0) { m_vorbisAudioDataStart = m_vorbisCurrentFilePos; }
@@ -281,9 +293,16 @@ int32_t VorbisDecoder::vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uin
     if (m_ogg_items.segment_table.size()) {
         if (m_f_oggContinuedPage) {
             m_f_oggContinuedPage = false;
+            if (!vorbis_last_segment_fits(m_ogg_items.lastSegmentTableLen, segmentLength)) {
+                VORBIS_LOG_ERROR("continued segment {} + {} exceeds {}", m_ogg_items.lastSegmentTableLen, segmentLength, VORBIS_LAST_SEGMENT_CAPACITY);
+                m_ogg_items.lastSegmentTableLen = 0;
+                ret = VORBIS_ERR;
+                goto exit;
+            }
+            const uint32_t total = m_ogg_items.lastSegmentTableLen + segmentLength;
             memcpy(m_ogg_items.lastSegmentTable.get() + m_ogg_items.lastSegmentTableLen, inbuf, segmentLength);
-            bitReader_setData(m_ogg_items.lastSegmentTable.get(), m_ogg_items.lastSegmentTableLen + segmentLength);
-            ret = vorbis_dsp_synthesis(m_ogg_items.lastSegmentTable.get(), m_ogg_items.lastSegmentTableLen + segmentLength, outbuf);
+            bitReader_setData(m_ogg_items.lastSegmentTable.get(), total);
+            ret = vorbis_dsp_synthesis(m_ogg_items.lastSegmentTable.get(), total, outbuf);
             m_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
             m_ogg_items.lastSegmentTableLen = 0;
             goto exit;
@@ -311,6 +330,12 @@ int32_t VorbisDecoder::vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uin
             goto exit;
         }
     } else {
+        if (!vorbis_last_segment_fits(0, segmentLength)) {
+            VORBIS_LOG_ERROR("deferred segment {} exceeds {}", segmentLength, VORBIS_LAST_SEGMENT_CAPACITY);
+            m_ogg_items.lastSegmentTableLen = 0;
+            ret = VORBIS_ERR;
+            goto exit;
+        }
         memcpy(m_ogg_items.lastSegmentTable.get(), inbuf, segmentLength);
         m_ogg_items.lastSegmentTableLen = segmentLength;
         m_vorbisValidSamples = 0;
