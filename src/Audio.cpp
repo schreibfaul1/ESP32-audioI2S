@@ -3203,6 +3203,26 @@ void Audio::playChunk() {
         m_dmaFreeDesc = 0;
         m_audio_items.mute = m_f_mute;
     }
+
+    // --------------------------------- prepare Bluetooth -----------------------------------------
+    if (settings.BT_SOURCE && settings.BT_DEV_NANE.valid() && settings.BT_DEV_NANE.strlen()) { // BT_SOURCE is true and has been named
+        if (!bt_source.is_init()) {
+            bool res = bt_source.init(settings.BT_DEV_NANE);
+            if (res) {
+                AUDIO_LOG_INFO("initialisize Bluetooth source, dev name: {}", settings.BT_DEV_NANE);
+            } else {
+                AUDIO_LOG_ERROR("initialisize Bluetooth source failed");
+                settings.BT_SOURCE = false;
+            }
+        }
+    } else {
+        if (bt_source.is_init()) {
+            bt_source.reset();
+            AUDIO_LOG_INFO("deactivate Bluetooth source");
+        }
+    }
+    // ----------------------------------------------------------------------------------------------
+
     bool continueI2S = true;
     m_plCh.err = ESP_OK;
 
@@ -3228,6 +3248,7 @@ void Audio::playChunk() {
             if (settings.IIR_FILTER) IIR_filter(m_i2sWorkBuff.get(), readWords);
             if (m_f_forceMono) stereo2mono(m_i2sWorkBuff.get(), readWords);
             if (settings.VOLUME_CONTROL) Gain(m_i2sWorkBuff.get(), readWords);
+            if (bt_source.connected()) bt_source.playChunk(m_i2sWorkBuff.get(), readWords);
 
             audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
             //--------------------------------------------------------------------------------------------------------
