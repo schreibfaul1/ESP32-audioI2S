@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
 #include "psram_unique_ptr.hpp"
+#include <Arduino.h>
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
@@ -726,7 +726,7 @@ class RingBuffer {
         return read;
     }
     //----------------------------------------------------------------------------------------------------------------------------------------------------
-    size_t peek(int32_t* dst, size_t words) {
+    size_t peek32(int32_t* dst, size_t words) {
 
         if (!m_init || !dst || words == 0) return 0;
 
@@ -755,6 +755,52 @@ class RingBuffer {
             if (readIndex == m_bufSize) readIndex = 0;
         }
         return read;
+    }
+    //----------------------------------------------------------------------------------------------------------------------------------------------------
+    size_t peek8(uint8_t* dst, size_t bytes) {
+
+        if (!m_init || !dst || bytes == 0) return 0;
+
+        // Always output full 16-bit values
+        bytes &= ~static_cast<size_t>(1);
+
+        // Two output bytes per int32_t sample
+        size_t samples = std::min(bytes / 2, bufferFilled());
+
+        size_t written = 0;
+        size_t readIndex = m_readIndex;
+
+        while (written < samples * 2) {
+            size_t chunk;
+
+            if (readIndex < m_writeIndex) {
+                chunk = m_writeIndex - readIndex;
+            } else {
+                chunk = m_bufSize - readIndex;
+
+                if (chunk == 0) {
+                    m_log.assignf("RingBuffer: m_bufSize=readIndex, filled: {}", bufferFilled());
+                    m_log.println();
+                    break;
+                }
+            }
+
+            chunk = std::min(chunk, samples - written / 2);
+
+            const int32_t* src = reinterpret_cast<const int32_t*>(m_buffer.get() + readIndex);
+
+            for (size_t i = 0; i < chunk; ++i) {
+                uint32_t sample = static_cast<uint32_t>(src[i]);
+
+                dst[written++] = static_cast<uint8_t>(sample >> 24);
+                dst[written++] = static_cast<uint8_t>(sample >> 16);
+            }
+
+            readIndex += chunk;
+            if (readIndex == m_bufSize) readIndex = 0;
+        }
+
+        return written;
     }
     //----------------------------------------------------------------------------------------------------------------------------------------------------
     inline size_t advanceIndex(size_t index, size_t words) const {

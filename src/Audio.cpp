@@ -3210,9 +3210,11 @@ void Audio::playChunk() {
             bool res = bt_source.init(settings.BT_DEV_NANE);
             if (res) {
                 AUDIO_LOG_INFO("initialisize Bluetooth source, dev name: {}", settings.BT_DEV_NANE);
+                setOutputSampleRate(Audio::SR_44100);
             } else {
                 AUDIO_LOG_ERROR("initialisize Bluetooth source failed");
                 settings.BT_SOURCE = false;
+                setOutputSampleRate(Audio::SR_ORIGIN);
             }
         }
     } else {
@@ -3237,7 +3239,7 @@ void Audio::playChunk() {
             size_t readWords = std::min(SamplesBuff.bufferFilled(), m_work_words);
             readWords &= ~static_cast<size_t>(1);
             if (readWords == 0) break;
-            SamplesBuff.peek(m_i2sWorkBuff.get(), readWords);
+            SamplesBuff.peek32(m_i2sWorkBuff.get(), readWords);
             //-------------------------------------------------------------------------------------------------------
             // samples manipulation
             //-------------------------------------------------------------------------------------------------------
@@ -3248,7 +3250,7 @@ void Audio::playChunk() {
             if (settings.IIR_FILTER) IIR_filter(m_i2sWorkBuff.get(), readWords);
             if (m_f_forceMono) stereo2mono(m_i2sWorkBuff.get(), readWords);
             if (settings.VOLUME_CONTROL) Gain(m_i2sWorkBuff.get(), readWords);
-            if (bt_source.connected()) bt_source.playChunk(m_i2sWorkBuff.get(), readWords);
+            if (bt_source.connected()) bt_source.getChunk(m_i2sWorkBuff.get(), readWords);
 
             audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
             //--------------------------------------------------------------------------------------------------------
