@@ -322,6 +322,7 @@ class VorbisDecoder : public Decoder {
 
     ps_ptr<vorbis_info_floor> floor0_info_unpack();
     void                      setDefaults();
+    void                      dropTransientOggState();
     void                      clearGlobalConfigurations();
     int32_t                   parse_OGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t                   vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
