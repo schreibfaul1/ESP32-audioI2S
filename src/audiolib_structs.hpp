@@ -128,6 +128,7 @@ struct plCh_t { // used in playChunk
 struct caSa_t { // used in cacheSamples
     size_t sourceWordsConsumed = 0;
     bool   firstCall = false;
+    bool   resampled = false; // this frame has already been resampled
 };
 
 struct lVar_t { // used in loop

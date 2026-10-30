@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1a                                                                                                                         ";
-/*  Updated on: Oct 29, 2026
+    Version 4.0.1b                                                                                                                         ";
+/*  Updated on: Oct 30, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3161,6 +3161,7 @@ void Audio::cacheSamples() {
     if (m_f_firstCacheSamplesCall) {
         m_f_firstCacheSamplesCall = false;
         m_caSa.sourceWordsConsumed = 0;
+        m_caSa.resampled = false;
     }
     bool     continueI2S = true;
     int32_t* sourceBuff = nullptr;
@@ -3168,9 +3169,10 @@ void Audio::cacheSamples() {
     size_t   written = 0;
 
     //------------------------------------------------------------------------------------------------------------------------------------------------
-    if (m_caSa.sourceWordsConsumed == 0) {
+    if (m_caSa.sourceWordsConsumed == 0 && !m_caSa.resampled) {
         if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
             m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+            m_caSa.resampled = true;
             sourceBuff = m_resamplesBuff.get();
         } else {
             sourceBuff = m_outBuff.get();
@@ -3190,6 +3192,7 @@ void Audio::cacheSamples() {
     if (m_caSa.sourceWordsConsumed >= sourceWords) {
         m_caSa.sourceWordsConsumed = 0;
         m_validSamples = 0;
+        m_caSa.resampled = false;
     }
     return;
 }
@@ -5618,6 +5621,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     if (m_validSamples) {
         calculateAudioTime(bytesDecoded, samples_out);
+        m_caSa.resampled = false; // newly decoded frame
         cacheSamples();
     }
     if (SamplesBuff.bufferFilled()) { playChunk(); }
