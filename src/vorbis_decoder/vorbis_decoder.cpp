@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 17.07.2026
+ *  Updated on: 29.10.2026
  */
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //                                     O G G    I M P L.
@@ -79,6 +79,21 @@ void VorbisDecoder::setDefaults() {
     m_commentBlockSegmentSize = 0;
     m_vorbisBlockPicItem.shrink_to_fit();
     clear();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::dropTransientOggState() {
+    // Confirmed parser failure or a new logical stream. Codebooks, floors, and the
+    // DSP object stay: setDefaults() would destroy them, and one bad audio packet
+    // must not force a new header chain. lastSegmentTable keeps its allocation.
+    m_ogg_items.segment_table.clear();
+    m_ogg_items.bytes_consumed_from_other = 0;
+    m_ogg_items.data_ptr = nullptr;
+    m_ogg_items.lastSegmentTableLen = 0;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
+    m_f_oggLastPage = false;
+    m_f_parseOggDone = false;
+    m_bitReader.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
@@ -187,7 +202,7 @@ exit:
     if (ret >= 0) { m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft); }
     if (ret < 0) {
         VORBIS_LOG_ERROR("ret {}", ret);
-        m_ogg_items.segment_table.clear();
+        dropTransientOggState();
     }
     if (ret == 0) {
         if (m_vorbisChannels == 1) {
@@ -827,7 +842,17 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
     int32_t  ret = 0;
     uint32_t ogg_lengt_total = 0;
     (void)ret;
+    // 8192 is the historical search window. bitReader() calls this with a dummy
+    // length of 256 that only measures bytes consumed, so *bytesLeft is not a
+    // physical bound on every path. Do not shrink the search to that dummy.
     int32_t idx = special_index_of(inbuf, "OggS", 8192);
+    // special_index_of returns -1 when the capture is absent. Reject that before
+    // any pointer update: inbuf += -1 reads the byte in front of the buffer, and
+    // *bytesLeft -= -1 makes the caller believe one extra byte is available.
+    if (idx < 0) {
+        VORBIS_LOG_ERROR("Vorbis decoder asynchron, 'OggS' not found");
+        return VORBIS_ERR;
+    }
     if (idx != 0) {
         if (m_f_oggContinuedPage) {
             VORBIS_LOG_ERROR("Vorbis decoder asynchron, 'OggS' not found");
@@ -839,7 +864,13 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
-    (void)headerType;
+    // A new BOS drops the previous page's packet assembly before any of its
+    // segments are queued. A continued page of the same stream is not BOS and
+    // must keep lastSegmentTableLen for the real cross-page packet.
+    const bool continuedPage = headerType & 0x01; // set: packet continued from the previous page
+    const bool firstPage = headerType & 0x02;     // set: first page of a logical bitstream (bos)
+    const bool lastPage = headerType & 0x04;      // set: last page of a logical bitstream (eos)
+    if (firstPage) { dropTransientOggState(); }
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
@@ -880,10 +911,6 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
         ogg_lengt_total += n;
     }
     m_vorbisCompressionRatio = (float)(960 * 2 * pageSegments) / ogg_lengt_total; // const 960 validBytes out
-
-    bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
-    bool lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
 
     uint16_t headerSize = pageSegments + 27;
 
@@ -1201,9 +1228,11 @@ int32_t VorbisDecoder::bitReader(uint16_t nBits) {
                 bits_left = m_bitReader.headbit;
             }
 
-            // Load new Ogg page
+            // Keep the page address locally. A BOS page resets m_bitReader inside
+            // parse_OGG, and the consumed count is taken from oggLen afterwards.
+            uint8_t* pageStart = m_bitReader.headptr;
             int32_t  oggLen = 256;
-            int32_t  ret = parse_OGG(m_bitReader.headptr, &oggLen);
+            int32_t  ret = parse_OGG(pageStart, &oggLen);
             uint32_t header_consumed = (256 - oggLen);
             VORBIS_LOG_DEBUG("header_consumed {}", header_consumed);
             if (ret != VORBIS_PARSE_OGG_DONE) {
@@ -1225,7 +1254,7 @@ int32_t VorbisDecoder::bitReader(uint16_t nBits) {
             }
 
             // New page data starts behind header+lacing
-            uint8_t* newPage = m_bitReader.headptr + header_consumed;
+            uint8_t* newPage = pageStart + header_consumed;
             bitReader_setData(newPage, m_vorbis_segment_length);
 
             // If remaining bits exist → append to the beginning of the new page
