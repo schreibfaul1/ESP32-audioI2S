@@ -16,6 +16,7 @@ char audioI2SVers[] = "\
 *****************************************************************************************************************************************************/
 
 #include "Audio.h"
+#include "decoder_lifecycle.h"
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
 #include "mp3_decoder/mp3_decoder.h"
@@ -73,12 +74,12 @@ Audio::Audio(uint8_t i2sPort) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
-    stopSong();
-    setDefaults();
+    // Stop the audio task before touching the decoder or deleting the mutexes.
+    stopAudioTask();
+    stopSongWithOwnership(true);
 
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
-    stopAudioTask();
     dsps_fft2r_deinit_fc32();
     vSemaphoreDelete(mutex_audioTask);
     vSemaphoreDelete(mutex_audioTaskIsDecoding);
@@ -137,7 +138,9 @@ void Audio::zeroI2Sbuff() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setDefaults() {
-    stopSong();
+    if (!stopSongWithOwnership(true)) return;
+    // Invalidate a NEED_RESTART that was published for the previous stream.
+    m_streamEpoch.fetch_add(1, std::memory_order_acq_rel);
     initInBuff(); // initialize InputBuffer if not already done
 
     InBuff.reset();
@@ -2993,34 +2996,72 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::stopSong() {
-    m_f_lockInBuffer = true; // wait for the decoding to finish
-    uint8_t  maxWait = 0;
-    uint32_t currTime = getAudioCurrentTime();
-
-    bool pdTrue = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
-    {
-        if (m_f_running) {
-            m_audio_items.mute = true;
-            m_f_running = false;
-            if (m_client->connected()) {
-                if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
-                if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
-                m_client->stop();
-            }
-            if (m_audiofile) {
-                info(*this, evt_info, "Closing audio file \"{}\"", m_audiofile.name());
-                m_audiofile.close();
-            }
-        }
-        m_dataMode = AUDIO_NONE;
-        m_streamType = ST_NONE;
-        m_playlistFormat = FORMAT_NONE;
-        destroy_decoder();
-    }
-    xSemaphoreGive(mutex_audioTaskIsDecoding);
-    if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
-    m_f_lockInBuffer = false;
+    const uint32_t currTime = getAudioCurrentTime();
+    if (stopSongWithOwnership(true)) m_f_lockInBuffer = false;
     return currTime;
+}
+
+bool Audio::stopSongWithOwnership(bool clear_pending) {
+    m_f_lockInBuffer = true; // keep playAudioData out until the caller clears it
+    const bool took = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ) == pdTRUE;
+    const audiolib::MutexStop decision = audiolib::mutexStop(took);
+    if (!decision.proceed) {
+        audiolib::requestDecoderCtrl(m_decoderCtrl, decision.publish);
+        AUDIO_LOG_WARN("was unable to obtain the semaphore");
+        return false;
+    }
+    // User/public stop consumes pending commands. A service claim already set
+    // the slot to None; clearing here would drop a Stop published after that claim.
+    if (clear_pending) m_decoderCtrl.store(static_cast<uint8_t>(audiolib::DecoderCtrl::None), std::memory_order_release);
+    stopSongLocked();
+    if (decision.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+    return true;
+}
+
+void Audio::stopSongLocked() {
+    if (m_f_running) {
+        m_audio_items.mute = true;
+        m_f_running = false;
+        if (m_client->connected()) {
+            if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
+            if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
+            m_client->stop();
+        }
+        if (m_audiofile) {
+            info(*this, evt_info, "Closing audio file \"{}\"", m_audiofile.name());
+            m_audiofile.close();
+        }
+    }
+    m_dataMode = AUDIO_NONE;
+    m_streamType = ST_NONE;
+    m_playlistFormat = FORMAT_NONE;
+    destroy_decoder();
+}
+
+void Audio::requestReconnect() {
+    m_reconnectEpoch.store(m_streamEpoch.load(std::memory_order_acquire), std::memory_order_release);
+    audiolib::requestDecoderCtrl(m_decoderCtrl, audiolib::DecoderCtrl::Reconnect);
+}
+
+void Audio::serviceDecoderCtrl() {
+    uint8_t claimed = 0;
+    if (!audiolib::claimDecoderCtrl(m_decoderCtrl, &claimed)) return;
+
+    if (!stopSongWithOwnership(false)) {
+        // Failed take already published Stop. Restore must raise, never demote.
+        audiolib::restoreDecoderCtrl(m_decoderCtrl, claimed);
+        return;
+    }
+
+    const uint32_t published_epoch = m_reconnectEpoch.load(std::memory_order_acquire);
+    const uint32_t stream_epoch = m_streamEpoch.load(std::memory_order_acquire);
+    const bool     do_reconnect = audiolib::reconnectAfterOwnedStop(m_decoderCtrl, claimed) &&
+                              audiolib::reconnectEpochCurrent(published_epoch, stream_epoch) && m_lastHost.valid();
+    if (do_reconnect) {
+        if (!connecttohost(m_lastHost.get()) && !audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire))) m_f_lockInBuffer = false;
+        return;
+    }
+    m_f_lockInBuffer = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::pauseResume() {
@@ -3271,6 +3312,7 @@ void Audio::playChunk() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
 
+    serviceDecoderCtrl();
     get_info();
     if (!m_f_running) return;
 
@@ -4609,7 +4651,17 @@ void Audio::playAudioData() {
         cacheSamples();
         return;
     }
-    //--------------------------------------------------------------------------------
+    if (!isFile() && !isStream()) return;
+    if (audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire))) return;
+
+    const bool took = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ) == pdTRUE;
+    const audiolib::DecodeGate gate = audiolib::decodeGate(took, audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire)));
+    if (!gate.enter) {
+        if (gate.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+        else AUDIO_LOG_WARN("was unable to obtain the semaphore");
+        return;
+    }
+
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
     m_pad.bytesDecoded = 0;
@@ -4622,11 +4674,7 @@ void Audio::playAudioData() {
         m_bytesNotConsumed = 0;
         m_pad.lastFrames = false;
     }
-    //--------------------------------------------------------------------------------
 
-    if (!isFile() && !isStream()) return;
-
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     {
         m_pad.bytesDecoded = 0;
         if (isFile()) {
@@ -5404,14 +5452,15 @@ void Audio::setDecoderItems() {
     }
     info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
 
-    if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
-        AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found {}", getBitsPerSample());
-        stopSong();
-    }
-
-    if (getChannels() != 1 && getChannels() != 2) {
-        AUDIO_LOG_ERROR("Num of channels must be 1 or 2, found {}", getChannels());
-        stopSong();
+    if (!audiolib::sampleFormatUsable(getChannels(), getBitsPerSample())) {
+        if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
+            AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found {}", getBitsPerSample());
+        }
+        if (getChannels() != 1 && getChannels() != 2) {
+            AUDIO_LOG_ERROR("Num of channels must be 1 or 2, found {}", getChannels());
+        }
+        audiolib::requestDecoderCtrl(m_decoderCtrl, audiolib::DecoderCtrl::Stop);
+        return;
     }
     showCodecParams();
 
@@ -5440,7 +5489,8 @@ void Audio::setDecoderItems() {
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
     // for(int i = 0; i < 10; i++){printf("0x%02X ", data[i]);} printf("\n");
     if (res == -100) {
-        stopSong();
+        const audiolib::FaultAction act = audiolib::deferredFault(true, false);
+        audiolib::requestDecoderCtrl(m_decoderCtrl, act.publish);
         return bytesDecoded;
     } // serious error, e.g. decoder could not be initialized
     if (m_codec == CODEC_AAC && res == -21) { // mono <-> stereo change
@@ -5462,7 +5512,8 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
     if (m_codec == CODEC_MP3) {
         if (res == MP3Decoder::MP3_NEED_RESTART) {
             info(*this, evt_info, "" ANSI_ESC_RED "Network error" ANSI_ESC_RESET "");
-            connecttohost(m_lastHost.get());
+            const audiolib::FaultAction act = audiolib::deferredFault(false, true);
+            if (act.publish == audiolib::DecoderCtrl::Reconnect) requestReconnect();
             return 0;
         }
     }
@@ -7883,6 +7934,7 @@ void Audio::performAudioTask() {
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
         playAudioData();
+        serviceDecoderCtrl();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
         // fade_out_levels(false);

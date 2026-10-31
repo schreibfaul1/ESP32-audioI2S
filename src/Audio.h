@@ -7,6 +7,7 @@
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
 #include "buffers.hpp"
+#include "decoder_lifecycle.h"
 #include "esp_arduino_version.h"
 #include "esp_dsp.h"
 #include "psram_unique_ptr.hpp"
@@ -169,7 +170,11 @@ class Audio {
     void                      destroy_decoder();
     void                      latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void                      htmlToUTF8(char* str);
-    void                      setDefaults(); // free buffers and set defaults
+    void                      setDefaults(); // free buffers and set defaults; early-return if decode mutex not taken
+    bool                      stopSongWithOwnership(bool clear_pending = true);
+    void                      stopSongLocked();
+    void                      serviceDecoderCtrl();
+    void                      requestReconnect();
     int32_t                   audioFileRead();
     int32_t                   audioFileRead(uint16_t timeout_ms);
     int32_t                   audioFileRead(uint8_t* buff, size_t len);
@@ -365,6 +370,9 @@ class Audio {
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;
     TaskHandle_t      m_audioTaskHandle = nullptr;
+    std::atomic<uint8_t>  m_decoderCtrl{0};     // audiolib::DecoderCtrl. Stop outranks reconnect.
+    std::atomic<uint32_t> m_streamEpoch{0};     // bumped on successful setDefaults (new user stream)
+    std::atomic<uint32_t> m_reconnectEpoch{0};  // epoch captured when Reconnect was published
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
