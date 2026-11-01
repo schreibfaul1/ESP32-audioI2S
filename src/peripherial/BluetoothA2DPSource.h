@@ -19,7 +19,6 @@
 
 #pragma once
 
-#include "A2DPEncoder.h"
 #include "BluetoothA2DPCommon.h"
 #include <vector>
 
