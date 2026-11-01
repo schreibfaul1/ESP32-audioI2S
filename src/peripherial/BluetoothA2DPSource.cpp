@@ -826,14 +826,6 @@ void BluetoothA2DPSource::app_rc_ct_callback(esp_avrc_ct_cb_event_t event, esp_a
     }
 }
 
-void BluetoothA2DPSource::bt_av_volume_changed(void) {
-    if (esp_avrc_rn_evt_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_TEST, &s_avrc_peer_rn_cap, ESP_AVRC_RN_VOLUME_CHANGE)) {
-        esp_avrc_ct_send_register_notification_cmd(APP_RC_CT_TL_RN_VOLUME_CHANGE, ESP_AVRC_RN_VOLUME_CHANGE, 0);
-    } else {
-        log_w("Unhandled event");
-    }
-}
-
 void BluetoothA2DPSource::bt_av_notify_evt_handler(uint8_t event_id, esp_avrc_rn_param_t* event_parameter) {
     log_d("%s evt %d", __func__, event_id);
     switch (event_id) {
@@ -894,7 +886,7 @@ void BluetoothA2DPSource::bt_av_hdl_avrc_ct_evt(uint16_t event, void* p_param) {
             break;
         }
         case ESP_AVRC_CT_SET_ABSOLUTE_VOLUME_RSP_EVT: { // when set absolute volume responsed, this event comes
-            log_w("Set absolute volume response: volume %d", rc->set_volume_rsp.volume);
+            log_w("unused event: Set absolute volume");
             break;
         }
         case ESP_AVRC_CT_PROF_STATE_EVT: {
@@ -954,15 +946,6 @@ void BluetoothA2DPSource::av_hdl_avrc_tg_evt(uint16_t event, void* p_param) {
             log_i("AVRC register event notification: %d, param: 0x%x", rc->reg_ntf.event_id, rc->reg_ntf.event_parameter);
             if (rc->reg_ntf.event_id == ESP_AVRC_RN_VOLUME_CHANGE) {
                 log_w("ESP_AVRC_RN_VOLUME_CHANGE");
-                // s_volume_notify = true;
-                //  esp_avrc_rn_param_t rn_param;
-                //  rn_param.volume = s_volume;
-                //  esp_avrc_tg_send_rn_rsp(ESP_AVRC_RN_VOLUME_CHANGE,
-                //                          ESP_AVRC_RN_RSP_INTERIM, &rn_param);
-                //  // notify user aplication volume change by local is completed
-                //  if (avrc_rn_volchg_complete_callback != nullptr) {
-                //    (*avrc_rn_volchg_complete_callback)(s_volume);
-                //  }
             }
             break;
         }

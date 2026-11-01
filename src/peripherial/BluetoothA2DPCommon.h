@@ -60,7 +60,7 @@ using namespace esp_i2s;
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "A2DPVolumeControl.h"
+//#include "A2DPVolumeControl.h"
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
 #include "esp_bt.h"
@@ -236,29 +236,29 @@ class BluetoothA2DPCommon {
   }
 
   /// Sets the volume (range 0 - 127)
-  virtual void set_volume(uint8_t volume) {
-    if (is_volume_used && volume_value == volume) {
-      return;
-    }
-    volume_value = std::min((int)volume, 0x7F);
-    ESP_LOGI(BT_AV_TAG, "set_volume: %d", volume_value);
-    volume_control()->set_volume(volume_value);
-    volume_control()->set_enabled(true);
-    is_volume_used = true;
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-    if (isSource() && is_connected()){
-      esp_avrc_ct_send_set_absolute_volume_cmd(0, volume_value);
-    }
-#endif
-  }
+//   virtual void set_volume(uint8_t volume) {
+//     if (is_volume_used && volume_value == volume) {
+//       return;
+//     }
+//     volume_value = std::min((int)volume, 0x7F);
+//     ESP_LOGI(BT_AV_TAG, "set_volume: %d", volume_value);
+//     volume_control()->set_volume(volume_value);
+//     volume_control()->set_enabled(true);
+//     is_volume_used = true;
+// #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
+//     if (isSource() && is_connected()){
+//       esp_avrc_ct_send_set_absolute_volume_cmd(0, volume_value);
+//     }
+// #endif
+//  }
 
   /// Determines the actual volume
-  virtual int get_volume() { return is_volume_used ? volume_value : 0; }
+//
 
   /// you can define a custom VolumeControl implementation
-  virtual void set_volume_control(A2DPVolumeControl *ptr) {
-    volume_control_ptr = ptr;
-  }
+  // virtual void set_volume_control(A2DPVolumeControl *ptr) {
+  //   volume_control_ptr = ptr;
+  // }
 
   /// Determine the actual audio state
   virtual esp_a2d_audio_state_t get_audio_state();
@@ -383,8 +383,8 @@ class BluetoothA2DPCommon {
   unsigned int default_reconnect_timout = 10000;
   bool is_autoreconnect_allowed = false;
   uint32_t debounce_ms = 0;
-  A2DPDefaultVolumeControl default_volume_control;
-  A2DPVolumeControl *volume_control_ptr = nullptr;
+  // A2DPDefaultVolumeControl default_volume_control;
+  // A2DPVolumeControl *volume_control_ptr = nullptr;
   esp_bd_addr_t last_connection = {0, 0, 0, 0, 0, 0};
   bool is_start_disabled = false;
   bool is_target_status_active = true;
@@ -441,10 +441,10 @@ class BluetoothA2DPCommon {
   virtual void set_scan_mode_connectable_default() = 0;
 
   /// provides access to the VolumeControl object
-  virtual A2DPVolumeControl *volume_control() {
-    return volume_control_ptr != nullptr ? volume_control_ptr
-                                         : &default_volume_control;
-  }
+  // virtual A2DPVolumeControl *volume_control() {
+  //   return volume_control_ptr != nullptr ? volume_control_ptr
+  //                                        : &default_volume_control;
+  // }
 
   virtual bool bt_start();
   virtual esp_err_t bluedroid_init();

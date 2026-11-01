@@ -22,11 +22,13 @@
 #include "BluetoothA2DPCommon.h"
 #include <vector>
 
-#if IS_VALID_PLATFORM
-
     #include "Stream.h"
 
     #define TIMER_ARG_TYPE tmrTimerControl*
+
+    struct __attribute__((packed)) Frame;
+
+
 
 typedef int32_t (*music_data_cb_t)(uint8_t* data, int32_t len);
 typedef int32_t (*music_data_frames_cb_t)(Frame* data, int32_t len);
@@ -264,14 +266,11 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
 
     void set_scan_mode_connectable_default() override { set_scan_mode_connectable(false); }
 
-    #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
     virtual void bt_av_notify_evt_handler(uint8_t event, esp_avrc_rn_param_t* param);
-    virtual void bt_av_volume_changed(void);
     virtual void app_rc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t* param) override;
     virtual void av_hdl_avrc_tg_evt(uint16_t event, void* p_param) override;
     virtual bool isSource() { return true; }
 
-    #endif
+
 };
 
-#endif // platform
