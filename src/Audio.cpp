@@ -16,6 +16,124 @@ char audioI2SVers[] = "\
 *****************************************************************************************************************************************************/
 
 #include "Audio.h"
+// Decoder lifecycle helpers (inlined from former decoder_lifecycle.h).
+// Decisions only — FreeRTOS take/give stays in Audio methods below.
+namespace audiolib {
+
+enum class DecoderCtrl : uint8_t {
+    None = 0,
+    Reconnect = 1, // MP3 NEED_RESTART: stop, then one connecttohost outside the decode mutex
+    Stop = 2,      // fatal decode or rejected format; outranks a reconnect
+};
+
+inline DecoderCtrl raiseDecoderCtrl(DecoderCtrl current, DecoderCtrl request) {
+    return static_cast<uint8_t>(request) > static_cast<uint8_t>(current) ? request : current;
+}
+
+// Monotonic raise. Stop can never be replaced by Reconnect or None through this path.
+inline void requestDecoderCtrl(std::atomic<uint8_t>& slot, DecoderCtrl request) {
+    uint8_t current = slot.load(std::memory_order_acquire);
+    for (;;) {
+        const DecoderCtrl next = raiseDecoderCtrl(static_cast<DecoderCtrl>(current), request);
+        if (next == static_cast<DecoderCtrl>(current)) return;
+        if (slot.compare_exchange_weak(current, static_cast<uint8_t>(next), std::memory_order_acq_rel, std::memory_order_acquire)) return;
+    }
+}
+
+inline bool decoderCtrlPending(uint8_t raw) {
+    return raw != static_cast<uint8_t>(DecoderCtrl::None);
+}
+
+// Claim one pending command for service. Returns false if none or lost the CAS.
+inline bool claimDecoderCtrl(std::atomic<uint8_t>& slot, uint8_t* claimed_out) {
+    uint8_t claimed = slot.load(std::memory_order_acquire);
+    if (!decoderCtrlPending(claimed)) return false;
+    if (!slot.compare_exchange_strong(claimed, static_cast<uint8_t>(DecoderCtrl::None), std::memory_order_acq_rel, std::memory_order_acquire)) return false;
+    *claimed_out = claimed;
+    return true;
+}
+
+// After a failed owned stop: put the claimed command back without demoting a
+// Stop that another task published while the take timed out.
+inline void restoreDecoderCtrl(std::atomic<uint8_t>& slot, uint8_t claimed) {
+    requestDecoderCtrl(slot, static_cast<DecoderCtrl>(claimed));
+}
+
+// After a successful destroy for a claimed command: a late Stop is already
+// satisfied by that destroy and is consumed. Reconnect runs only when the
+// claim was Reconnect and no Stop is pending.
+inline bool reconnectAfterOwnedStop(std::atomic<uint8_t>& slot, uint8_t claimed) {
+    uint8_t late = slot.load(std::memory_order_acquire);
+    if (late == static_cast<uint8_t>(DecoderCtrl::Stop)) {
+        uint8_t expected = static_cast<uint8_t>(DecoderCtrl::Stop);
+        slot.compare_exchange_strong(expected, static_cast<uint8_t>(DecoderCtrl::None), std::memory_order_acq_rel, std::memory_order_acquire);
+        return false;
+    }
+    return claimed == static_cast<uint8_t>(DecoderCtrl::Reconnect);
+}
+
+// Stale NEED_RESTART after the user started a new stream (setDefaults bumps epoch).
+inline bool reconnectEpochCurrent(uint32_t published_epoch, uint32_t stream_epoch) {
+    return published_epoch == stream_epoch;
+}
+
+// Under decode-mutex ownership for a claimed command: may we destroy?
+// Stop claims always destroy. Reconnect destroys only when still current, unless a
+// late Stop arrived after the claim (Stop outranks and forces destroy, no reconnect).
+inline bool destroyAfterReconnectClaim(uint8_t claimed, uint8_t late_ctrl, uint32_t published_epoch,
+                                       uint32_t stream_epoch) {
+    if (claimed != static_cast<uint8_t>(DecoderCtrl::Reconnect)) return true;
+    if (late_ctrl == static_cast<uint8_t>(DecoderCtrl::Stop)) return true;
+    return reconnectEpochCurrent(published_epoch, stream_epoch);
+}
+
+// Result of xSemaphoreTake, not of the constant pdTRUE.
+struct MutexStop {
+    bool        proceed; // take succeeded: caller may change decoder state, destroy, and give
+    bool        give;    // give only when this call owns the mutex
+    DecoderCtrl publish; // published when the take failed; None when the caller proceeds
+};
+
+inline MutexStop mutexStop(bool take_succeeded) {
+    if (!take_succeeded) return {false, false, DecoderCtrl::Stop};
+    return {true, true, DecoderCtrl::None};
+}
+
+// A decode section that already failed the take must not give.
+// A take that won, then observed a pending stop, must give and must not decode.
+struct DecodeGate {
+    bool enter;
+    bool give;
+};
+
+inline DecodeGate decodeGate(bool take_succeeded, bool stop_pending) {
+    if (!take_succeeded) return {false, false};
+    if (stop_pending) return {false, true};
+    return {true, false}; // caller gives when the section ends
+}
+
+struct FaultAction {
+    DecoderCtrl publish;
+    bool        call_stop_now;
+    bool        call_connect_now;
+    bool        keep_using_decoder;
+};
+
+// fatal is decode result -100. need_restart is MP3_NEED_RESTART.
+// Neither may call stopSong or connecttohost while the decode mutex is held.
+inline FaultAction deferredFault(bool fatal, bool need_restart) {
+    if (fatal) return {DecoderCtrl::Stop, false, false, false};
+    if (need_restart) return {DecoderCtrl::Reconnect, false, false, false};
+    return {DecoderCtrl::None, false, false, true};
+}
+
+inline bool sampleFormatUsable(int channels, int bits_per_sample) {
+    const bool bits_ok = bits_per_sample == 8 || bits_per_sample == 16 || bits_per_sample == 24 || bits_per_sample == 32;
+    const bool channels_ok = channels == 1 || channels == 2;
+    return bits_ok && channels_ok;
+}
+
+} // namespace audiolib
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
 #include "mp3_decoder/mp3_decoder.h"
@@ -73,12 +191,12 @@ Audio::Audio(uint8_t i2sPort) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
-    stopSong();
-    setDefaults();
+    // Stop the audio task before touching the decoder or deleting the mutexes.
+    stopAudioTask();
+    stopSongWithOwnership(true);
 
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
-    stopAudioTask();
     dsps_fft2r_deinit_fc32();
     vSemaphoreDelete(mutex_audioTask);
     vSemaphoreDelete(mutex_audioTaskIsDecoding);
@@ -136,8 +254,10 @@ void Audio::zeroI2Sbuff() {
     i2s_channel_preload_data(m_i2s_tx_handle, buff, 2, &bytes_loaded);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::setDefaults() {
-    stopSong();
+bool Audio::setDefaults() {
+    if (!stopSongWithOwnership(true)) return false;
+    // Invalidate a NEED_RESTART that was published for the previous stream.
+    m_streamEpoch.fetch_add(1, std::memory_order_acq_rel);
     initInBuff(); // initialize InputBuffer if not already done
 
     InBuff.reset();
@@ -233,6 +353,7 @@ void Audio::setDefaults() {
     m_M4A_sampleRate = 0;
     m_lastGranulePosition = 0;
     m_validSamples = 0;
+    return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -281,7 +402,7 @@ bool Audio::openai_speech(const char* api_key, const char* model, const char* in
         return in;
     };
 
-    setDefaults();
+    if (!setDefaults()) return false;
     m_f_ssl = true;
 
     ps_ptr<char> input_clean = clean(input);
@@ -463,7 +584,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         b64encode((const char*)toEncode.get(), toEncode.strlen(), authorization.get());
     }
 
-    setDefaults();
+    if (!setDefaults()) return false;
 
     rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
@@ -761,7 +882,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
         AUDIO_LOG_ERROR("No file extension found");
         goto exit;
     } // guard
-    setDefaults(); // free buffers an set defaults
+    if (!setDefaults()) goto exit; // free buffers and set defaults; abort if ownership unavailable
 
     if (c_path.ends_with_icase(".mp3")) m_codec = CODEC_MP3;
     if (c_path.ends_with_icase(".m4a")) m_codec = CODEC_M4A;
@@ -798,7 +919,7 @@ exit:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::connecttospeech(const char* speech, const char* lang) {
 
-    setDefaults();
+    if (!setDefaults()) return false;
     char host[] = "translate.google.com.vn";
     char path[] = "/translate_tts";
 
@@ -2993,34 +3114,103 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::stopSong() {
-    m_f_lockInBuffer = true; // wait for the decoding to finish
-    uint8_t  maxWait = 0;
-    uint32_t currTime = getAudioCurrentTime();
-
-    bool pdTrue = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
-    {
-        if (m_f_running) {
-            m_audio_items.mute = true;
-            m_f_running = false;
-            if (m_client->connected()) {
-                if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
-                if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
-                m_client->stop();
-            }
-            if (m_audiofile) {
-                info(*this, evt_info, "Closing audio file \"{}\"", m_audiofile.name());
-                m_audiofile.close();
-            }
-        }
-        m_dataMode = AUDIO_NONE;
-        m_streamType = ST_NONE;
-        m_playlistFormat = FORMAT_NONE;
-        destroy_decoder();
-    }
-    xSemaphoreGive(mutex_audioTaskIsDecoding);
-    if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
-    m_f_lockInBuffer = false;
+    const uint32_t currTime = getAudioCurrentTime();
+    if (stopSongWithOwnership(true)) m_f_lockInBuffer = false;
     return currTime;
+}
+
+bool Audio::stopSongWithOwnership(bool clear_pending) {
+    m_f_lockInBuffer = true; // keep playAudioData out until the caller clears it
+    const bool took = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ) == pdTRUE;
+    const audiolib::MutexStop decision = audiolib::mutexStop(took);
+    if (!decision.proceed) {
+        audiolib::requestDecoderCtrl(m_decoderCtrl, decision.publish);
+        AUDIO_LOG_WARN("was unable to obtain the semaphore");
+        return false;
+    }
+    // User/public stop consumes pending commands. A service claim already set
+    // the slot to None; clearing here would drop a Stop published after that claim.
+    if (clear_pending) m_decoderCtrl.store(static_cast<uint8_t>(audiolib::DecoderCtrl::None), std::memory_order_release);
+    stopSongLocked();
+    if (decision.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+    return true;
+}
+
+void Audio::stopSongLocked() {
+    if (m_f_running) {
+        m_audio_items.mute = true;
+        m_f_running = false;
+        if (m_client->connected()) {
+            if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
+            if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
+            m_client->stop();
+        }
+        if (m_audiofile) {
+            info(*this, evt_info, "Closing audio file \"{}\"", m_audiofile.name());
+            m_audiofile.close();
+        }
+    }
+    m_dataMode = AUDIO_NONE;
+    m_streamType = ST_NONE;
+    m_playlistFormat = FORMAT_NONE;
+    destroy_decoder();
+}
+
+void Audio::requestReconnect() {
+    m_reconnectEpoch.store(m_streamEpoch.load(std::memory_order_acquire), std::memory_order_release);
+    audiolib::requestDecoderCtrl(m_decoderCtrl, audiolib::DecoderCtrl::Reconnect);
+}
+
+void Audio::serviceDecoderCtrl() {
+    uint8_t claimed = 0;
+    if (!audiolib::claimDecoderCtrl(m_decoderCtrl, &claimed)) return;
+
+    const bool claimed_reconnect = claimed == static_cast<uint8_t>(audiolib::DecoderCtrl::Reconnect);
+
+    // Drop a stale Reconnect before any destroy. A Stop published after the claim
+    // remains in the slot for a later service pass (Stop still outranks).
+    if (claimed_reconnect) {
+        const uint32_t published_epoch = m_reconnectEpoch.load(std::memory_order_acquire);
+        const uint32_t stream_epoch = m_streamEpoch.load(std::memory_order_acquire);
+        if (!audiolib::reconnectEpochCurrent(published_epoch, stream_epoch)) return;
+    }
+
+    // Take ownership here (instead of stopSongWithOwnership) so a reconnect that
+    // went stale while waiting for the mutex can release without destroying stream B.
+    m_f_lockInBuffer = true;
+    const bool took = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ) == pdTRUE;
+    const audiolib::MutexStop decision = audiolib::mutexStop(took);
+    if (!decision.proceed) {
+        // Failed take already implies no give/destroy. Publish Stop; restore must raise, never demote.
+        audiolib::requestDecoderCtrl(m_decoderCtrl, decision.publish);
+        audiolib::restoreDecoderCtrl(m_decoderCtrl, claimed);
+        return;
+    }
+
+    if (claimed_reconnect) {
+        const uint8_t  late = m_decoderCtrl.load(std::memory_order_acquire);
+        const uint32_t published_epoch = m_reconnectEpoch.load(std::memory_order_acquire);
+        const uint32_t stream_epoch = m_streamEpoch.load(std::memory_order_acquire);
+        if (!audiolib::destroyAfterReconnectClaim(claimed, late, published_epoch, stream_epoch)) {
+            if (decision.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+            m_f_lockInBuffer = false;
+            return;
+        }
+    }
+
+    // clear_pending stays false: a Stop published after the claim must survive.
+    stopSongLocked();
+    if (decision.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+
+    const uint32_t published_epoch = m_reconnectEpoch.load(std::memory_order_acquire);
+    const uint32_t stream_epoch = m_streamEpoch.load(std::memory_order_acquire);
+    const bool     do_reconnect = audiolib::reconnectAfterOwnedStop(m_decoderCtrl, claimed) &&
+                              audiolib::reconnectEpochCurrent(published_epoch, stream_epoch) && m_lastHost.valid();
+    if (do_reconnect) {
+        if (!connecttohost(m_lastHost.get()) && !audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire))) m_f_lockInBuffer = false;
+        return;
+    }
+    m_f_lockInBuffer = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::pauseResume() {
@@ -3271,6 +3461,7 @@ void Audio::playChunk() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
 
+    serviceDecoderCtrl();
     get_info();
     if (!m_f_running) return;
 
@@ -4609,7 +4800,17 @@ void Audio::playAudioData() {
         cacheSamples();
         return;
     }
-    //--------------------------------------------------------------------------------
+    if (!isFile() && !isStream()) return;
+    if (audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire))) return;
+
+    const bool took = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ) == pdTRUE;
+    const audiolib::DecodeGate gate = audiolib::decodeGate(took, audiolib::decoderCtrlPending(m_decoderCtrl.load(std::memory_order_acquire)));
+    if (!gate.enter) {
+        if (gate.give) xSemaphoreGive(mutex_audioTaskIsDecoding);
+        else AUDIO_LOG_WARN("was unable to obtain the semaphore");
+        return;
+    }
+
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
     m_pad.bytesDecoded = 0;
@@ -4622,11 +4823,7 @@ void Audio::playAudioData() {
         m_bytesNotConsumed = 0;
         m_pad.lastFrames = false;
     }
-    //--------------------------------------------------------------------------------
 
-    if (!isFile() && !isStream()) return;
-
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     {
         m_pad.bytesDecoded = 0;
         if (isFile()) {
@@ -5404,14 +5601,15 @@ void Audio::setDecoderItems() {
     }
     info(*this, evt_info, "Audio-Data-Start: {}", m_audioDataStart);
 
-    if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
-        AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found {}", getBitsPerSample());
-        stopSong();
-    }
-
-    if (getChannels() != 1 && getChannels() != 2) {
-        AUDIO_LOG_ERROR("Num of channels must be 1 or 2, found {}", getChannels());
-        stopSong();
+    if (!audiolib::sampleFormatUsable(getChannels(), getBitsPerSample())) {
+        if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
+            AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found {}", getBitsPerSample());
+        }
+        if (getChannels() != 1 && getChannels() != 2) {
+            AUDIO_LOG_ERROR("Num of channels must be 1 or 2, found {}", getChannels());
+        }
+        audiolib::requestDecoderCtrl(m_decoderCtrl, audiolib::DecoderCtrl::Stop);
+        return;
     }
     showCodecParams();
 
@@ -5440,7 +5638,8 @@ void Audio::setDecoderItems() {
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
     // for(int i = 0; i < 10; i++){printf("0x%02X ", data[i]);} printf("\n");
     if (res == -100) {
-        stopSong();
+        const audiolib::FaultAction act = audiolib::deferredFault(true, false);
+        audiolib::requestDecoderCtrl(m_decoderCtrl, act.publish);
         return bytesDecoded;
     } // serious error, e.g. decoder could not be initialized
     if (m_codec == CODEC_AAC && res == -21) { // mono <-> stereo change
@@ -5462,7 +5661,8 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
     if (m_codec == CODEC_MP3) {
         if (res == MP3Decoder::MP3_NEED_RESTART) {
             info(*this, evt_info, "" ANSI_ESC_RED "Network error" ANSI_ESC_RESET "");
-            connecttohost(m_lastHost.get());
+            const audiolib::FaultAction act = audiolib::deferredFault(false, true);
+            if (act.publish == audiolib::DecoderCtrl::Reconnect) requestReconnect();
             return 0;
         }
     }
@@ -7883,6 +8083,7 @@ void Audio::performAudioTask() {
     if (m_decoder) {
         xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
         playAudioData();
+        serviceDecoderCtrl();
         xSemaphoreGive(mutex_audioTask);
         gain_ramp();
         // fade_out_levels(false);
