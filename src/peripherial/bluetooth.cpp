@@ -20,6 +20,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
 }
 
 void BT_Source::reset() {
+    a2dp_source.end();
     if (bt_samplesBuffer.isInitialized()) bt_samplesBuffer.reset();
     m_isInit = false;
 }
@@ -51,6 +52,9 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
     size_t filled = bt_samplesBuffer.bufferFilled();
     size_t free = bt_samplesBuffer.freeSpace();
     size_t ws = bt_samplesBuffer.writeSpace();
+    (void)filled;
+    (void)free;
+    (void)ws;
     // Two output bytes per int32_t sample
     // if (static_cast<size_t>(bytes) > available) {
     //     log_e("Not enough data: filled=%lu, requested=%li", static_cast<unsigned long>(available), static_cast<long>(bytes));
