@@ -2,29 +2,27 @@
 #pragma once
 
 #define AUTOCONNECT_TRY_NUM               1000
-#define A2DP_LEGACY_I2S_SUPPORT           (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
 #define A2DP_SPP_SUPPORT                  1
-#define A2DP_MANAGED_ENCODER_SUPPORTED    (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0) && A2DP_I2S_AUDIOTOOLS)
 #define A2DP_I2S_MAX_WRITE_SIZE           1024 * 5
 #define A2DP_I2S_MAX_WRITE_DELAY_MS       0
 #define A2DP_DISCONNECT_LIMIT             20
 
 
 #include "Arduino.h"
-#include "esp32-hal-bt.h"
-#include "esp32-hal-log.h"
+// #include "esp32-hal-bt.h"
+// #include "esp32-hal-log.h"
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
 #include "esp_bt.h"
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
 #include "esp_gap_bt_api.h"
-#include "esp_spp_api.h"
-#include "esp_task_wdt.h"
-#include "esp_timer.h"
+// #include "esp_spp_api.h"
+// #include "esp_task_wdt.h"
+// #include "esp_timer.h"
 #include "map"
-#include "nvs.h"
-#include "nvs_flash.h"
+// #include "nvs.h"
+// #include "nvs_flash.h"
 #include <vector>
 
 
@@ -231,15 +229,11 @@ class BluetoothA2DPCommon {
 
     esp_bluedroid_config_t bluedroid_config{};
 
-
-    virtual void        init_nvs();
     virtual esp_err_t   esp_a2d_connect(esp_bd_addr_t peer) = 0;
     virtual const char* last_bda_nvs_name() = 0;
     virtual bool        get_last_connection();
     virtual void        set_last_connection(esp_bd_addr_t bda);
     virtual bool        has_last_connection();
-    virtual bool        read_address(const char* name, esp_bd_addr_t& bda);
-    virtual bool        write_address(const char* name, esp_bd_addr_t bda);
 
     // change the scan mode
     virtual void set_scan_mode_connectable(bool connectable);

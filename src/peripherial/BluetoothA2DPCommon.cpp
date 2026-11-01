@@ -162,16 +162,6 @@ void BluetoothA2DPCommon::end(bool release_memory) {
     log_free_heap();
 }
 
-void BluetoothA2DPCommon::init_nvs() {
-    log_d("%s", __func__);
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
-}
-
 bool BluetoothA2DPCommon::has_last_connection() {
     esp_bd_addr_t empty_connection = {0, 0, 0, 0, 0, 0};
     int           result = memcmp(last_connection, empty_connection, ESP_BD_ADDR_LEN);
@@ -182,13 +172,6 @@ bool BluetoothA2DPCommon::get_last_connection() {
     log_d("%s", __func__);
     bool result = false;
 
-    if (is_autoreconnect_allowed) {
-        esp_bd_addr_t bda;
-        if (read_address(last_bda_nvs_name(), bda)) {
-            memcpy(last_connection, bda, ESP_BD_ADDR_LEN);
-            result = true;
-        }
-    }
     log_d("=> %s", to_str(last_connection));
     return result;
 }
@@ -202,7 +185,6 @@ void BluetoothA2DPCommon::set_last_connection(esp_bd_addr_t bda) {
         return;
     }
     // update nvs only when autoreconnect is enabled
-    if (reconnect_status != NoReconnect) { write_address(last_bda_nvs_name(), bda); }
     // update last_connection variable
     memcpy(last_connection, bda, ESP_BD_ADDR_LEN);
 }
@@ -211,46 +193,6 @@ void BluetoothA2DPCommon::clean_last_connection() {
     log_d("%s", __func__);
     esp_bd_addr_t cleanBda = {0};
     set_last_connection(cleanBda);
-}
-
-bool BluetoothA2DPCommon::read_address(const char* name, esp_bd_addr_t& bda) {
-    nvs_handle my_handle;
-    esp_err_t  err = ESP_OK;
-
-    err = nvs_open("connected_bda", NVS_READONLY, &my_handle);
-    if (err != ESP_OK) {
-        log_e("NVS OPEN ERROR");
-        return false;
-    }
-
-    size_t size = ESP_BD_ADDR_LEN;
-    err = nvs_get_blob(my_handle, name, bda, &size);
-    if (err != ESP_OK) {
-        if (err == ESP_ERR_NVS_NOT_FOUND) {
-            log_i("nvs_blob does not exist");
-        } else {
-            log_e("nvs_get_blob failed");
-        }
-    }
-    nvs_close(my_handle);
-    return err == ESP_OK;
-}
-
-bool BluetoothA2DPCommon::write_address(const char* name, esp_bd_addr_t bda) {
-    nvs_handle my_handle;
-    esp_err_t  err;
-
-    err = nvs_open("connected_bda", NVS_READWRITE, &my_handle);
-    if (err != ESP_OK) {
-        log_e("NVS OPEN ERROR");
-        return false;
-    }
-    err = nvs_set_blob(my_handle, last_bda_nvs_name(), bda, ESP_BD_ADDR_LEN);
-    if (err != ESP_OK) { log_e("NVS WRITE ERROR"); }
-    err = nvs_commit(my_handle);
-    if (err != ESP_OK) { log_e("NVS COMMIT ERROR"); }
-    nvs_close(my_handle);
-    return err != ESP_OK;
 }
 
 /// Set the callback that is called when the connection state is changed

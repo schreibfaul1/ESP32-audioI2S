@@ -70,16 +70,6 @@ void BluetoothA2DPSource::start(std::vector<const char*> names) {
     reconnect_retries = max_reconnect_retries;
     last_heart_beat = 0;
 
-    init_nvs();
-    if (is_autoreconnect_allowed) {
-        // get last connection if not available
-        if (!has_last_connection()) {
-            if (!get_last_connection()) {
-                log_i("No last connection found, disabling auto reconnect");
-                is_autoreconnect_allowed = false;
-            }
-        }
-    }
 
     if (reset_ble) { ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE)); }
 
@@ -487,11 +477,6 @@ void BluetoothA2DPSource::process_user_state_callbacks(uint16_t event, void* par
 void BluetoothA2DPSource::bt_app_av_sm_hdlr(uint16_t event, void* param) {
     log_i("%s state %s, evt 0x%x", __func__, to_state_str(s_a2d_state), event);
     process_user_state_callbacks(event, param);
-#if A2DP_MANAGED_ENCODER_SUPPORTED
-    // informational events of the managed encoder are not passed on to the
-    // state handlers
-    if (use_managed_encoder() && process_managed_encoder_events(event, param)) return;
-#endif
 
     /* select handler according to different states */
     switch (s_a2d_state) {
