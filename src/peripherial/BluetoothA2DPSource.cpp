@@ -159,17 +159,6 @@ int32_t BluetoothA2DPSource::get_audio_data(uint8_t* data, int32_t len) {
     return 0;
 }
 
-void BluetoothA2DPSource::reset_last_connection() {
-    log_i("%s, ", __func__);
-    [[maybe_unused]] const char* bda_str = to_str(last_connection);
-    log_w("last connection %s, ", bda_str);
-    if (has_last_connection()) {
-        // the device might not have noticed that we are disconnected
-        disconnect();
-        delay_ms(2000);
-    }
-}
-
 bool BluetoothA2DPSource::bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void* p_params, int param_len, bt_app_copy_cb_t p_copy_cback) {
     log_w("%s event 0x%x, param len %d", __func__, event, param_len);
 
@@ -278,7 +267,6 @@ void BluetoothA2DPSource::filter_inquiry_scan_result(esp_bt_gap_cb_param_t* para
             log_i("--Result: Target device found");
             s_a2d_state = APP_AV_STATE_DISCOVERED;
             memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
-            set_last_connection(peer_bd_addr);
             log_i("Cancel device discovery ...");
             esp_bt_gap_cancel_discovery();
         } else {

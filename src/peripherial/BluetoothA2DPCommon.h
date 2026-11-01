@@ -163,8 +163,7 @@ class BluetoothA2DPCommon {
     /// Provides the actual SSID name
     virtual const char* get_name() { return bt_name; }
 
-    /// clean last connection (delete)
-    virtual void clean_last_connection();
+
 
     /// Defines the default bt mode. The default is ESP_BT_MODE_CLASSIC_BT: use
     /// this e.g. to set to ESP_BT_MODE_BTDM
@@ -231,9 +230,7 @@ class BluetoothA2DPCommon {
 
     virtual esp_err_t   esp_a2d_connect(esp_bd_addr_t peer) = 0;
     virtual const char* last_bda_nvs_name() = 0;
-    virtual bool        get_last_connection();
-    virtual void        set_last_connection(esp_bd_addr_t bda);
-    virtual bool        has_last_connection();
+      virtual bool        has_last_connection();
 
     // change the scan mode
     virtual void set_scan_mode_connectable(bool connectable);

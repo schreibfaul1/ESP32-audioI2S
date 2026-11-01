@@ -189,8 +189,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
     virtual void bt_app_av_sm_hdlr(uint16_t event, void* param);
     /// avrc CT event handler
     virtual void bt_av_hdl_avrc_ct_evt(uint16_t event, void* p_param);
-    /// resets the last connectioin so that we can reconnect
-    virtual void reset_last_connection();
     /// returns true for
     /// ESP_BT_COD_SRVC_RENDERING,ESP_BT_COD_SRVC_AUDIO,ESP_BT_COD_SRVC_TELEPHONY
     virtual bool is_valid_cod_service(uint32_t cod);

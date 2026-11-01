@@ -79,7 +79,6 @@ void BluetoothA2DPCommon::end(bool release_memory) {
     int wait_ms = 50;
     // reconnect should not work after end
     is_start_disabled = false;
-    clean_last_connection();
     log_free_heap();
 
     // Disconnect and wait
@@ -166,33 +165,6 @@ bool BluetoothA2DPCommon::has_last_connection() {
     esp_bd_addr_t empty_connection = {0, 0, 0, 0, 0, 0};
     int           result = memcmp(last_connection, empty_connection, ESP_BD_ADDR_LEN);
     return result != 0;
-}
-
-bool BluetoothA2DPCommon::get_last_connection() {
-    log_d("%s", __func__);
-    bool result = false;
-
-    log_d("=> %s", to_str(last_connection));
-    return result;
-}
-
-void BluetoothA2DPCommon::set_last_connection(esp_bd_addr_t bda) {
-    log_d("set_last_connection: %s", to_str(bda));
-
-    // same value: nothing to store
-    if (memcmp(bda, last_connection, ESP_BD_ADDR_LEN) == 0) {
-        log_d("no change!");
-        return;
-    }
-    // update nvs only when autoreconnect is enabled
-    // update last_connection variable
-    memcpy(last_connection, bda, ESP_BD_ADDR_LEN);
-}
-
-void BluetoothA2DPCommon::clean_last_connection() {
-    log_d("%s", __func__);
-    esp_bd_addr_t cleanBda = {0};
-    set_last_connection(cleanBda);
 }
 
 /// Set the callback that is called when the connection state is changed
