@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1c                                                                                                                         ";
+    Version 4.0.1c1                                                                                                                         ";
 /*  Updated on: Nov 01, 2026
 
     Author: Wolle (schreibfaul1)
@@ -2996,8 +2996,9 @@ uint32_t Audio::stopSong() {
     m_f_lockInBuffer = true; // wait for the decoding to finish, prevent new decoding
     uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
+    bool     ownMutex = (xTaskGetCurrentTaskHandle() == m_audioTaskHandle); // called from audioTask? yes --> ignore the semaphore
 
-    if (xSemaphoreTake(mutex_audioTaskIsDecoding, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    if (ownMutex || xSemaphoreTake(mutex_audioTaskIsDecoding, pdMS_TO_TICKS(1000)) == pdTRUE) {
 
         if (m_f_running) {
             m_audio_items.mute = true;
@@ -3018,9 +3019,9 @@ uint32_t Audio::stopSong() {
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         destroy_decoder();
-        xSemaphoreGive(mutex_audioTaskIsDecoding);
-    }
-    else {
+
+        if (!ownMutex) { xSemaphoreGive(mutex_audioTaskIsDecoding); }
+    } else {
         AUDIO_LOG_WARN("was unable to obtain the semaphore");
     }
     m_f_lockInBuffer = false;
