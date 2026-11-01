@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1b                                                                                                                         ";
-/*  Updated on: Oct 30, 2026
+    Version 4.0.1c                                                                                                                         ";
+/*  Updated on: Nov 01, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -2993,15 +2993,16 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::stopSong() {
-    m_f_lockInBuffer = true; // wait for the decoding to finish
+    m_f_lockInBuffer = true; // wait for the decoding to finish, prevent new decoding
     uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
 
-    bool pdTrue = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
-    {
+    if (xSemaphoreTake(mutex_audioTaskIsDecoding, pdMS_TO_TICKS(1000)) == pdTRUE) {
+
         if (m_f_running) {
             m_audio_items.mute = true;
             m_f_running = false;
+
             if (m_client->connected()) {
                 if (isStream()) { info(*this, evt_info, "Closing web stream \"{}\"", m_lastHost.c_get()); }
                 if (isFile()) { info(*this, evt_info, "Closing web file \"{}\"", m_lastHost.c_get()); }
@@ -3012,13 +3013,16 @@ uint32_t Audio::stopSong() {
                 m_audiofile.close();
             }
         }
+
         m_dataMode = AUDIO_NONE;
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         destroy_decoder();
+        xSemaphoreGive(mutex_audioTaskIsDecoding);
     }
-    xSemaphoreGive(mutex_audioTaskIsDecoding);
-    if (!pdTRUE) AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    else {
+        AUDIO_LOG_WARN("was unable to obtain the semaphore");
+    }
     m_f_lockInBuffer = false;
     return currTime;
 }
@@ -3245,7 +3249,6 @@ void Audio::playChunk() {
             } else {
                 wordsConsumed = readWords;
             }
-
 
             if (wordsConsumed == 0) {
                 AUDIO_LOG_DEBUG("i2s write err={:X} consumed={} freeDesc={}", m_plCh.err, bytesConsumed, m_dmaFreeDesc.load());
@@ -7292,7 +7295,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     }
 
     // --- enter critical area ------------------------------------------
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_audioTaskIsDecoding, pdMS_TO_TICKS(1000));
     m_f_lockInBuffer = true;
     m_f_allDataReceived = false; // ------- prepare InBuff ------
     audioFileSeek(resumeFilePos);
