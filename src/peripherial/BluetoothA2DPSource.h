@@ -56,39 +56,7 @@ enum APP_AV_STATE {
 
 static const char* APP_AV_STATE_STR[] = {"IDLE", "DISCOVERING", "DISCOVERED", "UNCONNECTED", "CONNECTING", "CONNECTED", "DISCONNECTING"};
 
-/**
- * @brief BluetoothA2DPSource implements a flexible, extensible A2DP Bluetooth
- * audio source for ESP32.
- *
- * This class provides a modern C++ interface for streaming audio from the ESP32
- * to Bluetooth A2DP sink devices (e.g., speakers, headphones).
- *
- * Key features:
- *   - Handles Bluetooth A2DP source initialization, pairing, and connection
- * management
- *   - Supports multiple audio data sources: callback, Arduino Stream,
- * AudioTools, or custom providers
- *   - Automatic reconnection logic with configurable retry count and fallback
- * to device scanning
- *   - Device discovery and filtering by name or custom callback
- *   - AVRCP (remote control) support for passthrough commands and volume
- * control
- *   - Secure Simple Pairing (SSP) and legacy PIN code support
- *   - Extensible for custom event handling, output, and platform integration
- *   - Optional managed multi-codec encoding via add_encoder() (ESP-IDF 5.5+)
- *
- * Usage:
- *   - Instantiate BluetoothA2DPSource and call start() with a device name or
- * list
- *   - Optionally configure callbacks, reconnection, and pairing behavior
- *   - Use provided methods to send audio data, control playback, and manage
- * connections
- *
- *
- * @ingroup a2dp
- * @author Phil Schatzmann
- * @copyright Apache License Version 2
- */
+
 
 class BluetoothA2DPSource : public BluetoothA2DPCommon {
     friend void    ccall_a2d_app_heart_beat(TIMER_ARG_TYPE arg);
@@ -228,14 +196,14 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
     virtual bool is_valid_cod_service(uint32_t cod);
 
     esp_err_t esp_a2d_connect(esp_bd_addr_t peer) override {
-        ESP_LOGI(BT_AV_TAG, "==> a2dp connecting to: %s", to_str(peer));
+        log_i("==> a2dp connecting to: %s", to_str(peer));
         s_media_state = 0;
         s_a2d_state = APP_AV_STATE_CONNECTING;
         return esp_a2d_source_connect(peer);
     }
 
     esp_err_t esp_a2d_disconnect(esp_bd_addr_t peer) override {
-        ESP_LOGI(BT_AV_TAG, "==> a2dp esp_a2d_source_disconnect from: %s", to_str(peer));
+        log_i("==> a2dp esp_a2d_source_disconnect from: %s", to_str(peer));
         // esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_SUSPEND);
         return esp_a2d_source_disconnect(peer);
     }

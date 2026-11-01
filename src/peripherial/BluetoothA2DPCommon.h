@@ -8,15 +8,7 @@
 #define A2DP_I2S_MAX_WRITE_SIZE           1024 * 5
 #define A2DP_I2S_MAX_WRITE_DELAY_MS       0
 #define A2DP_DISCONNECT_LIMIT             20
-#define A2DP_MANAGED_DECODE_Q_DEPTH       24
-#define A2DP_MANAGED_DECODE_TASK_STACK    4096
-#define A2DP_MANAGED_DECODE_TASK_PRIO     (tskIDLE_PRIORITY + 5)
-#define A2DP_MANAGED_ENCODE_TASK_STACK    8192
-#define A2DP_MANAGED_ENCODE_TASK_PRIO     (tskIDLE_PRIORITY + 5)
-#define A2DP_MANAGED_ENCODE_CHUNK_SIZE    512
-#define A2DP_MANAGED_ENCODE_LEAD_MS       100
-#define A2DP_MANAGED_ENCODE_MAX_LAG_MS    200
-#define A2DP_MANAGED_ENCODE_SEND_RETRY_MS 100
+
 
 #include "Arduino.h"
 #include "esp32-hal-bt.h"
@@ -35,7 +27,6 @@
 #include "nvs_flash.h"
 #include <vector>
 
-#define A2DP_DEPRECATED __attribute__((deprecated))
 
 #define BT_APP_SIG_WORK_DISPATCH (0x01)
 
@@ -52,10 +43,6 @@ typedef struct {
     app_callback_t cb;    /*!< context switch callback */
     void*          param; /*!< parameter area needs to be last */
 } bt_app_msg_t;
-
-#define BT_AV_TAG    "BT_AV"
-#define BT_RC_CT_TAG "RCCT"
-#define BT_APP_TAG   "BT_API"
 
 // AVRCP used transaction labels
 #define APP_RC_CT_TL_GET_CAPS           (0)
@@ -133,10 +120,6 @@ class BluetoothA2DPCommon {
     /// Set the callback that is called when the audio state is changed
     virtual void set_on_audio_state_changed(void (*callBack)(esp_a2d_audio_state_t state, void*), void* obj = nullptr);
 
-    /// Prevents that the same method is executed multiple times within the
-    /// indicated time limit
-    virtual void debounce(void (*cb)(void), int ms);
-
     /// Logs the free heap
     void log_free_heap();
 
@@ -213,7 +196,6 @@ class BluetoothA2DPCommon {
     unsigned long   reconnect_timout = 0;
     unsigned int    default_reconnect_timout = 10000;
     bool            is_autoreconnect_allowed = false;
-    uint32_t        debounce_ms = 0;
     // A2DPDefaultVolumeControl default_volume_control;
     // A2DPVolumeControl *volume_control_ptr = nullptr;
     esp_bd_addr_t last_connection = {0, 0, 0, 0, 0, 0};
