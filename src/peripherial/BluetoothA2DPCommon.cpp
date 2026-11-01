@@ -61,40 +61,6 @@ esp_a2d_connection_state_t BluetoothA2DPCommon::get_connection_state() {
     return connection_state;
 }
 
-void BluetoothA2DPCommon::set_auto_reconnect(bool active) {
-    this->reconnect_status = active ? AutoReconnect : NoReconnect;
-}
-
-/// Reconnects to the last device
-bool BluetoothA2DPCommon::reconnect() {
-    if (has_last_connection()) {
-        is_target_status_active = true;
-        is_autoreconnect_allowed = true;
-        reconnect_status = IsReconnecting;
-        reconnect_timout = get_millis() + default_reconnect_timout;
-        return connect_to(last_connection);
-    }
-
-    return false;
-}
-
-bool BluetoothA2DPCommon::connect_to(esp_bd_addr_t peer) {
-    ESP_LOGW(BT_AV_TAG, "connect_to to %s", to_str(peer));
-    set_scan_mode_connectable_default();
-    esp_err_t err = esp_a2d_connect(peer);
-    if (err != ESP_OK) { ESP_LOGE(BT_AV_TAG, "esp_a2d_source_connect:%d", err); }
-    return err == ESP_OK;
-}
-
-/// Calls disconnect or reconnect
-void BluetoothA2DPCommon::set_connected(bool active) {
-    if (active) {
-        reconnect();
-    } else {
-        disconnect();
-    }
-}
-
 /// Closes the connection
 void BluetoothA2DPCommon::disconnect() {
     ESP_LOGI(BT_AV_TAG, "disconect a2d: %s", to_str(last_connection));

@@ -427,17 +427,9 @@ void BluetoothA2DPSource::av_hdl_stack_evt(uint16_t event, void* p_param) {
             // ESP_BT_NON_DISCOVERABLE);
             delay_ms(10000);
             set_scan_mode_connectable(false);
-
-            if (reconnect_status == AutoReconnect && has_last_connection()) {
-                log_w("Reconnecting to %s", to_str(last_connection));
-                memcpy(peer_bd_addr, last_connection, ESP_BD_ADDR_LEN);
-                connect_to(last_connection);
-                s_a2d_state = APP_AV_STATE_CONNECTING;
-            } else {
-                log_i("Starting device discovery...");
-                s_a2d_state = APP_AV_STATE_DISCOVERING;
-                esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
-            }
+            log_i("Starting device discovery...");
+            s_a2d_state = APP_AV_STATE_DISCOVERING;
+            esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
             // create and start heart beat timer
             int tmr_id = 0;
             s_tmr = xTimerCreate("connTmr", (10000 / portTICK_PERIOD_MS), pdTRUE, (void*)&tmr_id, ccall_a2d_app_heart_beat);
@@ -523,11 +515,7 @@ void BluetoothA2DPSource::bt_app_av_state_unconnected_hdlr(uint16_t event, void*
             esp_a2d_cb_param_t* a2d = (esp_a2d_cb_param_t*)(param);
             if (a2d && a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
                 // Retry reconnect logic if enabled
-                if (handle_reconnect_logic()) {
-                    log_i("Retrying reconnect to last address");
-                    return;
-                }
-                log_i("Reconnect retries exhausted, fallback to scanning");
+                 log_i("unused event:  fallback to scanning");
             }
             break;
         }
@@ -536,21 +524,15 @@ void BluetoothA2DPSource::bt_app_av_state_unconnected_hdlr(uint16_t event, void*
         case ESP_A2D_MEDIA_CTRL_ACK_EVT: log_w("Events unprocessed: %d", event); break;
         case BT_APP_HEART_BEAT_EVT: {
             // Use the same retry/fallback logic as disconnect event
-            if (handle_reconnect_logic()) {
-                log_i("Heartbeat: retrying reconnect to last address");
-                return;
-            }
-            log_i("Heartbeat: reconnect retries exhausted, fallback to scanning");
+            log_i("unused event: Heartbeat, fallback to scanning");
             break;
         }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
         case ESP_A2D_REPORT_SNK_DELAY_VALUE_EVT: {
             esp_a2d_cb_param_t* a2d = (esp_a2d_cb_param_t*)(param);
             (void)a2d; // prevent unused variable warning
             log_i("%s, delay value: %u * 1/10 ms", __func__, a2d->a2d_report_delay_value_stat.delay_value);
             break;
         }
-#endif
         default: {
             log_w("%s unhandled event: %d", __func__, event);
             break;
@@ -558,26 +540,7 @@ void BluetoothA2DPSource::bt_app_av_state_unconnected_hdlr(uint16_t event, void*
     }
 }
 
-bool BluetoothA2DPSource::handle_reconnect_logic() {
-    if (!is_autoreconnect_allowed) {
-        log_i("Auto-reconnect disabled, not attempting to reconnect");
-        return false;
-    }
-    if (reconnect_status == AutoReconnect && reconnect_retries > 0) {
-        log_i("Attempting auto-reconnect, retries left: %d", reconnect_retries);
-        reconnect_retries--;
-        connect_to(last_connection);
-        return true;
-    } else if (reconnect_status == AutoReconnect) {
-        log_i("Auto-reconnect retries exhausted, starting device discovery");
-        reconnect_status = NoReconnect;
-        reconnect_retries = max_reconnect_retries;
-        s_a2d_state = APP_AV_STATE_DISCOVERING;
-        esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
-        return false;
-    }
-    return false;
-}
+
 
 void BluetoothA2DPSource::bt_app_av_state_connecting_hdlr(uint16_t event, void* param) {
     log_d("%s evt %d", __func__, event);
@@ -772,8 +735,7 @@ void BluetoothA2DPSource::app_rc_ct_callback(esp_avrc_ct_cb_event_t event, esp_a
         case ESP_AVRC_CT_REMOTE_FEATURES_EVT:
         case ESP_AVRC_CT_GET_RN_CAPABILITIES_RSP_EVT:
         case ESP_AVRC_CT_SET_ABSOLUTE_VOLUME_RSP_EVT:
-        case ESP_AVRC_CT_PROF_STATE_EVT:
-        {
+        case ESP_AVRC_CT_PROF_STATE_EVT: {
             bt_app_work_dispatch(ccall_bt_av_hdl_avrc_ct_evt, event, param, sizeof(esp_avrc_ct_cb_param_t), nullptr);
             break;
         }

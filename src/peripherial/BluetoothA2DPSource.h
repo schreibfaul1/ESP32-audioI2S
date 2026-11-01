@@ -103,24 +103,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
     /// Destructor
     ~BluetoothA2DPSource();
 
-    /// activate Secure Simple Pairing
-    virtual void set_ssp_enabled(bool active) { this->ssp_enabled = active; }
-
-    /// activate / deactivate the automatic reconnection to the last address (per
-    /// default this is on) If active is true, will retry up to max_retries times
-    /// before falling back to scanning
-    virtual void set_auto_reconnect(bool active, int max_retries = AUTOCONNECT_TRY_NUM) {
-        this->reconnect_status = active ? AutoReconnect : NoReconnect;
-        this->max_reconnect_retries = max_retries;
-        this->reconnect_retries = max_reconnect_retries;
-    }
-
-    /// automatically tries to reconnect to the indicated address, with retry
-    /// count
-    virtual void set_auto_reconnect(esp_bd_addr_t addr, int max_retries = 3) {
-        set_auto_reconnect(true, max_retries);
-        memcpy(last_connection, addr, ESP_BD_ADDR_LEN);
-    }
 
     /// Defines the local name
     virtual void set_local_name(const char* name) { dev_name = name; }
@@ -260,9 +242,7 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
 
     /// converts a APP_AV_STATE_ENUM to a string
     const char* to_state_str(int state) { return APP_AV_STATE_STR[state]; }
-    /// Retry logic for auto reconnect. Returns true if a reconnect attempt was
-    /// made, false if fallback to scan
-    bool handle_reconnect_logic();
+
 
     void set_scan_mode_connectable_default() override { set_scan_mode_connectable(false); }
 

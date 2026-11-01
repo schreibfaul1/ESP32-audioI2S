@@ -1,7 +1,6 @@
 
 #pragma once
 
-#define IS_VALID_PLATFORM                 true
 #define AUTOCONNECT_TRY_NUM               1000
 #define A2DP_LEGACY_I2S_SUPPORT           (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
 #define A2DP_SPP_SUPPORT                  1
@@ -106,21 +105,10 @@ class BluetoothA2DPCommon {
     /// Destructor
     virtual ~BluetoothA2DPCommon() = default;
 
-    /// activate / deactivate the automatic reconnection to the last address (per
-    /// default this is on)
-    void set_auto_reconnect(bool active);
 
     /// Closes the connection
     virtual void disconnect();
 
-    /// Reconnects to the last device
-    virtual bool reconnect();
-
-    /// Connnects to the indicated address
-    virtual bool connect_to(esp_bd_addr_t peer);
-
-    /// Calls disconnect or reconnect
-    virtual void set_connected(bool active);
 
     /// Closes the connection and stops A2DP
     virtual void end(bool releaseMemory = false);
