@@ -38,7 +38,7 @@ constexpr size_t AUDIO_STACK_SIZE = 4100;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
-StackType_t  __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
+StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
 //-------------------------------------------------------------------------------------------------------------------
 // weak default implementation - can be overridden by user
 __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S) {
