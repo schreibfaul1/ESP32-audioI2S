@@ -1,25 +1,7 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// Copyright 2020 Phil Schatzmann
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
 
 #include "BluetoothA2DPSource.h"
 
 #if IS_VALID_PLATFORM
-
-    #if A2DP_MANAGED_ENCODER_SUPPORTED
-        #include "esp_timer.h"
-    #endif
 
     #define APP_RC_CT_TL_RN_VOLUME_CHANGE (1)
     #define BT_APP_HEART_BEAT_EVT         (0xff00)
@@ -479,19 +461,8 @@ void BluetoothA2DPSource::av_hdl_stack_evt(uint16_t event, void* p_param) {
 
             esp_a2d_source_init();
             esp_a2d_register_callback(&ccall_app_a2d_callback);
-    #if A2DP_MANAGED_ENCODER_SUPPORTED
-            // the managed encoder sends the encoded data itself (the stream
-            // endpoints are registered on ESP_A2D_PROF_STATE_EVT)
-            if (!use_managed_encoder())
-    #endif
-            {
-    #ifdef CONFIG_BT_A2DP_USE_EXTERNAL_CODEC
-                log_w( "CONFIG_BT_A2DP_USE_EXTERNAL_CODEC is active: the data "
-                                    "callback is not supported - register an encoder with "
-                                    "add_encoder()");
-    #endif
-                esp_a2d_source_register_data_callback(&ccall_bt_app_a2d_data_cb);
-            }
+            esp_a2d_source_register_data_callback(&ccall_bt_app_a2d_data_cb);
+
 
             /* Avoid the state error of s_a2d_state caused by the connection initiated
              * by the peer device. */
@@ -525,13 +496,6 @@ void BluetoothA2DPSource::av_hdl_stack_evt(uint16_t event, void* p_param) {
 }
 
 void BluetoothA2DPSource::app_a2d_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* param) {
-    #if A2DP_MANAGED_ENCODER_SUPPORTED
-    // stream endpoints must be registered after the A2DP profile has been
-    // initialized and before a connection is established: we do this here
-    // directly in the BTC task, because the app task is still blocked in the
-    // stack up handler, which starts the connection
-    if (event == ESP_A2D_PROF_STATE_EVT && use_managed_encoder() && param->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) { register_managed_encoder_seps(); }
-    #endif
     bt_app_work_dispatch(ccall_bt_app_av_sm_hdlr, event, param, sizeof(esp_a2d_cb_param_t), nullptr);
 }
 
