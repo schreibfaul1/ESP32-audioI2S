@@ -1,48 +1,27 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// Copyright 2020 Phil Schatzmann
-
-/**
- * @defgroup a2dp ESP32 A2DP
- * @brief A Simple ESP32 Bluetooth A2DP Library (to implement a Music Receiver
- * or Sender) that supports Arduino, PlatformIO and Espressif IDF
- * @file BluetoothA2DPCommon.h
- * @author Phil Schatzmann
- * @copyright GPLv3
- */
-
-/**
- * @defgroup codecs Codecs
- * @brief Custom decoders (A2DP Sink) and encoders (A2DP Source) that support
- * additional codecs (e.g. AAC) with the help of the AudioTools library
- */
 
 #pragma once
 
-// Compile only for ESP32
-#include "config.h"
-#if !IS_VALID_PLATFORM
-//#  error "Please read the ESP32-A2DP Wiki about the supported Platforms!"
-#endif
 
-// Continue only for ESP32
-#if IS_VALID_PLATFORM
+#  define IS_VALID_PLATFORM true
+#  define AUTOCONNECT_TRY_NUM 1000
+#  define A2DP_LEGACY_I2S_SUPPORT (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
+#  define A2DP_SPP_SUPPORT 1
+#  define A2DP_MANAGED_DECODER_SUPPORTED (IS_VALID_PLATFORM && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0) && A2DP_I2S_AUDIOTOOLS)
+#  define A2DP_MANAGED_ENCODER_SUPPORTED (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0) && A2DP_I2S_AUDIOTOOLS)
+#  define A2DP_I2S_MAX_WRITE_SIZE 1024 * 5
+#  define A2DP_I2S_MAX_WRITE_DELAY_MS 0
+#  define A2DP_DISCONNECT_LIMIT 20
+#  define A2DP_MANAGED_DECODE_Q_DEPTH 24
+#  define A2DP_MANAGED_DECODE_TASK_STACK 4096
+#  define A2DP_MANAGED_DECODE_TASK_PRIO (tskIDLE_PRIORITY + 5)
+#  define A2DP_MANAGED_ENCODE_TASK_STACK 8192
+#  define A2DP_MANAGED_ENCODE_TASK_PRIO (tskIDLE_PRIORITY + 5)
+#  define A2DP_MANAGED_ENCODE_CHUNK_SIZE 512
+#  define A2DP_MANAGED_ENCODE_LEAD_MS 100
+#  define A2DP_MANAGED_ENCODE_MAX_LAG_MS 200
+#  define A2DP_MANAGED_ENCODE_SEND_RETRY_MS 100
 
-// If you use #include "I2S.h" the i2s functionality is hidden in a namespace
-// this hack prevents any error messages
-#ifdef _I2S_H_INCLUDED
-using namespace esp_i2s;
-#endif
+
 
 #include <math.h>
 #include <stdbool.h>
@@ -60,7 +39,7 @@ using namespace esp_i2s;
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-//#include "A2DPVolumeControl.h"
+
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
 #include "esp_bt.h"
@@ -478,4 +457,3 @@ class BluetoothA2DPCommon {
 
 extern BluetoothA2DPCommon *actual_bluetooth_a2dp_common;
 
-#endif // platform
