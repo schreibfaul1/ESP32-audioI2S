@@ -26,15 +26,9 @@
 
 #if IS_VALID_PLATFORM
 
-#ifdef ARDUINO
 #include "Stream.h"
-#endif
 
-#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
-#define TIMER_ARG_TYPE void*
-#else
 #define TIMER_ARG_TYPE tmrTimerControl*
-#endif
 
 typedef int32_t (*music_data_cb_t)(uint8_t* data, int32_t len);
 typedef int32_t (*music_data_frames_cb_t)(Frame* data, int32_t len);
@@ -45,9 +39,6 @@ extern "C" void ccall_a2d_app_heart_beat(TIMER_ARG_TYPE arg);
 extern "C" void ccall_bt_app_av_sm_hdlr(uint16_t event, void* param);
 extern "C" void ccall_bt_av_hdl_avrc_ct_evt(uint16_t event, void* param);
 extern "C" int32_t ccall_bt_app_a2d_data_cb(uint8_t* data, int32_t len);
-#if A2DP_MANAGED_ENCODER_SUPPORTED
-extern "C" void ccall_managed_encode_task_handler(void* arg);
-#endif
 
 /**
  * @brief Buetooth A2DP global state
@@ -106,9 +97,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
   friend void ccall_bt_app_av_sm_hdlr(uint16_t event, void* param);
   friend void ccall_bt_av_hdl_avrc_ct_evt(uint16_t event, void* param);
   friend int32_t ccall_bt_app_a2d_data_cb(uint8_t* data, int32_t len);
-#if A2DP_MANAGED_ENCODER_SUPPORTED
-  friend void ccall_managed_encode_task_handler(void* arg);
-#endif
 
  public:
   /// Constructor
@@ -151,23 +139,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
     get_data_in_frames_cb = cb;
   }
 
-#ifdef ARDUINO
-
-  /// Defines a single Arduino Stream (e.g. File) as audio source
-  virtual void set_data_source(Stream& data) { p_stream = &data; }
-  /// Provide a callback which provides streams
-  virtual void set_data_source_callback(Stream& (*next_stream)()) {
-    get_next_stream_cb = next_stream;
-  }
-#endif
-
-  /// Starts the A2DP source w/o indicating any names: use the ssid callback to
-  /// select the device
-  virtual void start() {
-    std::vector<const char*> names;  // empty vector
-    start(names);
-  }
-
   /// Starts the A2DP source
   virtual void start(const char* name) {
     std::vector<const char*> names = {name};  // empty vector
@@ -177,58 +148,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
   /// Starts the first available A2DP source
   virtual void start(std::vector<const char*> names);
 
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start(const char* name, music_data_frames_cb_t callback) {
-    set_data_callback_in_frames(callback);
-    std::vector<const char*> names = {name};
-    start(names);
-  }
-
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start(music_data_frames_cb_t callback) {
-    set_data_callback_in_frames(callback);
-    start();
-  }
-
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start(std::vector<const char*> names,
-                     // Prevent auto-reconnect after willful disconnect
-                     music_data_frames_cb_t callback) {
-    set_data_callback_in_frames(callback);
-    start(names);
-  }
-
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start_raw(const char* name, music_data_cb_t callback = nullptr) {
-    set_data_callback(callback);
-    start(name);
-  }
-
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start_raw(std::vector<const char*> names,
-                         music_data_cb_t callback = nullptr) {
-    set_data_callback(callback);
-    start(names);
-  }
-
-  /// Obsolete: use the start w/o callback and set the callback separately
-  virtual void start_raw(music_data_cb_t callback = nullptr) {
-    set_data_callback(callback);
-    start();
-  }
-
-  /// Defines the pin code. If nothing is defined we use "1234"
-  void set_pin_code(const char* pin_code, esp_bt_pin_type_t pin_type);
-
-  /// Defines if the BLE should be reset on start
-  virtual void set_reset_ble(bool doInit);
-
-  /// Define callback to be notified about the found ssids
-  virtual void set_ssid_callback(bool (*callback)(const char* ssid,
-                                                  esp_bd_addr_t address,
-                                                  int rrsi)) {
-    ssid_callback = callback;
-  }
 
   /// Define callback to be notified about bt discovery mode state changes
   virtual void set_discovery_mode_callback(
