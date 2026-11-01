@@ -215,8 +215,6 @@ class BluetoothA2DPSource : public BluetoothA2DPCommon {
 
     /// provides the audio data to be sent
     virtual int32_t get_audio_data(uint8_t* data, int32_t len);
-    /// provides the audio after applying the volume
-    virtual int32_t get_audio_data_volume(uint8_t* data, int32_t len);
 
     virtual void process_user_state_callbacks(uint16_t event, void* param);
 

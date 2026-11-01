@@ -35,7 +35,7 @@ extern "C" void ccall_bt_av_hdl_avrc_ct_evt(uint16_t event, void* param) {
 
 extern "C" int32_t ccall_bt_app_a2d_data_cb(uint8_t* data, int32_t len) {
     // log_w("x%x - len: %d", __func__, len);
-    if (actual_bluetooth_a2dp_source) return actual_bluetooth_a2dp_source->get_audio_data_volume(data, len);
+    if (actual_bluetooth_a2dp_source) return actual_bluetooth_a2dp_source->get_audio_data(data, len);
     return 0;
 }
 
@@ -165,12 +165,6 @@ void BluetoothA2DPSource::end(bool release_memory) {
 
     // standard end
     BluetoothA2DPCommon::end(release_memory);
-}
-
-int32_t BluetoothA2DPSource::get_audio_data_volume(uint8_t* data, int32_t len) {
-    int32_t result = get_audio_data(data, len);
-    volume_control()->update_audio_data(data, len);
-    return result;
 }
 
 int32_t BluetoothA2DPSource::get_audio_data(uint8_t* data, int32_t len) {
