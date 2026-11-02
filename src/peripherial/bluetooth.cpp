@@ -347,34 +347,20 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
 
     if (!s_instance) return bytes;
 
-
-
-
+    // statistics
     static uint32_t cbCount = 0;
-
     size_t filled = s_instance->bt_samplesBuffer.bufferFilled();
-
     size_t words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), bytes / 2);
-
     if (++cbCount % 100 == 0) {
-        log_i("BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
-
-        if (words > 1) { log_i("PCM samples: 0x%08lX, 0x%08lX", (uint32_t)s_instance->m_workBuff[0], (uint32_t)s_instance->m_workBuff[1]); }
+        log_d("BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
+        if (words > 1) { log_d("PCM samples: 0x%08lX, 0x%08lX", (uint32_t)s_instance->m_workBuff[0], (uint32_t)s_instance->m_workBuff[1]); }
     }
 
-
-
-
-
-
     size_t requestedWords = bytes / 2;
-
     words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), requestedWords);
 
     for (size_t i = 0; i < words; i++) {
-
         int32_t sample = s_instance->m_workBuff[i];
-
         // Convert int32_t to signed 16-bit PCM (little endian)
         data[i * 2] = (sample >> 16) & 0xFF;
         data[i * 2 + 1] = (sample >> 24) & 0xFF;

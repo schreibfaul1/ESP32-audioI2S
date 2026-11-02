@@ -32,7 +32,7 @@ class BT_Source {
     SBC_Config m_sbcConfig{};
 
     bool   m_isInit = false;
-    size_t m_bt_buffSize = 8192 * 4;
+    size_t m_bt_buffSize = 32768;
 
     static BT_Source* s_instance;
     ps_ptr<int32_t>   m_workBuff;
