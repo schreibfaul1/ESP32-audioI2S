@@ -75,7 +75,7 @@ class BT_Source {
     }
 };
 
-#else // dumm<
+#else // dummy
 
 #include "psram_unique_ptr.hpp"
 
