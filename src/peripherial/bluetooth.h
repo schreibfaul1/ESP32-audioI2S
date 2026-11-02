@@ -1,6 +1,7 @@
 #pragma once
+#include <Arduino.h>
 
-#if CONFIG_IDF_TARGET_ESP32S31
+#ifdef CONFIG_IDF_TARGET_ESP32S31
 #include "buffers.hpp"
 #include "audiolib_structs.hpp"
 #include "esp_a2dp_api.h"
@@ -9,7 +10,6 @@
 #include "esp_err.h"
 #include "esp_gap_bt_api.h"
 #include "psram_unique_ptr.hpp"
-#include <Arduino.h>
 #include <atomic>
 
 using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);

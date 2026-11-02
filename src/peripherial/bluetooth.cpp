@@ -1,4 +1,5 @@
-#if CONFIG_IDF_TARGET_ESP32S31
+#include "Arduino.h"
+#ifdef CONFIG_IDF_TARGET_ESP32S31
 #include "bluetooth.h"
 #include"Audio.h"
 
