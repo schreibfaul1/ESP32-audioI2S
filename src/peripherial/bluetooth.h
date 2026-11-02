@@ -2,14 +2,20 @@
 
 #include "buffers.hpp"
 #include "audiolib_structs.hpp"
+#include "psram_unique_ptr.hpp"
+#include <Arduino.h>
+#include <atomic>
+
+#ifdef CONFIG_IDF_TARGET_ESP32S31
+
 #include "esp_a2dp_api.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_err.h"
 #include "esp_gap_bt_api.h"
-#include "psram_unique_ptr.hpp"
-#include <Arduino.h>
-#include <atomic>
+
+
+
 
 using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);
 class BT_Source {
@@ -73,3 +79,19 @@ class BT_Source {
         return m_infoCallback(m_infoContext, event, std::move(result));
     }
 };
+
+#else  // dummy class
+
+using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);
+class BT_Source {
+
+  public:
+    BT_Source(void* context = nullptr, bt_info_callback_t callback = nullptr) : m_infoContext(context), m_infoCallback(callback) {}
+    ~BT_Source() { s_instance = nullptr; };
+
+    void* m_infoContext = nullptr;
+    void* m_infoCallback = nullptr;
+    static BT_Source*  s_instance;
+};
+
+#endif
