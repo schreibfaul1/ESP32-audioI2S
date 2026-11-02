@@ -188,7 +188,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
                 esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
 
-                if (err != ESP_OK) { log_e("A2DP START failed: %s", esp_err_to_name(err)); }
+                if (err != ESP_OK) { s_instance->info(audiolib::evt_bt, "A2DP START failed: {}", esp_err_to_name(err)); }
             }
 
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { log_i("A2DP media start acknowledged"); }
