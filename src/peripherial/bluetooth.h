@@ -19,6 +19,18 @@ class BT_Source {
     ~BT_Source() { s_instance = nullptr; };
 
   private:
+    struct SBC_Config {
+        uint8_t sampleRate;
+        uint8_t channelMode;
+        uint8_t blockLength;
+        uint8_t subbands;
+        uint8_t allocation;
+        uint8_t minBitpool;
+        uint8_t maxBitpool;
+    };
+
+    SBC_Config m_sbcConfig{};
+
     bool   m_isInit = false;
     size_t m_bt_buffSize = 8192 * 4;
 

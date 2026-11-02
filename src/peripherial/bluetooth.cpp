@@ -53,7 +53,7 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
 
                 if (s_instance && s_instance->m_deviceFound) {
                     log_i("Target device MAC: %02X:%02X:%02X:%02X:%02X:%02X", s_instance->m_targetBda[0], s_instance->m_targetBda[1], s_instance->m_targetBda[2], s_instance->m_targetBda[3],
-                        s_instance->m_targetBda[4], s_instance->m_targetBda[5]);
+                          s_instance->m_targetBda[4], s_instance->m_targetBda[5]);
                     s_instance->connect();
                 }
             }
@@ -62,45 +62,110 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+static void log_codec_info(const char* source, const esp_a2d_mcc_t& mcc) {
 
+    log_i("%s: codec type %u", source, mcc.type);
+
+    switch (mcc.type) {
+
+        case ESP_A2D_MCT_SBC: {
+
+            const auto& sbc = mcc.cie.sbc_info;
+
+            log_i("SBC sampling frequency mask: 0x%X", sbc.samp_freq);
+            log_i("SBC channel mode mask:       0x%X", sbc.ch_mode);
+            log_i("SBC block length mask:       0x%X", sbc.block_len);
+            log_i("SBC subbands mask:           0x%X", sbc.num_subbands);
+            log_i("SBC allocation method:       0x%X", sbc.alloc_mthd);
+            log_i("SBC bitpool min: %u, max: %u", sbc.min_bitpool, sbc.max_bitpool);
+
+            break;
+        }
+
+        case ESP_A2D_MCT_M24: log_i("AAC codec"); break;
+
+        case ESP_A2D_MCT_M12: log_i("MPEG Audio codec"); break;
+
+        default: log_i("Other codec"); break;
+    }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* param) {
 
     switch (event) {
-
-        case ESP_A2D_PROF_STATE_EVT:
-
-            if (param->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) {
-                if(s_instance) s_instance->m_a2dpInitialized = true;
-            } else if (param->a2d_prof_stat.init_state == ESP_A2D_DEINIT_SUCCESS) {
-                if(s_instance) s_instance->m_a2dpInitialized = false;
-                log_i("A2DP: Source deinitialized");
-            }
-            break;
 
         case ESP_A2D_CONNECTION_STATE_EVT:
 
             switch (param->conn_stat.state) {
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTED:
-                    if(s_instance) s_instance->m_connected.store(false, std::memory_order_release);
+                    if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
                     log_i("A2DP: Disconnected");
                     break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTING: log_i("A2DP: Connecting"); break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTED:
-                    if(s_instance) s_instance->m_connected.store(true, std::memory_order_release);
+                    if (s_instance) s_instance->m_connected.store(true, std::memory_order_release);
                     log_i("A2DP: Connected");
                     break;
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
-                    if(s_instance) s_instance->m_connected.store(false, std::memory_order_release);
+                    if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
                     log_i("A2DP: Disconnecting");
                     break;
 
                 default: break;
             }
             break;
+
+        case ESP_A2D_AUDIO_CFG_EVT: {
+
+            const auto& sbc = param->audio_cfg.mcc.cie.sbc_info;
+
+            s_instance->m_sbcConfig.sampleRate = sbc.samp_freq;
+            s_instance->m_sbcConfig.channelMode = sbc.ch_mode;
+            s_instance->m_sbcConfig.blockLength = sbc.block_len;
+            s_instance->m_sbcConfig.subbands = sbc.num_subbands;
+            s_instance->m_sbcConfig.allocation = sbc.alloc_mthd;
+            s_instance->m_sbcConfig.minBitpool = sbc.min_bitpool;
+            s_instance->m_sbcConfig.maxBitpool = sbc.max_bitpool;
+
+            log_codec_info("AUDIO_CFG", param->audio_cfg.mcc);
+
+            break;
+        }
+        case ESP_A2D_PROF_STATE_EVT:
+
+            if (param->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) {
+                if (s_instance) s_instance->m_a2dpInitialized = true;
+            } else if (param->a2d_prof_stat.init_state == ESP_A2D_DEINIT_SUCCESS) {
+                if (s_instance) s_instance->m_a2dpInitialized = false;
+                log_i("A2DP: Source deinitialized");
+            }
+            break;
+
+        case ESP_A2D_REPORT_SNK_CODEC_CAPS_EVT: {
+
+            log_i("A2DP: REPORT_SNK_CODEC_CAPS_EVT");
+            log_codec_info("Selected sink codec capabilities", param->a2d_report_snk_codec_caps_stat.mcc);
+            break;
+        }
+
+        case ESP_A2D_REPORT_SNK_ALL_CODEC_CAPS_EVT: {
+
+            auto& caps = param->a2d_report_snk_all_codec_caps_stat;
+            log_i("A2DP: REPORT_SNK_ALL_CODEC_CAPS_EVT");
+            log_i("Number of sink endpoints: %u", caps.sep_num);
+
+            if (caps.sep_mcc) {
+                for (int i = 0; i < caps.sep_num; i++) {
+                    log_i("SEP %u:", caps.sep_mcc[i].seid);
+                    log_codec_info("SEP codec capabilities", caps.sep_mcc[i].mcc);
+                }
+            }
+            break;
+        }
 
         default: log_i("A2DP: Event %d", event); break;
     }
