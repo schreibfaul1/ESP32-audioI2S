@@ -55,26 +55,6 @@ class Audio {
     ~Audio();
     std::mutex mutex_info; // mutex_info as member
 
-    // callbacks ---------------------------------------------------------
-    typedef enum {
-        evt_info = 0,
-        evt_id3data,
-        evt_eof,
-        evt_name,
-        evt_icydescription,
-        evt_streamtitle,
-        evt_bitrate,
-        evt_icyurl,
-        evt_icylogo,
-        evt_genre,
-        evt_lasthost,
-        evt_image,
-        evt_lyrics,
-        evt_log,
-        evt_vu,
-        evt_spectrum,
-    } event_t;
-
     // Audio event type descriptions
     static constexpr std::array<const char*, 16> eventStr = {
         "info",            // evt_info
@@ -98,7 +78,7 @@ class Audio {
     typedef struct _msg { // used in info(audio_info_callback());
         const char*           msg = nullptr;
         const char*           s = nullptr;
-        event_t               e = (event_t)0; // event type
+        audiolib::event_t     e = (audiolib::event_t)0; // event type
         int32_t               i2s_num = 0;
         int32_t               arg1 = 0;
         int32_t               arg2 = 0;
@@ -596,7 +576,7 @@ class Audio {
         return 0;
     }
 
-    static bool enqueueInfo(Audio& instance, event_t e, ps_ptr<char>&& msg, int32_t arg1 = 0, int32_t arg2 = 0, std::vector<uint32_t>&& vec1 = {}, std::vector<uint32_t>&& vec2 = {}) {
+    static bool enqueueInfo(Audio& instance, audiolib::event_t e, ps_ptr<char>&& msg, int32_t arg1 = 0, int32_t arg2 = 0, std::vector<uint32_t>&& vec1 = {}, std::vector<uint32_t>&& vec2 = {}) {
 
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!audio_info_callback) return false;
@@ -619,7 +599,7 @@ class Audio {
 
   public:
     //-------------------------------------------------------------------------------------------------------------------
-    template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+    template <typename... Args> static bool info(Audio& instance, audiolib::event_t e, const char* fmt, Args&&... args) {
 
         ps_ptr<char> result;
         result.assignf(fmt, std::forward<Args>(args)...);
@@ -628,12 +608,12 @@ class Audio {
         return enqueueInfo(instance, e, std::move(result), number);
     }
     //-------------------------------------------------------------------------------------------------------------------
-    static bool info(Audio& instance, event_t e, const std::vector<uint32_t>& v, const std::vector<uint32_t>& p = {}) {
+    static bool info(Audio& instance, audiolib::event_t e, const std::vector<uint32_t>& v, const std::vector<uint32_t>& p = {}) {
         ps_ptr<char> txt;
         switch (e) {
-            case evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
-            case evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
-            case evt_spectrum:
+            case audiolib::evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
+            case audiolib::evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
+            case audiolib::evt_spectrum:
                 txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8],
                             v[9], v[10], v[11], v[12], v[13], v[14]);
                 break;
@@ -685,7 +665,7 @@ class Audio {
         msg.msg = logStr.get();
         const char* tag[7] = {"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
         msg.s = tag[level];
-        msg.e = evt_log;
+        msg.e = audiolib::evt_log;
 
         if (audio_info_callback)
             audio_info_callback(msg);
