@@ -57,7 +57,7 @@ static bool IRAM_ATTR i2s_tx_sent_callback(i2s_chan_handle_t handle, i2s_event_d
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O   📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-Audio::Audio(uint8_t i2sPort) {
+Audio::Audio(uint8_t i2sPort) : bt_source(this, &Audio::bt_info_callback) {
 
     m_f_I2S_init = false;
     mutex_audioTask = xSemaphoreCreateMutex();
@@ -1849,7 +1849,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 cd_len = 1 + content_descriptor.copy_from(m_ID3Hdr.iBuff.get() + idx); // utf-8
             else
                 cd_len = 2 + content_descriptor.copy_from_utf16(m_ID3Hdr.iBuff.get() + idx, isBigEndian); // utf-16
-            if (cd_len > 2) info(*this, audiolib::evt_info, "Comment: text encoding; {}, language {}, content_descriptor: {}", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
+            if (cd_len > 2)
+                info(*this, audiolib::evt_info, "Comment: text encoding; {}, language {}, content_descriptor: {}", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
 
             idx += cd_len;
             // AUDIO_LOG_INFO("Tag: {}, Length: {}, Format: {}", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
@@ -3232,7 +3233,6 @@ void Audio::playChunk() {
         }
     }
     // ----------------------------------------------------------------------------------------------
-
 
     bool continueI2S = true;
     m_plCh.err = ESP_OK;
@@ -5345,7 +5345,7 @@ void Audio::showCodecParams() {
 
     if (m_codec == CODEC_AAC) {
         info(*this, audiolib::evt_info, "{}", m_decoder->arg2()); // AAC Format
-        uint8_t answ = m_decoder->val2();               // SBR
+        uint8_t answ = m_decoder->val2();                         // SBR
         if (answ > 0 && answ < 4) {
             const char sbr[4][50] = {"without SBR", "upsampled SBR", "downsampled SBR", "no SBR used, but file is upsampled by a factor 2"};
             info(*this, audiolib::evt_info, "Spectral band replication: {}", sbr[answ]);

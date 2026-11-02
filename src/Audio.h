@@ -623,6 +623,18 @@ class Audio {
     }
     //----------------------------------------------------------------------------------------------------------------------
 
+  private:
+    static bool bt_info_callback(void* context, uint16_t event, ps_ptr<char>&& message) {
+        if (!context || !message.get()) return false;
+
+        Audio& instance = *static_cast<Audio*>(context);
+
+        int32_t number = extract_last_number(message.c_get());
+
+        return enqueueInfo(instance, static_cast<audiolib::event_t>(event), std::move(message), number);
+    }
+    //----------------------------------------------------------------------------------------------------------------------
+  public:
     template <typename... Args> static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* func, const char* fmt, Args&&... args) {
 
 #define ANSI_ESC_RESET   "\033[0m"

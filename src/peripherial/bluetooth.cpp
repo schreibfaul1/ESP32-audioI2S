@@ -40,6 +40,7 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
                 memcpy(s_instance->m_targetBda, param->disc_res.bda, sizeof(esp_bd_addr_t));
                 s_instance->m_deviceFound = true;
                 log_i("Target device found: '%s'", s_instance->m_devName.c_get());
+
                 esp_bt_gap_cancel_discovery();
             }
             break;
@@ -247,6 +248,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         return false;
     }
     log_i("Bluedroid initialized");
+    info(audiolib::evt_bt, "Bluedroid initialized");
 
     // Activate Bluedroid
     err = esp_bluedroid_enable();

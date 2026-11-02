@@ -477,6 +477,7 @@ struct InfoItem {
         evt_log,
         evt_vu,
         evt_spectrum,
+        evt_bt,
     } event_t;
 
 
