@@ -56,7 +56,7 @@ class Audio {
     std::mutex mutex_info; // mutex_info as member
 
     // Audio event type descriptions
-    static constexpr std::array<const char*, 16> eventStr = {
+    static constexpr std::array<const char*, 17> eventStr = {
         "info",            // evt_info
         "id3data",         // evt_id3data
         "eof",             // evt_eof
@@ -73,6 +73,7 @@ class Audio {
         "log",             // evt_log
         "VU",              // evt_vu
         "BANDS",           // evt_spectrum
+        "BT",              // evt_bt
     };
 
     typedef struct _msg { // used in info(audio_info_callback());
