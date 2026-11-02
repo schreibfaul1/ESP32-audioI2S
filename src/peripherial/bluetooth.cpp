@@ -105,11 +105,14 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTING: log_i("A2DP: Connecting"); break;
 
-                case ESP_A2D_CONNECTION_STATE_CONNECTED:
+                case ESP_A2D_CONNECTION_STATE_CONNECTED: {
                     if (s_instance) s_instance->m_connected.store(true, std::memory_order_release);
                     log_i("A2DP: Connected");
-                    break;
+                    esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
 
+                    if (err != ESP_OK) { log_e("A2DP CHECK_SRC_RDY failed: %s", esp_err_to_name(err)); }
+                    break;
+                }
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
                     if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
                     log_i("A2DP: Disconnecting");
@@ -167,6 +170,42 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             break;
         }
 
+        case ESP_A2D_MEDIA_CTRL_ACK_EVT: {
+
+            auto& stat = param->media_ctrl_stat;
+
+            log_i("A2DP MEDIA_CTRL_ACK: cmd=%d status=%d", stat.cmd, stat.status);
+
+            if (stat.status != ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
+                log_e("A2DP media control failed");
+                break;
+            }
+
+            if (stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY) {
+
+                log_i("A2DP source ready, starting media");
+
+                esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
+
+                if (err != ESP_OK) { log_e("A2DP START failed: %s", esp_err_to_name(err)); }
+            }
+
+            if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { log_i("A2DP media start acknowledged"); }
+
+            break;
+        }
+
+        case ESP_A2D_AUDIO_STATE_EVT: {
+
+            auto state = param->audio_stat.state;
+
+            log_i("A2DP AUDIO_STATE: %d", state);
+
+            if (state == ESP_A2D_AUDIO_STATE_STARTED) { log_i("A2DP audio transmission started!"); }
+
+            break;
+        }
+
         default: log_i("A2DP: Event %d", event); break;
     }
 }
@@ -174,7 +213,12 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
 bool BT_Source::init(ps_ptr<char> devName) {
     m_devName = devName;
-    s_instance = this;
+    bt_samplesBuffer.setBufsize(m_bt_buffSize);
+    size_t buffSize = bt_samplesBuffer.init();
+    if (buffSize == m_bt_buffSize) {
+        m_workBuff.alloc_array(1024);
+        s_instance = this;
+    }
     // Configure the Bluetooth Controller
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
@@ -237,6 +281,13 @@ bool BT_Source::init(ps_ptr<char> devName) {
     }
     log_i("A2DP source initialization requested");
     m_controllerInitialized = true;
+
+    err = esp_a2d_source_register_data_callback(BT_Source::get_data);
+    log_i("err %i", err);
+    if (err != ESP_OK) {
+        log_e("A2DP data callback registration failed: %s", esp_err_to_name(err));
+        return false;
+    }
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -270,44 +321,69 @@ void BT_Source::reset() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::getChunk(int32_t* chunk, size_t size) {
-    // size_t written = 0;
-    // if (size <= bt_samplesBuffer.freeSpace()) {
-    //     written = bt_samplesBuffer.write(chunk, size);
-    //     if (written != size) {
-    //         log_e("buffer write error size: %lu, written: %lu", size, written);
-    //         return false;
-    //     }
-    // } else {
-    //     // log_e("not enough space, size %lu, free %lu", size, bt_samplesBuffer.freeSpace());
-    //     return false;
-    // }
+    size_t written = 0;
+    if (size <= bt_samplesBuffer.freeSpace()) {
+        written = bt_samplesBuffer.write(chunk, size);
+        if (written != size) {
+            log_e("buffer write error size: %lu, written: %lu", size, written);
+            return false;
+        }
+    } else {
+        log_d("not enough space, size %lu, free %lu", size, bt_samplesBuffer.freeSpace());
+        return false;
+    }
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) { // CallBack
+int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
 
-//     // Special case: Flush request
-//     if (bytes == -1) { return 0; }
+    // Flush request
+    if (bytes == -1) return 0;
 
-//     if (!data || bytes <= 0) return 0;
+    if (!data || bytes <= 0) return 0;
 
-//     size_t filled = bt_samplesBuffer.bufferFilled();
-//     size_t free = bt_samplesBuffer.freeSpace();
-//     size_t ws = bt_samplesBuffer.writeSpace();
-//     (void)filled;
-//     (void)free;
-//     (void)ws;
+    // Default: silence
+    memset(data, 0, bytes);
 
-//     size_t words = bt_samplesBuffer.peek_words(m_workBuff.get(), bytes / 2);
-//     //   log_e("words %lu, filled %lu, free %lu, ws %lu, bytes %lu", words, filled, free, ws, bytes);
-//     for (int i = 0; i < words; i++) {
+    if (!s_instance) return bytes;
 
-//         data[i * 2 + 1] = (m_workBuff[i] & 0xFF000000) >> 24;
-//         data[i * 2] = (m_workBuff[i] & 0x00FF0000) >> 16;
-//     }
-//     bt_samplesBuffer.wordsConsumed(words);
-//     return bytes;
-// }
+
+
+
+    static uint32_t cbCount = 0;
+
+    size_t filled = s_instance->bt_samplesBuffer.bufferFilled();
+
+    size_t words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), bytes / 2);
+
+    if (++cbCount % 100 == 0) {
+        log_i("BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
+
+        if (words > 1) { log_i("PCM samples: 0x%08lX, 0x%08lX", (uint32_t)s_instance->m_workBuff[0], (uint32_t)s_instance->m_workBuff[1]); }
+    }
+
+
+
+
+
+
+    size_t requestedWords = bytes / 2;
+
+    words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), requestedWords);
+
+    for (size_t i = 0; i < words; i++) {
+
+        int32_t sample = s_instance->m_workBuff[i];
+
+        // Convert int32_t to signed 16-bit PCM (little endian)
+        data[i * 2] = (sample >> 16) & 0xFF;
+        data[i * 2 + 1] = (sample >> 24) & 0xFF;
+    }
+
+    s_instance->bt_samplesBuffer.wordsConsumed(words);
+    //   log_i("bytes %li", bytes);
+    return bytes;
+}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::connect() {
 
