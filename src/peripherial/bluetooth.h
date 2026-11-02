@@ -19,6 +19,7 @@ class BT_Source {
     ~BT_Source() { s_instance = nullptr; };
 
   private:
+  //  using bt_info_callback_t = bool (*)(event_t e, const char* fmt, ...);
     struct SBC_Config {
         uint8_t sampleRate;
         uint8_t channelMode;

@@ -308,14 +308,15 @@ void BT_Source::reset() {
 
     if (!m_controllerInitialized) return;
 
+    m_connected = false;
+    m_controllerInitialized = false;
+
     if (esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_ENABLED) { esp_bluedroid_disable(); }
 
     if (esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_INITIALIZED) { esp_bluedroid_deinit(); }
 
     esp_bt_controller_disable();
     esp_bt_controller_deinit();
-
-    m_controllerInitialized = false;
 
     log_i("Bluetooth stopped");
 }
@@ -350,6 +351,7 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
     // statistics
     static uint32_t cbCount = 0;
     size_t filled = s_instance->bt_samplesBuffer.bufferFilled();
+    (void)filled;
     size_t words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), bytes / 2);
     if (++cbCount % 100 == 0) {
         log_d("BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
