@@ -9,6 +9,7 @@
 #include "buffers.hpp"
 #include "esp_arduino_version.h"
 #include "esp_dsp.h"
+#include "peripherial/bluetooth.h"
 #include "psram_unique_ptr.hpp"
 #include <Arduino.h>
 #include <FFat.h>
@@ -47,13 +48,34 @@ class Audio {
   private:
     AudioBuffer InBuff; // instance of input buffer
     RingBuffer  SamplesBuff;
+    BT_Source   bt_source;
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     std::mutex mutex_info; // mutex_info as member
 
-    // callbacks ---------------------------------------------------------
+    // Audio event type descriptions
+    static constexpr std::array<const char*, 17> eventStr = {
+        "info",            // evt_info
+        "id3data",         // evt_id3data
+        "eof",             // evt_eof
+        "station_name",    // evt_name
+        "icy_description", // evt_icydescription
+        "streamtitle",     // evt_streamtitle
+        "bitrate (b/s)",   // evt_bitrate
+        "icy_url",         // evt_icyurl
+        "icy_logo",        // evt_icylogo
+        "genre",           // evt_genre
+        "lasthost",        // evt_lasthost
+        "cover_image",     // evt_image
+        "lyrics",          // evt_lyrics
+        "log",             // evt_log
+        "VU",              // evt_vu
+        "BANDS",           // evt_spectrum
+        "BT",              // evt_bt
+    };
+
     typedef enum {
         evt_info = 0,
         evt_id3data,
@@ -71,27 +93,8 @@ class Audio {
         evt_log,
         evt_vu,
         evt_spectrum,
+        evt_bt,
     } event_t;
-
-    // Audio event type descriptions
-    static constexpr std::array<const char*, 16> eventStr = {
-        "info",            // evt_info
-        "id3data",         // evt_id3data
-        "eof",             // evt_eof
-        "station_name",    // evt_name
-        "icy_description", // evt_icydescription
-        "streamtitle",     // evt_streamtitle
-        "bitrate (b/s)",   // evt_bitrate
-        "icy_url",         // evt_icyurl
-        "icy_logo",        // evt_icylogo
-        "genre",           // evt_genre
-        "lasthost",        // evt_lasthost
-        "cover_image",     // evt_image
-        "lyrics",          // evt_lyrics
-        "log",             // evt_log
-        "VU",              // evt_vu
-        "BANDS",           // evt_spectrum
-    };
 
     typedef struct _msg { // used in info(audio_info_callback());
         const char*           msg = nullptr;
@@ -328,30 +331,32 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 16;                // i2s - dma;  number of I2S DMA buffer
-        uint16_t DMA_FRAME_NUM = 256;              // i2s - dma;  number of frames in one DMA buffer
-        uint16_t FREQ_LS_HZ = 500;                 // IIR Filter: lowshelf
-        uint16_t FREQ_PEAK_HZ = 1800;              // IIR Filter: peakingEQ
-        uint16_t FREQ_HS_HZ = 6000;                // IIR Filter: highshelf
-        float    QUALITY_SLOPE = 0.707;            // IIR Filter: quality (all shelfes)
-        bool     IIR_FILTER = true;                // IIR Filter: true -> IIR filter (highshelf, bandpass, lowshelf) are enabled
-        uint8_t  VU_BARS_ATTACK_STEP = 200;        // vu-meter:   bars rising steps
-        uint8_t  VU_BARS_RELEASE_STEP = 30;        // vu-meter:   bars falling steps
-        uint8_t  VU_BARS_HOLD_CYCLES = 1;          // vu-meter:   bars hold_cycles
-        uint8_t  VU_PEAK_ATTACK_STEP = 200;        // vu-meter:   peak rising steps
-        uint8_t  VU_PEAK_RELEASE_STEP = 10;        // vu-meter:   peak falling steps
-        uint8_t  VU_PEAK_HOLD_CYCLES = 2;          // vu-meter:   peak hold_cycles
-        bool     VU_LEVEL = false;                 // vu-meter:   true -> vu meter is enabled
-        uint8_t  SP_BARS_ATTACK_STEP = 100;        // spectrum:   bars rising steps
-        uint8_t  SP_BARS_RELEASE_STEP = 20;        // spectrum:   bars falling steps
-        uint8_t  SP_BARS_HOLD_CYCLES = 1;          // spectrum:   bars hold_cycles
-        uint8_t  SP_PEAK_ATTACK_STEP = 200;        // spectrum:   peak rising steps
-        uint8_t  SP_PEAK_RELEASE_STEP = 10;        // spectrum:   peak falling steps
-        uint8_t  SP_PEAK_HOLD_CYCLES = 2;          // spectrum:   peak hold_cycles
-        bool     SPECTRUM = false;                 // true: spectrum analyzer is enabled
-        bool     VOLUME_CONTROL = true;            // true: volume and balance control is enabled
-        float    VOL_FADING_SPEED = 50.0;          // mute, volume fading 1.0f (fast) ... 100.0f (slow)
-        uint32_t BUFFER_TRESHOLD_HLS = UINT16_MAX; // Level at which the HLS-TS stream starts and is reloaded
+        uint16_t     DMA_DESC_NUM = 16;                // i2s - dma;  number of I2S DMA buffer
+        uint16_t     DMA_FRAME_NUM = 256;              // i2s - dma;  number of frames in one DMA buffer
+        uint16_t     FREQ_LS_HZ = 500;                 // IIR Filter: lowshelf
+        uint16_t     FREQ_PEAK_HZ = 1800;              // IIR Filter: peakingEQ
+        uint16_t     FREQ_HS_HZ = 6000;                // IIR Filter: highshelf
+        float        QUALITY_SLOPE = 0.707;            // IIR Filter: quality (all shelfes)
+        bool         IIR_FILTER = true;                // IIR Filter: true -> IIR filter (highshelf, bandpass, lowshelf) are enabled
+        uint8_t      VU_BARS_ATTACK_STEP = 200;        // vu-meter:   bars rising steps
+        uint8_t      VU_BARS_RELEASE_STEP = 30;        // vu-meter:   bars falling steps
+        uint8_t      VU_BARS_HOLD_CYCLES = 1;          // vu-meter:   bars hold_cycles
+        uint8_t      VU_PEAK_ATTACK_STEP = 200;        // vu-meter:   peak rising steps
+        uint8_t      VU_PEAK_RELEASE_STEP = 10;        // vu-meter:   peak falling steps
+        uint8_t      VU_PEAK_HOLD_CYCLES = 2;          // vu-meter:   peak hold_cycles
+        bool         VU_LEVEL = false;                 // vu-meter:   true -> vu meter is enabled
+        uint8_t      SP_BARS_ATTACK_STEP = 100;        // spectrum:   bars rising steps
+        uint8_t      SP_BARS_RELEASE_STEP = 20;        // spectrum:   bars falling steps
+        uint8_t      SP_BARS_HOLD_CYCLES = 1;          // spectrum:   bars hold_cycles
+        uint8_t      SP_PEAK_ATTACK_STEP = 200;        // spectrum:   peak rising steps
+        uint8_t      SP_PEAK_RELEASE_STEP = 10;        // spectrum:   peak falling steps
+        uint8_t      SP_PEAK_HOLD_CYCLES = 2;          // spectrum:   peak hold_cycles
+        bool         SPECTRUM = false;                 // true: spectrum analyzer is enabled
+        bool         VOLUME_CONTROL = true;            // true: volume and balance control is enabled
+        float        VOL_FADING_SPEED = 50.0;          // mute, volume fading 1.0f (fast) ... 100.0f (slow)
+        uint32_t     BUFFER_TRESHOLD_HLS = UINT16_MAX; // Level at which the HLS-TS stream starts and is reloaded
+        bool         BT_SOURCE = false;                // activate Bluetooth source (only ESP32_S31)
+        ps_ptr<char> BT_DEV_NANE = "";                 // set the name of your BT speaker;
     } settings;
 
     std::atomic<uint32_t> m_dmaFreeDesc = 0;
@@ -627,9 +632,9 @@ class Audio {
     static bool info(Audio& instance, event_t e, const std::vector<uint32_t>& v, const std::vector<uint32_t>& p = {}) {
         ps_ptr<char> txt;
         switch (e) {
-            case evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
-            case evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
-            case evt_spectrum:
+            case Audio::evt_image: txt.assignf("APIC found at pos {}", v[0]); break;
+            case Audio::evt_vu: txt.assignf("l: {:03}, r: {:03}, pl: {:03}, pr: {:03}", v[0], v[1], v[2], v[3]); break;
+            case Audio::evt_spectrum:
                 txt.assignf("0...14: {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}, {:03}", v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8],
                             v[9], v[10], v[11], v[12], v[13], v[14]);
                 break;
@@ -639,6 +644,18 @@ class Audio {
     }
     //----------------------------------------------------------------------------------------------------------------------
 
+  private:
+    static bool bt_info_callback(void* context, uint16_t event, ps_ptr<char>&& message) {
+        if (!context || !message.get()) return false;
+
+        Audio& instance = *static_cast<Audio*>(context);
+
+        int32_t number = extract_last_number(message.c_get());
+
+        return enqueueInfo(instance, static_cast<event_t>(event), std::move(message), number);
+    }
+    //----------------------------------------------------------------------------------------------------------------------
+  public:
     template <typename... Args> static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* func, const char* fmt, Args&&... args) {
 
 #define ANSI_ESC_RESET   "\033[0m"
@@ -681,7 +698,7 @@ class Audio {
         msg.msg = logStr.get();
         const char* tag[7] = {"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
         msg.s = tag[level];
-        msg.e = evt_log;
+        msg.e = Audio::evt_log;
 
         if (audio_info_callback)
             audio_info_callback(msg);
