@@ -1,5 +1,6 @@
 #pragma once
 
+#if CONFIG_IDF_TARGET_ESP32S31
 #include "buffers.hpp"
 #include "audiolib_structs.hpp"
 #include "esp_a2dp_api.h"
@@ -73,3 +74,23 @@ class BT_Source {
         return m_infoCallback(m_infoContext, event, std::move(result));
     }
 };
+
+#else // dumm<
+
+#include "psram_unique_ptr.hpp"
+
+using bt_info_callback_t = bool (*)(void*, uint16_t, ps_ptr<char>&&);
+
+class BT_Source {
+  public:
+    BT_Source(void* = nullptr, bt_info_callback_t = nullptr) {}
+
+    bool init(ps_ptr<char>) { return false; }
+    void reset() {}
+    bool is_init() { return false; }
+    bool connect() { return false; }
+    bool connected() { return false; }
+    bool getChunk(int32_t*, size_t) { return false; }
+};
+
+#endif
