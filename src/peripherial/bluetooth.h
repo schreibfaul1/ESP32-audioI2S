@@ -8,6 +8,7 @@
 #include "esp_gap_bt_api.h"
 #include "psram_unique_ptr.hpp"
 #include <Arduino.h>
+#include <atomic>
 
 class BT_Source {
 
@@ -27,20 +28,20 @@ class BT_Source {
     bool              m_controllerInitialized = false;
     esp_bd_addr_t     m_targetBda = {0};
     bool              m_deviceFound = false;
-    bool              m_connected = false;
+    std::atomic_bool  m_connected{false};
     bool              m_a2dpInitialized = false;
-    bool test = false;
+    bool              test = false;
 
   public:
     bool init(ps_ptr<char> devName);
     void reset();
     bool is_init() { return m_isInit; }
     bool connect();
-    bool connected() { return m_connected;; }
+    bool connected() { return m_connected.load(std::memory_order_acquire); }
     bool getChunk(int32_t* chunk, size_t size);
 
   private:
-    bool startScan();
+    bool        startScan();
     static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t* param);
     static void a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* param);
 };

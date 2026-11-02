@@ -82,19 +82,19 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             switch (param->conn_stat.state) {
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTED:
-                    if(s_instance) s_instance->m_connected = false;
+                    if(s_instance) s_instance->m_connected.store(false, std::memory_order_release);
                     log_i("A2DP: Disconnected");
                     break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTING: log_i("A2DP: Connecting"); break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTED:
-                    if(s_instance) s_instance->m_connected = true;
+                    if(s_instance) s_instance->m_connected.store(true, std::memory_order_release);
                     log_i("A2DP: Connected");
                     break;
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
-                    if(s_instance) s_instance->m_connected = false;
+                    if(s_instance) s_instance->m_connected.store(false, std::memory_order_release);
                     log_i("A2DP: Disconnecting");
                     break;
 
