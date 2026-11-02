@@ -39,7 +39,7 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
             if (s_instance && len == strlen(s_instance->m_devName.c_get()) && memcmp(dev_name, s_instance->m_devName.c_get(), len) == 0) {
                 memcpy(s_instance->m_targetBda, param->disc_res.bda, sizeof(esp_bd_addr_t));
                 s_instance->m_deviceFound = true;
-                log_i("Target device found: '%s'", s_instance->m_devName.c_get());
+                s_instance->info(audiolib::evt_bt, "Target device found: '{}'", s_instance->m_devName);
 
                 esp_bt_gap_cancel_discovery();
             }
@@ -48,13 +48,12 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
 
         case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
             if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) {
-                log_i("GAP: Discovery started");
+                s_instance->info(audiolib::evt_bt, "GAP: Discovery started");
             } else if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
-                log_i("GAP: Discovery stopped");
-
+                s_instance->info(audiolib::evt_bt, "GAP: Discovery stopped");
                 if (s_instance && s_instance->m_deviceFound) {
-                    log_i("Target device MAC: %02X:%02X:%02X:%02X:%02X:%02X", s_instance->m_targetBda[0], s_instance->m_targetBda[1], s_instance->m_targetBda[2], s_instance->m_targetBda[3],
-                          s_instance->m_targetBda[4], s_instance->m_targetBda[5]);
+                    s_instance->info(audiolib::evt_bt, "Target device MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", s_instance->m_targetBda[0], s_instance->m_targetBda[1],
+                                     s_instance->m_targetBda[2], s_instance->m_targetBda[3], s_instance->m_targetBda[4], s_instance->m_targetBda[5]);
                     s_instance->connect();
                 }
             }
@@ -65,29 +64,30 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static void log_codec_info(const char* source, const esp_a2d_mcc_t& mcc) {
 
-    log_i("%s: codec type %u", source, mcc.type);
+    log_d("%s: codec type %u", source, mcc.type);
 
     switch (mcc.type) {
 
         case ESP_A2D_MCT_SBC: {
 
             const auto& sbc = mcc.cie.sbc_info;
+            (void)sbc;
 
-            log_i("SBC sampling frequency mask: 0x%X", sbc.samp_freq);
-            log_i("SBC channel mode mask:       0x%X", sbc.ch_mode);
-            log_i("SBC block length mask:       0x%X", sbc.block_len);
-            log_i("SBC subbands mask:           0x%X", sbc.num_subbands);
-            log_i("SBC allocation method:       0x%X", sbc.alloc_mthd);
-            log_i("SBC bitpool min: %u, max: %u", sbc.min_bitpool, sbc.max_bitpool);
+            log_d("SBC sampling frequency mask: 0x%X", sbc.samp_freq);
+            log_d("SBC channel mode mask:       0x%X", sbc.ch_mode);
+            log_d("SBC block length mask:       0x%X", sbc.block_len);
+            log_d("SBC subbands mask:           0x%X", sbc.num_subbands);
+            log_d("SBC allocation method:       0x%X", sbc.alloc_mthd);
+            log_d("SBC bitpool min: %u, max: %u", sbc.min_bitpool, sbc.max_bitpool);
 
             break;
         }
 
-        case ESP_A2D_MCT_M24: log_i("AAC codec"); break;
+        case ESP_A2D_MCT_M24: log_d("AAC codec"); break;
 
-        case ESP_A2D_MCT_M12: log_i("MPEG Audio codec"); break;
+        case ESP_A2D_MCT_M12: log_d("MPEG Audio codec"); break;
 
-        default: log_i("Other codec"); break;
+        default: log_d("Other codec"); break;
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -101,14 +101,14 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTED:
                     if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
-                    log_i("A2DP: Disconnected");
+                    s_instance->info(audiolib::evt_bt, "A2DP: Disconnected");
                     break;
 
-                case ESP_A2D_CONNECTION_STATE_CONNECTING: log_i("A2DP: Connecting"); break;
+                case ESP_A2D_CONNECTION_STATE_CONNECTING: s_instance->info(audiolib::evt_bt, "A2DP: Connecting"); break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTED: {
                     if (s_instance) s_instance->m_connected.store(true, std::memory_order_release);
-                    log_i("A2DP: Connected");
+                    s_instance->info(audiolib::evt_bt, "A2DP: Connected");
                     esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
 
                     if (err != ESP_OK) { log_e("A2DP CHECK_SRC_RDY failed: %s", esp_err_to_name(err)); }
@@ -116,7 +116,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
                 }
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
                     if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
-                    log_i("A2DP: Disconnecting");
+                    s_instance->info(audiolib::evt_bt, "A2DP: Disconnecting");
                     break;
 
                 default: break;
@@ -145,13 +145,13 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
                 if (s_instance) s_instance->m_a2dpInitialized = true;
             } else if (param->a2d_prof_stat.init_state == ESP_A2D_DEINIT_SUCCESS) {
                 if (s_instance) s_instance->m_a2dpInitialized = false;
-                log_i("A2DP: Source deinitialized");
+                s_instance->info(audiolib::evt_bt, "A2DP: Source deinitialized");
             }
             break;
 
         case ESP_A2D_REPORT_SNK_CODEC_CAPS_EVT: {
 
-            log_i("A2DP: REPORT_SNK_CODEC_CAPS_EVT");
+            s_instance->info(audiolib::evt_bt, "A2DP: REPORT_SNK_CODEC_CAPS_EVT");
             log_codec_info("Selected sink codec capabilities", param->a2d_report_snk_codec_caps_stat.mcc);
             break;
         }
@@ -159,12 +159,12 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
         case ESP_A2D_REPORT_SNK_ALL_CODEC_CAPS_EVT: {
 
             auto& caps = param->a2d_report_snk_all_codec_caps_stat;
-            log_i("A2DP: REPORT_SNK_ALL_CODEC_CAPS_EVT");
-            log_i("Number of sink endpoints: %u", caps.sep_num);
+            s_instance->info(audiolib::evt_bt, "A2DP: REPORT_SNK_ALL_CODEC_CAPS_EVT");
+            s_instance->info(audiolib::evt_bt, "Number of sink endpoints: {}", caps.sep_num);
 
             if (caps.sep_mcc) {
                 for (int i = 0; i < caps.sep_num; i++) {
-                    log_i("SEP %u:", caps.sep_mcc[i].seid);
+                    s_instance->info(audiolib::evt_bt, "SEP {}:", caps.sep_mcc[i].seid);
                     log_codec_info("SEP codec capabilities", caps.sep_mcc[i].mcc);
                 }
             }
@@ -175,7 +175,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
             auto& stat = param->media_ctrl_stat;
 
-            log_i("A2DP MEDIA_CTRL_ACK: cmd=%d status=%d", stat.cmd, stat.status);
+            s_instance->info(audiolib::evt_bt, "A2DP MEDIA_CTRL_ACK: cmd={} status={}", stat.cmd, stat.status);
 
             if (stat.status != ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
                 log_e("A2DP media control failed");
@@ -184,14 +184,14 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY) {
 
-                log_i("A2DP source ready, starting media");
+                s_instance->info(audiolib::evt_bt, "A2DP source ready, starting media");
 
                 esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
 
-                if (err != ESP_OK) { s_instance->info(audiolib::evt_bt, "A2DP START failed: {}", esp_err_to_name(err)); }
+                if (err != ESP_OK) { log_e("A2DP START failed: %s", esp_err_to_name(err)); }
             }
 
-            if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { log_i("A2DP media start acknowledged"); }
+            if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { s_instance->info(audiolib::evt_bt, "A2DP media start acknowledged"); }
 
             break;
         }
@@ -199,15 +199,13 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
         case ESP_A2D_AUDIO_STATE_EVT: {
 
             auto state = param->audio_stat.state;
-
-            log_i("A2DP AUDIO_STATE: %d", state);
-
-            if (state == ESP_A2D_AUDIO_STATE_STARTED) { log_i("A2DP audio transmission started!"); }
+            s_instance->info(audiolib::evt_bt, "A2DP AUDIO_STATE: {}", state);
+            if (state == ESP_A2D_AUDIO_STATE_STARTED) { s_instance->info(audiolib::evt_bt, "A2DP audio transmission started!"); }
 
             break;
         }
 
-        default: log_i("A2DP: Event %d", event); break;
+        default: s_instance->info(audiolib::evt_bt, "A2DP: Event {}", event); break;
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -229,7 +227,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("BT Controller init failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("BT Controller initialized");
+    s_instance->info(audiolib::evt_bt, "BT Controller initialized");
     m_isInit = true;
 
     // Enable Bluetooth Classic
@@ -239,7 +237,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         esp_bt_controller_deinit();
         return false;
     }
-    log_i("BT Controller enabled");
+    info(audiolib::evt_bt, "BT Controller enabled");
 
     // Initialize Bluedroid
     err = esp_bluedroid_init();
@@ -247,8 +245,8 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("Bluedroid init failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("Bluedroid initialized");
-    info(audiolib::evt_bt, "Bluedroid initialized");
+    s_instance->info(audiolib::evt_bt, "Bluedroid initialized");
+    info(audiolib::evt_bt, "Bluedroid initialized {}", 4.6);
 
     // Activate Bluedroid
     err = esp_bluedroid_enable();
@@ -256,7 +254,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("Bluedroid enable failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("Bluedroid enabled");
+    info(audiolib::evt_bt, "Bluedroid enabled");
 
     // tegister GAP Callback
     err = esp_bt_gap_register_callback(gap_callback);
@@ -264,7 +262,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("GAP callback registration failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("GAP callback registered");
+    info(audiolib::evt_bt, "GAP callback registered");
     startScan();
 
     // register A2DP Callback
@@ -273,7 +271,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("A2DP callback registration failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("A2DP callback registered");
+    info(audiolib::evt_bt, "A2DP callback registered");
 
     // initialisize A2DP Source
     err = esp_a2d_source_init();
@@ -281,11 +279,11 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_e("A2DP source init failed: %s", esp_err_to_name(err));
         return false;
     }
-    log_i("A2DP source initialization requested");
+    info(audiolib::evt_bt, "A2DP source initialization requested");
     m_controllerInitialized = true;
 
     err = esp_a2d_source_register_data_callback(BT_Source::get_data);
-    log_i("err %i", err);
+    info(audiolib::evt_bt, "err {}", err);
     if (err != ESP_OK) {
         log_e("A2DP data callback registration failed: %s", esp_err_to_name(err));
         return false;
@@ -302,7 +300,7 @@ bool BT_Source::startScan() {
         return false;
     }
 
-    log_i("GAP discovery started");
+    info(audiolib::evt_bt, "GAP discovery started");
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -320,7 +318,7 @@ void BT_Source::reset() {
     esp_bt_controller_disable();
     esp_bt_controller_deinit();
 
-    log_i("Bluetooth stopped");
+    info(audiolib::evt_bt, "Bluetooth stopped");
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::getChunk(int32_t* chunk, size_t size) {
@@ -352,7 +350,7 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
 
     // statistics
     static uint32_t cbCount = 0;
-    size_t filled = s_instance->bt_samplesBuffer.bufferFilled();
+    size_t          filled = s_instance->bt_samplesBuffer.bufferFilled();
     (void)filled;
     size_t words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), bytes / 2);
     if (++cbCount % 100 == 0) {
@@ -371,7 +369,6 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
     }
 
     s_instance->bt_samplesBuffer.wordsConsumed(words);
-    //   log_i("bytes %li", bytes);
     return bytes;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -394,7 +391,7 @@ bool BT_Source::connect() {
         return false;
     }
 
-    log_i("A2DP connection requested");
+    info(audiolib::evt_bt, "A2DP connection requested");
 
     return true;
 }

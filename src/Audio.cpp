@@ -3218,7 +3218,7 @@ void Audio::playChunk() {
         if (!bt_source.is_init()) {
             bool res = bt_source.init(settings.BT_DEV_NANE);
             if (res) {
-                AUDIO_LOG_INFO("initialisize Bluetooth source, dev name: {}", settings.BT_DEV_NANE);
+                AUDIO_LOG_DEBUG("initialisize Bluetooth source, dev name: {}", settings.BT_DEV_NANE);
                 setOutputSampleRate(Audio::SR_44100);
             } else {
                 AUDIO_LOG_ERROR("initialisize Bluetooth source failed");

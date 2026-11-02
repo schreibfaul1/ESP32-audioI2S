@@ -55,27 +55,6 @@ class Audio {
     ~Audio();
     std::mutex mutex_info; // mutex_info as member
 
-    // Audio event type descriptions
-    static constexpr std::array<const char*, 17> eventStr = {
-        "info",            // evt_info
-        "id3data",         // evt_id3data
-        "eof",             // evt_eof
-        "station_name",    // evt_name
-        "icy_description", // evt_icydescription
-        "streamtitle",     // evt_streamtitle
-        "bitrate (b/s)",   // evt_bitrate
-        "icy_url",         // evt_icyurl
-        "icy_logo",        // evt_icylogo
-        "genre",           // evt_genre
-        "lasthost",        // evt_lasthost
-        "cover_image",     // evt_image
-        "lyrics",          // evt_lyrics
-        "log",             // evt_log
-        "VU",              // evt_vu
-        "BANDS",           // evt_spectrum
-        "BT",              // evt_bt
-    };
-
     typedef struct _msg { // used in info(audio_info_callback());
         const char*           msg = nullptr;
         const char*           s = nullptr;
@@ -586,7 +565,7 @@ class Audio {
             return false;
         }
         audiolib::InfoItem item;
-        item.s = eventStr[e];
+        item.s = audiolib::eventStr[e];
         item.e = static_cast<uint8_t>(e);
         item.msg = std::move(msg);
         item.arg1 = arg1;

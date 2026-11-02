@@ -460,25 +460,45 @@ struct InfoItem {
     std::vector<uint32_t> vec2; // spectrum peaks
 };
 
-    typedef enum {
-        evt_info = 0,
-        evt_id3data,
-        evt_eof,
-        evt_name,
-        evt_icydescription,
-        evt_streamtitle,
-        evt_bitrate,
-        evt_icyurl,
-        evt_icylogo,
-        evt_genre,
-        evt_lasthost,
-        evt_image,
-        evt_lyrics,
-        evt_log,
-        evt_vu,
-        evt_spectrum,
-        evt_bt,
-    } event_t;
+// Audio event type descriptions
+static constexpr std::array<const char*, 17> eventStr = {
+    "info",            // evt_info
+    "id3data",         // evt_id3data
+    "eof",             // evt_eof
+    "station_name",    // evt_name
+    "icy_description", // evt_icydescription
+    "streamtitle",     // evt_streamtitle
+    "bitrate (b/s)",   // evt_bitrate
+    "icy_url",         // evt_icyurl
+    "icy_logo",        // evt_icylogo
+    "genre",           // evt_genre
+    "lasthost",        // evt_lasthost
+    "cover_image",     // evt_image
+    "lyrics",          // evt_lyrics
+    "log",             // evt_log
+    "VU",              // evt_vu
+    "BANDS",           // evt_spectrum
+    "BT",              // evt_bt
+};
 
+typedef enum {
+    evt_info = 0,
+    evt_id3data,
+    evt_eof,
+    evt_name,
+    evt_icydescription,
+    evt_streamtitle,
+    evt_bitrate,
+    evt_icyurl,
+    evt_icylogo,
+    evt_genre,
+    evt_lasthost,
+    evt_image,
+    evt_lyrics,
+    evt_log,
+    evt_vu,
+    evt_spectrum,
+    evt_bt,
+} event_t;
 
 } // namespace audiolib

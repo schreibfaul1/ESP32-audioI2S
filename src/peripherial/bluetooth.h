@@ -70,7 +70,6 @@ class BT_Source {
         ps_ptr<char> result;
         result.assignf(fmt, std::forward<Args>(args)...);
         if (!result.get()) return false;
-        log_w("info callback");
         return m_infoCallback(m_infoContext, event, std::move(result));
     }
 };
