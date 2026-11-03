@@ -1,9 +1,14 @@
+/*
+ * bluetooth.cpp
+ *
+ *  Created on: 30.10.2026
+ *  Updated on: 03.11.2026
+ */
+
 #include "Arduino.h"
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-#include "bluetooth.h"
-#include"../Audio.h"
-
-
+    #include "../Audio.h"
+    #include "bluetooth.h"
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -54,9 +59,8 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
                 s_instance->info(Audio::evt_bt, "GAP: Discovery started");
             } else if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
                 s_instance->info(Audio::evt_bt, "GAP: Discovery stopped");
-                if (s_instance && s_instance->m_deviceFound) {
-                    s_instance->info(Audio::evt_bt, "Target device MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", s_instance->m_targetBda[0], s_instance->m_targetBda[1],
-                                     s_instance->m_targetBda[2], s_instance->m_targetBda[3], s_instance->m_targetBda[4], s_instance->m_targetBda[5]);
+                if (s_instance && !s_instance->m_stopping.load(std::memory_order_acquire) && s_instance->m_deviceFound && s_instance->m_a2dpInitialized.load(std::memory_order_acquire)) {
+
                     s_instance->connect();
                 }
             }
@@ -103,7 +107,8 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             switch (param->conn_stat.state) {
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTED:
-                    if (s_instance) s_instance->m_connected.store(false, std::memory_order_release);
+                    s_instance->m_connected.store(false, std::memory_order_release);
+                    xEventGroupSetBits(s_instance->m_btEvents, BT_Source::BT_EVT_DISCONNECTED);
                     s_instance->info(Audio::evt_bt, "A2DP: Disconnected");
                     break;
 
@@ -142,16 +147,6 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
             break;
         }
-        case ESP_A2D_PROF_STATE_EVT:
-
-            if (param->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) {
-                if (s_instance) s_instance->m_a2dpInitialized = true;
-            } else if (param->a2d_prof_stat.init_state == ESP_A2D_DEINIT_SUCCESS) {
-                if (s_instance) s_instance->m_a2dpInitialized = false;
-                s_instance->info(Audio::evt_bt, "A2DP: Source deinitialized");
-            }
-            break;
-
         case ESP_A2D_REPORT_SNK_CODEC_CAPS_EVT: {
 
             s_instance->info(Audio::evt_bt, "A2DP: REPORT_SNK_CODEC_CAPS_EVT");
@@ -184,17 +179,20 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
                 log_e("A2DP media control failed");
                 break;
             }
+s_instance->info(Audio::evt_bt, "stat.cmd: {},  stat.status: {} ", stat.cmd, stat.status);
+            if (stat.cmd == ESP_A2D_MEDIA_CTRL_SUSPEND && stat.status == ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) { //
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_MEDIA_SUSPEND);
+            }
 
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY) {
-
                 s_instance->info(Audio::evt_bt, "A2DP source ready, starting media");
-
                 esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
-
                 if (err != ESP_OK) { log_e("A2DP START failed: %s", esp_err_to_name(err)); }
             }
 
-            if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { s_instance->info(Audio::evt_bt, "A2DP media start acknowledged"); }
+            if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { //
+                s_instance->info(Audio::evt_bt, "A2DP media start acknowledged");
+            }
 
             break;
         }
@@ -208,90 +206,380 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             break;
         }
 
+        case ESP_A2D_PROF_STATE_EVT:
+
+            if (param->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) {
+
+                s_instance->m_a2dpInitialized = true;
+
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_A2DP_INIT);
+            } else if (param->a2d_prof_stat.init_state == ESP_A2D_DEINIT_SUCCESS) {
+
+                s_instance->m_a2dpInitialized = false;
+
+                s_instance->info(Audio::evt_bt, "A2DP deinitialized");
+
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_A2DP_DEINIT);
+            }
+            break;
+
         default: s_instance->info(Audio::evt_bt, "A2DP: Event {}", event); break;
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void BT_Source::avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t* param) {
+    if (!s_instance || !param) return;
 
-bool BT_Source::init(ps_ptr<char> devName) {
-    m_devName = devName;
-    bt_samplesBuffer.setBufsize(m_bt_buffSize);
-    size_t buffSize = bt_samplesBuffer.init();
-    if (buffSize == m_bt_buffSize) {
-        m_workBuff.alloc_array(1024);
-        s_instance = this;
+    switch (event) {
+
+        case ESP_AVRC_TG_PROF_STATE_EVT:
+
+            if (param->avrc_tg_init_stat.state == ESP_AVRC_INIT_SUCCESS) {
+                s_instance->info(Audio::evt_bt, "AVRCP Target initialized");
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_AVRC_INIT);
+            } else if (param->avrc_tg_init_stat.state == ESP_AVRC_DEINIT_SUCCESS) {
+                s_instance->info(Audio::evt_bt, "AVRCP Target deinitialized");
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_AVRC_DEINIT);
+            }
+            break;
+
+        case ESP_AVRC_TG_CONNECTION_STATE_EVT: s_instance->info(Audio::evt_bt, "AVRCP connection: {}", param->conn_stat.connected ? "connected" : "disconnected"); break;
+
+        case ESP_AVRC_TG_PASSTHROUGH_CMD_EVT: {
+
+            const auto& cmd = param->psth_cmd;
+
+            s_instance->info(Audio::evt_bt, "AVRCP command: key={} state={}", cmd.key_code, cmd.key_state);
+
+            break;
+        }
+
+        case ESP_AVRC_TG_REMOTE_FEATURES_EVT: s_instance->info(Audio::evt_bt, "AVRCP remote features received"); break;
+
+        default: break;
     }
-    // Configure the Bluetooth Controller
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool BT_Source::init(ps_ptr<char> devName) {
+
+    EventBits_t bits = {};
+
+    if (!m_btEvents) {
+        log_e("Bluetooth event group unavailable");
+        return false;
+    }
+
+    if (m_isInit) {
+        log_w("Bluetooth already initialized");
+        return true;
+    }
+
+    s_instance = this;
+
+    m_stopping = false;
+    m_connected = false;
+    m_deviceFound = false;
+    m_a2dpInitialized = false;
+
+    m_devName = devName;
+
+    xEventGroupClearBits(m_btEvents, 0x00FFFFFF);
+
+    info(Audio::evt_bt, "starting Bluetooth, device name: {}", devName);
+
+    // Initialize sample buffer
+    bt_samplesBuffer.setBufsize(m_bt_buffSize);
+
+    if (bt_samplesBuffer.init() != m_bt_buffSize) {
+        log_e("Bluetooth sample buffer initialization failed");
+        return false;
+    }
+
+    m_workBuff.alloc_array(1024);
+
+    esp_err_t err;
+
+    // --------------------------------------------------
+    // Bluetooth Controller
+    // --------------------------------------------------
+
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
-    // Initialize the controller
-    esp_err_t err = esp_bt_controller_init(&bt_cfg);
-    if (err != ESP_OK) {
-        log_e("BT Controller init failed: %s", esp_err_to_name(err));
-        return false;
-    }
-    s_instance->info(Audio::evt_bt, "BT Controller initialized");
-    m_isInit = true;
+    err = esp_bt_controller_init(&bt_cfg);
 
-    // Enable Bluetooth Classic
+    if (err != ESP_OK) goto error;
+
+    m_btControllerInitialized = true;
+
     err = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT);
-    if (err != ESP_OK) {
-        log_e("BT Controller enable failed: %s", esp_err_to_name(err));
-        esp_bt_controller_deinit();
-        return false;
-    }
+
+    if (err != ESP_OK) goto error;
+
+    m_btControllerEnabled = true;
+
     info(Audio::evt_bt, "BT Controller enabled");
 
-    // Initialize Bluedroid
-    err = esp_bluedroid_init();
-    if (err != ESP_OK) {
-        log_e("Bluedroid init failed: %s", esp_err_to_name(err));
-        return false;
-    }
-    s_instance->info(Audio::evt_bt, "Bluedroid initialized");
-    info(Audio::evt_bt, "Bluedroid initialized {}", 4.6);
+    // --------------------------------------------------
+    // Bluedroid
+    // --------------------------------------------------
 
-    // Activate Bluedroid
+    err = esp_bluedroid_init();
+
+    if (err != ESP_OK) goto error;
+
+    m_bluedroidInitialized = true;
+
     err = esp_bluedroid_enable();
-    if (err != ESP_OK) {
-        log_e("Bluedroid enable failed: %s", esp_err_to_name(err));
-        return false;
-    }
+
+    if (err != ESP_OK) goto error;
+
+    m_bluedroidEnabled = true;
+
     info(Audio::evt_bt, "Bluedroid enabled");
 
-    // tegister GAP Callback
+    // --------------------------------------------------
+    // GAP
+    // --------------------------------------------------
+
     err = esp_bt_gap_register_callback(gap_callback);
-    if (err != ESP_OK) {
-        log_e("GAP callback registration failed: %s", esp_err_to_name(err));
-        return false;
-    }
+
+    if (err != ESP_OK) goto error;
+
     info(Audio::evt_bt, "GAP callback registered");
-    startScan();
 
-    // register A2DP Callback
+    // --------------------------------------------------
+    // AVRCP Target
+    // --------------------------------------------------
+
+    err = esp_avrc_tg_register_callback(avrc_tg_callback);
+
+    if (err != ESP_OK) goto error;
+
+    err = esp_avrc_tg_init();
+
+    if (err != ESP_OK) goto error;
+
+    m_avrcTgInitRequested = true;
+
+    info(Audio::evt_bt, "AVRCP Target initialization requested");
+
+    // --------------------------------------------------
+    // A2DP Source
+    // --------------------------------------------------
+
     err = esp_a2d_register_callback(a2dp_callback);
-    if (err != ESP_OK) {
-        log_e("A2DP callback registration failed: %s", esp_err_to_name(err));
-        return false;
-    }
-    info(Audio::evt_bt, "A2DP callback registered");
 
-    // initialisize A2DP Source
+    if (err != ESP_OK) goto error;
+
     err = esp_a2d_source_init();
-    if (err != ESP_OK) {
-        log_e("A2DP source init failed: %s", esp_err_to_name(err));
-        return false;
-    }
-    info(Audio::evt_bt, "A2DP source initialization requested");
-    m_controllerInitialized = true;
 
-    err = esp_a2d_source_register_data_callback(BT_Source::get_data);
-    info(Audio::evt_bt, "err {}", err);
-    if (err != ESP_OK) {
-        log_e("A2DP data callback registration failed: %s", esp_err_to_name(err));
-        return false;
+    if (err != ESP_OK) goto error;
+
+    m_a2dpInitRequested = true;
+
+    err = esp_a2d_source_register_data_callback(get_data);
+
+    if (err != ESP_OK) goto error;
+
+    info(Audio::evt_bt, "A2DP Source initialization requested");
+
+    // --------------------------------------------------
+    // Wait for both profiles
+    // --------------------------------------------------
+
+    bits = xEventGroupWaitBits(m_btEvents, BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(10000));
+
+    if ((bits & (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) != (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) {
+
+        log_e("Bluetooth profile initialization timeout");
+        goto error;
     }
+
+    m_isInit = true;
+
+    info(Audio::evt_bt, "Bluetooth profiles initialized");
+
+    // Start discovery only now!
+    if (!startScan()) goto error;
+
     return true;
+
+error:
+
+    log_e("Bluetooth initialization failed: %s", esp_err_to_name(err));
+
+    reset();
+
+    return false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+void BT_Source::reset() {
+
+    info(Audio::evt_bt, "stopping Bluetooth");
+
+    if (!m_btControllerInitialized) {
+        m_isInit = false;
+        return;
+    }
+
+    m_stopping.store(true, std::memory_order_release);
+
+    // --------------------------------------------------
+    // Stop GAP discovery
+    // --------------------------------------------------
+
+    esp_bt_gap_cancel_discovery();
+
+    // --------------------------------------------------
+    // Stop A2DP media and disconnect
+    // --------------------------------------------------
+
+    if (m_connected.load(std::memory_order_acquire)) {
+
+        xEventGroupClearBits(m_btEvents, BT_EVT_MEDIA_SUSPEND);
+
+        esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_SUSPEND);
+
+        if (err == ESP_OK) {
+
+            EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_MEDIA_SUSPEND, pdTRUE, pdFALSE, pdMS_TO_TICKS(2000));
+
+            if (!(bits & BT_EVT_MEDIA_SUSPEND)) { log_w("A2DP suspend timeout"); }
+        }
+
+        // Erst danach Disconnect!
+        xEventGroupClearBits(m_btEvents, BT_EVT_DISCONNECTED);
+
+        err = esp_a2d_source_disconnect(m_targetBda);
+
+        // Hier anschließend wie bisher auf DISCONNECTED warten.
+    }
+
+    m_connected = false;
+
+    // --------------------------------------------------
+    // Deinitialize AVRCP Target
+    // --------------------------------------------------
+
+    if (m_avrcTgInitRequested) {
+
+        xEventGroupClearBits(m_btEvents, BT_EVT_AVRC_DEINIT);
+
+        esp_err_t err = esp_avrc_tg_deinit();
+
+        if (err == ESP_OK) {
+
+            EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_AVRC_DEINIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
+
+            if (!(bits & BT_EVT_AVRC_DEINIT)) {
+                log_e("AVRCP deinit timeout - keeping Bluetooth stack alive");
+                return;
+            }
+        } else {
+            log_e("AVRCP deinit failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_avrcTgInitRequested = false;
+    }
+
+    // --------------------------------------------------
+    // Deinitialize A2DP Source
+    // --------------------------------------------------
+
+    if (m_a2dpInitRequested) {
+
+        xEventGroupClearBits(m_btEvents, BT_EVT_A2DP_DEINIT);
+
+        esp_err_t err = esp_a2d_source_deinit();
+
+        if (err == ESP_OK) {
+
+            EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_A2DP_DEINIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
+
+            if (!(bits & BT_EVT_A2DP_DEINIT)) {
+                log_e("A2DP deinit timeout - keeping Bluetooth stack alive");
+                return;
+            }
+        } else {
+            log_e("A2DP deinit failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_a2dpInitRequested = false;
+    }
+
+    // --------------------------------------------------
+    // Bluedroid
+    // --------------------------------------------------
+
+    if (m_bluedroidEnabled) {
+
+        esp_err_t err = esp_bluedroid_disable();
+
+        if (err != ESP_OK) {
+            log_e("Bluedroid disable failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_bluedroidEnabled = false;
+    }
+
+    if (m_bluedroidInitialized) {
+
+        esp_err_t err = esp_bluedroid_deinit();
+
+        if (err != ESP_OK) {
+            log_e("Bluedroid deinit failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_bluedroidInitialized = false;
+    }
+
+    // --------------------------------------------------
+    // Bluetooth Controller
+    // --------------------------------------------------
+
+    if (m_btControllerEnabled) {
+
+        esp_err_t err = esp_bt_controller_disable();
+
+        if (err != ESP_OK) {
+            log_e("BT Controller disable failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_btControllerEnabled = false;
+    }
+
+    if (m_btControllerInitialized) {
+
+        esp_err_t err = esp_bt_controller_deinit();
+
+        if (err != ESP_OK) {
+            log_e("BT Controller deinit failed: %s", esp_err_to_name(err));
+            return;
+        }
+
+        m_btControllerInitialized = false;
+    }
+
+    // --------------------------------------------------
+    // Reset states
+    // --------------------------------------------------
+
+    m_a2dpInitialized = false;
+    m_connected = false;
+    m_deviceFound = false;
+
+    m_isInit = false;
+    m_stopping = false;
+
+    memset(m_targetBda, 0, sizeof(m_targetBda));
+
+    info(Audio::evt_bt, "Bluetooth stopped");
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::startScan() {
@@ -305,23 +593,6 @@ bool BT_Source::startScan() {
 
     info(Audio::evt_bt, "GAP discovery started");
     return true;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void BT_Source::reset() {
-
-    if (!m_controllerInitialized) return;
-
-    m_connected = false;
-    m_controllerInitialized = false;
-
-    if (esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_ENABLED) { esp_bluedroid_disable(); }
-
-    if (esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_INITIALIZED) { esp_bluedroid_deinit(); }
-
-    esp_bt_controller_disable();
-    esp_bt_controller_deinit();
-
-    info(Audio::evt_bt, "Bluetooth stopped");
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::getChunk(int32_t* chunk, size_t size) {
@@ -376,7 +647,7 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool BT_Source::connect() {
-
+    if (m_stopping || !m_isInit) return false;
     if (!m_a2dpInitialized) {
         log_e("A2DP not initialized");
         return false;

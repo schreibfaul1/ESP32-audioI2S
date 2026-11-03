@@ -3227,7 +3227,7 @@ void Audio::playChunk() {
             }
         }
     } else {
-        if (bt_source.is_init()) {
+        if (!settings.BT_SOURCE && bt_source.is_init()) {
             bt_source.reset();
             AUDIO_LOG_INFO("deactivate Bluetooth source");
         }

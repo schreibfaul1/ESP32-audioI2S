@@ -2,15 +2,17 @@
 #include <Arduino.h>
 
 #ifdef CONFIG_IDF_TARGET_ESP32S31
-#include "../buffers.hpp"
-#include "../audiolib_structs.hpp"
-#include "../psram_unique_ptr.hpp"
-#include "esp_a2dp_api.h"
-#include "esp_bt.h"
-#include "esp_bt_main.h"
-#include "esp_err.h"
-#include "esp_gap_bt_api.h"
-#include <atomic>
+    #include "../buffers.hpp"
+    #include "../psram_unique_ptr.hpp"
+    #include "esp_a2dp_api.h"
+    #include "esp_avrc_api.h"
+    #include "esp_bt.h"
+    #include "esp_bt_main.h"
+    #include "esp_err.h"
+    #include "esp_gap_bt_api.h"
+    #include "freertos/FreeRTOS.h"
+    #include "freertos/event_groups.h"
+    #include <atomic>
 
 using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);
 class BT_Source {
@@ -18,11 +20,21 @@ class BT_Source {
     RingBuffer bt_samplesBuffer;
 
   public:
-    BT_Source(void* context = nullptr, bt_info_callback_t callback = nullptr) : m_infoContext(context), m_infoCallback(callback) {}
+    BT_Source(void* context = nullptr, bt_info_callback_t callback = nullptr) : m_infoContext(context), m_infoCallback(callback) { //
+        m_btEvents = xEventGroupCreate();
+    }
+
     ~BT_Source() { s_instance = nullptr; };
 
   private:
-    //  using bt_info_callback_t = bool (*)(event_t e, const char* fmt, ...);
+    static constexpr EventBits_t BT_EVT_AVRC_INIT = BIT0;
+    static constexpr EventBits_t BT_EVT_A2DP_INIT = BIT1;
+    static constexpr EventBits_t BT_EVT_AVRC_DEINIT = BIT2;
+    static constexpr EventBits_t BT_EVT_A2DP_DEINIT = BIT3;
+    static constexpr EventBits_t BT_EVT_DISCONNECTED = BIT4;
+    static constexpr EventBits_t BT_EVT_MEDIA_SUSPEND = BIT5;
+    static constexpr EventBits_t BT_EVT_AVRC_DISCONNECTED = BIT6;
+
     struct SBC_Config {
         uint8_t sampleRate;
         uint8_t channelMode;
@@ -33,22 +45,30 @@ class BT_Source {
         uint8_t maxBitpool;
     };
 
-    SBC_Config m_sbcConfig{};
-
-    bool   m_isInit = false;
-    size_t m_bt_buffSize = 32768;
-
+    EventGroupHandle_t m_btEvents = nullptr;
+    std::atomic_bool   m_stopping{false};
+    std::atomic_bool   m_a2dpInitialized{false};
+    std::atomic_bool   m_avrcConnected{false};
+    bool               m_btControllerInitialized = false;
+    bool               m_btControllerEnabled = false;
+    bool               m_bluedroidInitialized = false;
+    bool               m_bluedroidEnabled = false;
+    bool               m_avrcTgInitRequested = false;
+    bool               m_a2dpInitRequested = false;
+    SBC_Config         m_sbcConfig{};
+    bool               m_isInit = false;
+    size_t             m_bt_buffSize = 32768;
     static BT_Source*  s_instance;
     ps_ptr<int32_t>    m_workBuff;
     ps_ptr<char>       m_devName;
-    bool               m_controllerInitialized = false;
-    esp_bd_addr_t      m_targetBda = {0};
+    esp_bd_addr_t      m_targetBda;
     bool               m_deviceFound = false;
     std::atomic_bool   m_connected{false};
-    bool               m_a2dpInitialized = false;
     bool               test = false;
     void*              m_infoContext = nullptr;
     bt_info_callback_t m_infoCallback = nullptr;
+
+    static void avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t* param);
 
   public:
     bool init(ps_ptr<char> devName);
@@ -57,8 +77,6 @@ class BT_Source {
     bool connect();
     bool connected() { return m_connected.load(std::memory_order_acquire); }
     bool getChunk(int32_t* chunk, size_t size);
-
-
 
   private:
     bool           startScan();
@@ -77,7 +95,7 @@ class BT_Source {
 
 #else // dummy
 
-#include "../psram_unique_ptr.hpp"
+    #include "../psram_unique_ptr.hpp"
 
 using bt_info_callback_t = bool (*)(void*, uint16_t, ps_ptr<char>&&);
 
