@@ -743,8 +743,8 @@ class Decoder {
     virtual uint32_t              getOutputSamples() = 0;
     virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) = 0;
     virtual void                  setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
-    virtual const char*           getStreamTitle();
-    virtual const char*           whoIsIt();
+    virtual const char*           getStreamTitle() = 0;
+    virtual const char*           whoIsIt() = 0;
     virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
     virtual const char*           arg1() = 0; // decoder specific
     virtual const char*           arg2() = 0; // decoder specific
