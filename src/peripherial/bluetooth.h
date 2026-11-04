@@ -83,6 +83,7 @@ class BT_Source {
     static void    gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t* param);
     static void    a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* param);
     static int32_t get_data(uint8_t* data, int32_t bytes);
+    void           restartDiscoveryIfDisconnected();
 
     template <typename... Args> bool info(uint16_t event, const char* fmt, Args&&... args) {
         if (!m_infoCallback) return false;

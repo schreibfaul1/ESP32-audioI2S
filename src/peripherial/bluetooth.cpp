@@ -63,9 +63,12 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
                 s_instance->info(Audio::evt_bt, "GAP: Discovery started");
             } else if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
                 s_instance->info(Audio::evt_bt, "GAP: Discovery stopped");
-                if (s_instance && !s_instance->m_stopping.load(std::memory_order_acquire) && s_instance->m_deviceFound && s_instance->m_a2dpInitialized.load(std::memory_order_acquire)) {
-
+                if (!s_instance || s_instance->m_stopping.load(std::memory_order_acquire)) { break; }
+                if (s_instance->m_deviceFound && s_instance->m_a2dpInitialized.load(std::memory_order_acquire)) {
                     s_instance->connect();
+                } else if (s_instance->m_isInit) {
+                    // No device found: Start the next scan
+                    s_instance->startScan();
                 }
             }
             break;
@@ -112,8 +115,9 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
 
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTED:
                     s_instance->m_connected.store(false, std::memory_order_release);
-                    xEventGroupSetBits(s_instance->m_btEvents, BT_Source::BT_EVT_DISCONNECTED);
+                    xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_DISCONNECTED);
                     s_instance->info(Audio::evt_bt, "A2DP: Disconnected");
+                    s_instance->restartDiscoveryIfDisconnected();
                     break;
 
                 case ESP_A2D_CONNECTION_STATE_CONNECTING: s_instance->info(Audio::evt_bt, "A2DP: Connecting"); break;
@@ -250,13 +254,13 @@ void BT_Source::avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_pa
         case ESP_AVRC_TG_CONNECTION_STATE_EVT: {
             const bool connected = param->conn_stat.connected;
             s_instance->m_avrcConnected.store(connected, std::memory_order_release);
-
             if (connected) {
                 xEventGroupClearBits(s_instance->m_btEvents, BT_EVT_AVRC_DISCONNECTED);
             } else {
                 xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_AVRC_DISCONNECTED);
             }
             s_instance->info(Audio::evt_bt, "AVRCP connection: {}", connected ? "connected" : "disconnected");
+            if (!connected) { s_instance->restartDiscoveryIfDisconnected(); }
             break;
         }
 
@@ -739,6 +743,20 @@ bool BT_Source::connect() {
     info(Audio::evt_bt, "A2DP connection requested");
 
     return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void BT_Source::restartDiscoveryIfDisconnected() {
+
+    if (!m_isInit || m_stopping.load(std::memory_order_acquire)) return;
+
+    if (m_connected.load(std::memory_order_acquire) || m_avrcConnected.load(std::memory_order_acquire)) return;
+
+    info(Audio::evt_bt, "Bluetooth connection lost, restarting discovery");
+
+    m_deviceFound = false;
+    memset(m_targetBda, 0, sizeof(m_targetBda));
+
+    if (!startScan()) { log_e("Restarting Bluetooth discovery failed"); }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #endif
