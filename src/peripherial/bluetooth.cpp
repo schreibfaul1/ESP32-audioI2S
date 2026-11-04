@@ -23,10 +23,10 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
     switch (event) {
 
         case ESP_BT_GAP_DISC_RES_EVT: {
-            uint8_t* name = nullptr;
-            uint8_t  name_len = 0;
-            uint8_t* eir = nullptr;
-            ps_ptr<char>devName;
+            uint8_t*     name = nullptr;
+            uint8_t      name_len = 0;
+            uint8_t*     eir = nullptr;
+            ps_ptr<char> devName;
 
             for (int i = 0; i < param->disc_res.num_prop; i++) {
                 if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR) {
@@ -48,8 +48,8 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
             s_instance->info(Audio::evt_bt, "BT device found: '{}'", devName);
 
             // compare mames
-            if(devName == s_instance->m_devName){
-            //if (s_instance && len == strlen(s_instance->m_devName.c_get()) && memcmp(name, s_instance->m_devName.c_get(), len) == 0) {
+            if (devName == s_instance->m_devName) {
+                // if (s_instance && len == strlen(s_instance->m_devName.c_get()) && memcmp(name, s_instance->m_devName.c_get(), len) == 0) {
                 memcpy(s_instance->m_targetBda, param->disc_res.bda, sizeof(esp_bd_addr_t));
                 s_instance->m_deviceFound = true;
                 s_instance->info(Audio::evt_bt, "Target device found: '{}'", s_instance->m_devName);
@@ -261,9 +261,8 @@ void BT_Source::avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_pa
         }
 
         case ESP_AVRC_TG_PASSTHROUGH_CMD_EVT: {
-
             const auto& cmd = param->psth_cmd;
-
+            log_w("cmd.key_code %u", cmd.key_code);
             // Nur Tastendruck verarbeiten, nicht das Loslassen
             if (cmd.key_state != ESP_AVRC_PT_CMD_STATE_PRESSED) { break; }
 
@@ -423,6 +422,37 @@ bool BT_Source::init(ps_ptr<char> devName) {
     // --------------------------------------------------
 
     bits = xEventGroupWaitBits(m_btEvents, BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(10000));
+
+    {
+        esp_avrc_psth_bit_mask_t cmdSet{};
+
+        const esp_avrc_pt_cmd_t commands[] = {ESP_AVRC_PT_CMD_PLAY,         //
+                                              ESP_AVRC_PT_CMD_PAUSE,        //
+                                              ESP_AVRC_PT_CMD_STOP,         //
+                                              ESP_AVRC_PT_CMD_FORWARD,      //
+                                              ESP_AVRC_PT_CMD_BACKWARD,     //
+                                              ESP_AVRC_PT_CMD_FAST_FORWARD, //
+                                              ESP_AVRC_PT_CMD_REWIND,       //
+                                              ESP_AVRC_PT_CMD_VOL_UP,       //
+                                              ESP_AVRC_PT_CMD_VOL_DOWN};
+
+        for (auto cmd : commands) {
+            if (!esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &cmdSet, cmd)) {
+                log_e("AVRCP passthrough mask error: %u", cmd);
+                err = ESP_FAIL;
+                goto error;
+            }
+        }
+
+        err = esp_avrc_tg_set_psth_cmd_filter(ESP_AVRC_PSTH_FILTER_SUPPORTED_CMD, &cmdSet);
+
+        if (err != ESP_OK) {
+            log_e("AVRCP passthrough filter failed: %s", esp_err_to_name(err));
+            goto error;
+        }
+
+        info(Audio::evt_bt, "AVRCP passthrough commands configured");
+    }
 
     if ((bits & (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) != (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) {
 
