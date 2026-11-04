@@ -2,7 +2,7 @@
  * bluetooth.cpp
  *
  *  Created on: 30.10.2026
- *  Updated on: 03.11.2026
+ *  Updated on: 04.11.2026
  */
 
 #include "Arduino.h"
@@ -23,9 +23,10 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
     switch (event) {
 
         case ESP_BT_GAP_DISC_RES_EVT: {
-            uint8_t* dev_name = nullptr;
+            uint8_t* name = nullptr;
             uint8_t  name_len = 0;
             uint8_t* eir = nullptr;
+            ps_ptr<char>devName;
 
             for (int i = 0; i < param->disc_res.num_prop; i++) {
                 if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR) {
@@ -35,17 +36,20 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
             }
 
             if (eir) {
-                dev_name = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME, &name_len);
-                if (!dev_name) { dev_name = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME, &name_len); }
+                name = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME, &name_len);
+                if (!name) { name = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME, &name_len); }
             }
-            if (!dev_name || name_len == 0) break;
+            if (!name || name_len == 0) break;
 
             // Clean up device names from EIR data
             size_t len = name_len;
-            while (len > 0 && (dev_name[len - 1] == '\n' || dev_name[len - 1] == '\r' || dev_name[len - 1] == '\0')) { len--; }
+            while (len > 0 && (name[len - 1] == '\n' || name[len - 1] == '\r' || name[len - 1] == '\0')) { len--; }
+            devName.copy_from((char*)name, len);
+            s_instance->info(Audio::evt_bt, "BT device found: '{}'", devName);
 
             // compare mames
-            if (s_instance && len == strlen(s_instance->m_devName.c_get()) && memcmp(dev_name, s_instance->m_devName.c_get(), len) == 0) {
+            if(devName == s_instance->m_devName){
+            //if (s_instance && len == strlen(s_instance->m_devName.c_get()) && memcmp(name, s_instance->m_devName.c_get(), len) == 0) {
                 memcpy(s_instance->m_targetBda, param->disc_res.bda, sizeof(esp_bd_addr_t));
                 s_instance->m_deviceFound = true;
                 s_instance->info(Audio::evt_bt, "Target device found: '{}'", s_instance->m_devName);
@@ -179,7 +183,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
                 log_e("A2DP media control failed");
                 break;
             }
-s_instance->info(Audio::evt_bt, "stat.cmd: {},  stat.status: {} ", stat.cmd, stat.status);
+
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_SUSPEND && stat.status == ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) { //
                 xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_MEDIA_SUSPEND);
             }
@@ -243,13 +247,44 @@ void BT_Source::avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_pa
             }
             break;
 
-        case ESP_AVRC_TG_CONNECTION_STATE_EVT: s_instance->info(Audio::evt_bt, "AVRCP connection: {}", param->conn_stat.connected ? "connected" : "disconnected"); break;
+        case ESP_AVRC_TG_CONNECTION_STATE_EVT: {
+            const bool connected = param->conn_stat.connected;
+            s_instance->m_avrcConnected.store(connected, std::memory_order_release);
+
+            if (connected) {
+                xEventGroupClearBits(s_instance->m_btEvents, BT_EVT_AVRC_DISCONNECTED);
+            } else {
+                xEventGroupSetBits(s_instance->m_btEvents, BT_EVT_AVRC_DISCONNECTED);
+            }
+            s_instance->info(Audio::evt_bt, "AVRCP connection: {}", connected ? "connected" : "disconnected");
+            break;
+        }
 
         case ESP_AVRC_TG_PASSTHROUGH_CMD_EVT: {
 
             const auto& cmd = param->psth_cmd;
 
-            s_instance->info(Audio::evt_bt, "AVRCP command: key={} state={}", cmd.key_code, cmd.key_state);
+            // Nur Tastendruck verarbeiten, nicht das Loslassen
+            if (cmd.key_state != ESP_AVRC_PT_CMD_STATE_PRESSED) { break; }
+
+            switch (cmd.key_code) {
+
+                case ESP_AVRC_PT_CMD_PLAY: s_instance->info(Audio::evt_bt, "play"); break;
+
+                case ESP_AVRC_PT_CMD_PAUSE: s_instance->info(Audio::evt_bt, "pause"); break;
+
+                case ESP_AVRC_PT_CMD_STOP: s_instance->info(Audio::evt_bt, "stop"); break;
+
+                case ESP_AVRC_PT_CMD_FORWARD: s_instance->info(Audio::evt_bt, "next"); break;
+
+                case ESP_AVRC_PT_CMD_BACKWARD: s_instance->info(Audio::evt_bt, "previous"); break;
+
+                case ESP_AVRC_PT_CMD_FAST_FORWARD: s_instance->info(Audio::evt_bt, "fast_forward"); break;
+
+                case ESP_AVRC_PT_CMD_REWIND: s_instance->info(Audio::evt_bt, "rewind"); break;
+
+                default: s_instance->info(Audio::evt_bt, "unknown AVRCP command: {}", cmd.key_code); break;
+            }
 
             break;
         }
@@ -432,30 +467,36 @@ void BT_Source::reset() {
     esp_bt_gap_cancel_discovery();
 
     // --------------------------------------------------
-    // Stop A2DP media and disconnect
+    // Disconnect A2DP and AVRCP
     // --------------------------------------------------
 
-    if (m_connected.load(std::memory_order_acquire)) {
+    if (m_connected.load(std::memory_order_acquire) || m_avrcConnected.load(std::memory_order_acquire)) {
+        const bool waitAvrc = m_avrcConnected.load(std::memory_order_acquire);
 
-        xEventGroupClearBits(m_btEvents, BT_EVT_MEDIA_SUSPEND);
-
-        esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_SUSPEND);
+        // Clear events before requesting disconnect
+        EventBits_t clearBits = BT_EVT_DISCONNECTED;
+        if (waitAvrc) { clearBits |= BT_EVT_AVRC_DISCONNECTED; }
+        xEventGroupClearBits(m_btEvents, clearBits);
+        esp_err_t err = esp_a2d_source_disconnect(m_targetBda);
 
         if (err == ESP_OK) {
+            EventBits_t waitBits = BT_EVT_DISCONNECTED;
+            if (waitAvrc) { waitBits |= BT_EVT_AVRC_DISCONNECTED; }
+            EventBits_t bits = xEventGroupWaitBits(m_btEvents, waitBits, pdTRUE,
+                                                   pdTRUE, // Beide Events müssen eintreffen!
+                                                   pdMS_TO_TICKS(5000));
 
-            EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_MEDIA_SUSPEND, pdTRUE, pdFALSE, pdMS_TO_TICKS(2000));
+            if ((bits & waitBits) != waitBits) {
+                log_e("Bluetooth disconnect timeout: A2DP=%d AVRCP=%d", (bits & BT_EVT_DISCONNECTED) != 0, !waitAvrc || (bits & BT_EVT_AVRC_DISCONNECTED) != 0);
 
-            if (!(bits & BT_EVT_MEDIA_SUSPEND)) { log_w("A2DP suspend timeout"); }
+                // Nicht mit der Deinitialisierung fortfahren!
+                return;
+            }
+        } else {
+            log_e("A2DP disconnect failed: %s", esp_err_to_name(err));
+            return;
         }
-
-        // Erst danach Disconnect!
-        xEventGroupClearBits(m_btEvents, BT_EVT_DISCONNECTED);
-
-        err = esp_a2d_source_disconnect(m_targetBda);
-
-        // Hier anschließend wie bisher auf DISCONNECTED warten.
     }
-
     m_connected = false;
 
     // --------------------------------------------------
