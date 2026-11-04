@@ -3221,7 +3221,7 @@ void Audio::playChunk() {
                 AUDIO_LOG_DEBUG("initialisize Bluetooth source, dev name: {}", settings.BT_DEV_NANE);
                 setOutputSampleRate(Audio::SR_44100);
             } else {
-                AUDIO_LOG_ERROR("initialisize Bluetooth source failed");
+                AUDIO_LOG_DEBUG("initialisize Bluetooth source failed");
                 settings.BT_SOURCE = false;
                 setOutputSampleRate(Audio::SR_ORIGIN);
             }
