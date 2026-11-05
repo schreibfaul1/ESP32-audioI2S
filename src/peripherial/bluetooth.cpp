@@ -6,7 +6,7 @@
  */
 
 #include "Arduino.h"
-#if defined (CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)
+#if (defined(CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)) && (ESP_IDF_VERSION_MAJOR >= 6)
     #include "../Audio.h"
     #include "bluetooth.h"
     #include "nvs.h"
@@ -319,7 +319,6 @@ bool BT_Source::init(ps_ptr<char> devName) {
     esp_log_level_set("BT_HCI", ESP_LOG_ERROR);
     esp_log_level_set("BT_AVRC", ESP_LOG_ERROR);
     esp_log_level_set("BT_BTC", ESP_LOG_ERROR);
-
 
     s_instance = this;
 

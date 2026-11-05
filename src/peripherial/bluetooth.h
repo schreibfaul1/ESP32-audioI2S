@@ -1,18 +1,18 @@
 #pragma once
 #include <Arduino.h>
 
-#if defined (CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)
-    #include "../buffers.hpp"
-    #include "../psram_unique_ptr.hpp"
-    #include "esp_a2dp_api.h"
-    #include "esp_avrc_api.h"
-    #include "esp_bt.h"
-    #include "esp_bt_main.h"
-    #include "esp_err.h"
-    #include "esp_gap_bt_api.h"
-    #include "freertos/FreeRTOS.h"
-    #include "freertos/event_groups.h"
-    #include <atomic>
+#if (defined(CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)) &&  (ESP_IDF_VERSION_MAJOR >= 6)
+        #include "../buffers.hpp"
+        #include "../psram_unique_ptr.hpp"
+        #include "esp_a2dp_api.h"
+        #include "esp_avrc_api.h"
+        #include "esp_bt.h"
+        #include "esp_bt_main.h"
+        #include "esp_err.h"
+        #include "esp_gap_bt_api.h"
+        #include "freertos/FreeRTOS.h"
+        #include "freertos/event_groups.h"
+        #include <atomic>
 
 using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);
 class BT_Source {
@@ -94,9 +94,9 @@ class BT_Source {
     }
 };
 
-#else // dummy
+    #else // dummy
 
-    #include "../psram_unique_ptr.hpp"
+        #include "../psram_unique_ptr.hpp"
 
 using bt_info_callback_t = bool (*)(void*, uint16_t, ps_ptr<char>&&);
 
@@ -111,5 +111,4 @@ class BT_Source {
     bool connected() { return false; }
     bool getChunk(int32_t*, size_t) { return false; }
 };
-
-#endif
+#endif // #if (ESP_IDF_VERSION_MAJOR >= 6)
