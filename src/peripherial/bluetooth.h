@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#ifdef CONFIG_IDF_TARGET_ESP32S31
+#if defined (CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)
     #include "../buffers.hpp"
     #include "../psram_unique_ptr.hpp"
     #include "esp_a2dp_api.h"

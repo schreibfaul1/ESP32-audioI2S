@@ -6,10 +6,11 @@
  */
 
 #include "Arduino.h"
-#ifdef CONFIG_IDF_TARGET_ESP32S31
+#if defined (CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)
     #include "../Audio.h"
     #include "bluetooth.h"
-
+    #include "nvs.h"
+    #include "nvs_flash.h"
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 BT_Source* BT_Source::s_instance = nullptr;
@@ -351,15 +352,22 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     err = esp_bt_controller_init(&bt_cfg);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("bt_controller_init error");
+        goto error;
+    }
 
     m_btControllerInitialized = true;
 
     err = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("bt_controller_enable error");
+        goto error;
+    }
 
     m_btControllerEnabled = true;
 
@@ -371,13 +379,19 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     err = esp_bluedroid_init();
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("bluedroid_init error");
+        goto error;
+    }
 
     m_bluedroidInitialized = true;
 
     err = esp_bluedroid_enable();
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("bluedroid_enable error");
+        goto error;
+    }
 
     m_bluedroidEnabled = true;
 
@@ -389,7 +403,10 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     err = esp_bt_gap_register_callback(gap_callback);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("bt_gap_register error");
+        goto error;
+    }
 
     info(Audio::evt_bt, "GAP callback registered");
 
@@ -399,11 +416,17 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     err = esp_avrc_tg_register_callback(avrc_tg_callback);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("avrc_tg_register error");
+        goto error;
+    }
 
     err = esp_avrc_tg_init();
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("esp_avrc_tg_init error");
+        goto error;
+    }
 
     m_avrcTgInitRequested = true;
 
@@ -415,17 +438,26 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     err = esp_a2d_register_callback(a2dp_callback);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("a2d_register error");
+        goto error;
+    }
 
     err = esp_a2d_source_init();
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("a2d_source_init error");
+        goto error;
+    }
 
     m_a2dpInitRequested = true;
 
     err = esp_a2d_source_register_data_callback(get_data);
 
-    if (err != ESP_OK) goto error;
+    if (err != ESP_OK) {
+        log_e("a2d_source_register error");
+        goto error;
+    }
 
     info(Audio::evt_bt, "A2DP Source initialization requested");
 
