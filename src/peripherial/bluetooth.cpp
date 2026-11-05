@@ -2,7 +2,7 @@
  * bluetooth.cpp
  *
  *  Created on: 30.10.2026
- *  Updated on: 04.11.2026
+ *  Updated on: 05.11.2026
  */
 
 #include "Arduino.h"
@@ -311,6 +311,14 @@ bool BT_Source::init(ps_ptr<char> devName) {
         log_w("Bluetooth already initialized");
         return true;
     }
+
+    esp_log_level_set("BT_AVCT", ESP_LOG_ERROR);
+    esp_log_level_set("BT_L2CAP", ESP_LOG_NONE);
+    esp_log_level_set("BT_APPL", ESP_LOG_NONE);
+    esp_log_level_set("BT_HCI", ESP_LOG_ERROR);
+    esp_log_level_set("BT_AVRC", ESP_LOG_ERROR);
+    esp_log_level_set("BT_BTC", ESP_LOG_ERROR);
+
 
     s_instance = this;
 
