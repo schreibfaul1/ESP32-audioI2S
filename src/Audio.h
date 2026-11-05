@@ -117,6 +117,8 @@ class Audio {
     bool             connecttospeech(const char* speech, const char* lang);
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
+    void             setInsecure();
+    void             setCACert(const char* rootCA);
     bool             setAudioPlayTime(uint16_t sec);
     bool             setTimeOffset(int sec);
     bool             setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
