@@ -240,6 +240,10 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if (timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setCACert(const char* rootCA) {
+    clientsecure.setCACert(rootCA);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /*
     Text to speech API provides a speech endpoint based on our TTS (text-to-speech) model.
