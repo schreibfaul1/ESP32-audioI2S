@@ -221,6 +221,7 @@ class Audio {
     void                      calculateVUlevel(int32_t* buff, size_t len);
     void                      calculateSpectrum(int32_t* buff, size_t len);
     void                      Gain(int32_t* buff, size_t len);
+    void                      antiAutoMute(int32_t* buff, size_t len);
     void                      stereo2mono(int32_t* buff, size_t len);
     void                      IIR_filter(int32_t* buff, size_t len);
     void                      gain_ramp();
@@ -355,6 +356,7 @@ class Audio {
         uint8_t      SP_PEAK_HOLD_CYCLES = 2;          // spectrum:   peak hold_cycles
         bool         SPECTRUM = false;                 // true: spectrum analyzer is enabled
         bool         VOLUME_CONTROL = true;            // true: volume and balance control is enabled
+        bool         ANTI_AUTOMUTE = false;            // deactivate DAC Zero-Data-Detect-Mechanism, e.g. PCM510xA (after 1025 LRCKs with zero I2S)
         float        VOL_FADING_SPEED = 50.0;          // mute, volume fading 1.0f (fast) ... 100.0f (slow)
         uint32_t     BUFFER_TRESHOLD_HLS = UINT16_MAX; // Level at which the HLS-TS stream starts and is reloaded
         bool         BT_SOURCE = false;                // activate Bluetooth source (only ESP32_S31)
