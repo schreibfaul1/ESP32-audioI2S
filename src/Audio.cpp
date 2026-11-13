@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1e                                                                                                                         ";
-/*  Updated on: Nov 10, 2026
+    Version 4.0.1f                                                                                                                         ";
+/*  Updated on: Nov 13, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -597,6 +597,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
+    rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept:*/*\r\n");
     rqh.appendf("User-Agent: {}\r\n", user_agent);
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
