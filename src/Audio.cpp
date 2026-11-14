@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1d                                                                                                                         ";
-/*  Updated on: Nov 03, 2026
+    Version 4.0.1f                                                                                                                         ";
+/*  Updated on: Nov 13, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -597,6 +597,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
+    rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept:*/*\r\n");
     rqh.appendf("User-Agent: {}\r\n", user_agent);
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
@@ -1853,8 +1854,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 cd_len = 1 + content_descriptor.copy_from(m_ID3Hdr.iBuff.get() + idx); // utf-8
             else
                 cd_len = 2 + content_descriptor.copy_from_utf16(m_ID3Hdr.iBuff.get() + idx, isBigEndian); // utf-16
-            if (cd_len > 2)
-                info(*this, Audio::evt_info, "Comment: text encoding; {}, language {}, content_descriptor: {}", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
+            if (cd_len > 2) info(*this, Audio::evt_info, "Comment: text encoding; {}, language {}, content_descriptor: {}", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
 
             idx += cd_len;
             // AUDIO_LOG_INFO("Tag: {}, Length: {}, Format: {}", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
@@ -3263,6 +3263,7 @@ void Audio::playChunk() {
             if (settings.IIR_FILTER) IIR_filter(m_i2sWorkBuff.get(), readWords);
             if (m_f_forceMono) stereo2mono(m_i2sWorkBuff.get(), readWords);
             if (settings.VOLUME_CONTROL) Gain(m_i2sWorkBuff.get(), readWords);
+            if (settings.ANTI_AUTOMUTE) antiAutoMute(m_i2sWorkBuff.get(), readWords);
             if (bt_source.connected()) bt_source.getChunk(m_i2sWorkBuff.get(), readWords);
 
             audio_process_i2s(m_i2sWorkBuff.get(), (int32_t)readWords, &continueI2S);
@@ -5349,7 +5350,7 @@ void Audio::showCodecParams() {
 
     if (m_codec == CODEC_AAC) {
         info(*this, Audio::evt_info, "{}", m_decoder->arg2()); // AAC Format
-        uint8_t answ = m_decoder->val2();                         // SBR
+        uint8_t answ = m_decoder->val2();                      // SBR
         if (answ > 0 && answ < 4) {
             const char sbr[4][50] = {"without SBR", "upsampled SBR", "downsampled SBR", "no SBR used, but file is upsampled by a factor 2"};
             info(*this, Audio::evt_info, "Spectral band replication: {}", sbr[answ]);
@@ -6747,6 +6748,24 @@ void Audio::Gain(int32_t* buff, size_t len) {
         s32 = buff + (i * 2);
         s32[LEFTCHANNEL] *= m_audio_items.limiter[LEFTCHANNEL];
         s32[RIGHTCHANNEL] *= m_audio_items.limiter[RIGHTCHANNEL];
+    }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::antiAutoMute(int32_t* buff, size_t len) {
+    bool allZero = true;
+    for (size_t i = 0; i < len; i++) {
+        if ((buff[i *2] != 0) && (buff[i *2 + 1] != 0)) {
+            allZero = false;
+            break;
+        }
+    }
+    if (allZero) {
+        AUDIO_LOG_DEBUG("all zero");
+        for (size_t i = 0; i < len; i += 2) {
+            int32_t v = ((i >> 1) & 1) ? 256 : -256;
+            buff[i] = v;
+            buff[i + 1] = v;
+        }
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
