@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 17.07.2026
+ *  Updated on: 29.10.2026
  */
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //                                     O G G    I M P L.
@@ -81,21 +81,41 @@ void VorbisDecoder::setDefaults() {
     clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::dropTransientOggState() {
+    // Confirmed parser failure or a new logical stream. Codebooks, floors, and the
+    // DSP object stay: setDefaults() would destroy them, and one bad audio packet
+    // must not force a new header chain. lastSegmentTable keeps its allocation.
+    m_ogg_items.segment_table.clear();
+    m_ogg_items.bytes_consumed_from_other = 0;
+    m_ogg_items.data_ptr = nullptr;
+    m_ogg_items.lastSegmentTableLen = 0;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
+    m_f_oggLastPage = false;
+    m_f_parseOggDone = false;
+    m_bitReader.reset();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
     vorbis_book_clear(m_codebooks);
     vorbis_dsp_destroy(m_dsp_state);
 
     if (m_nrOfFloors) {
-        for (int32_t i = 0; i < m_nrOfFloors; i++) {
-            m_floor_param[i]->_class.reset();
-            m_floor_param[i]->partitionclass.reset();
-            m_floor_param[i]->postlist.reset();
-            m_floor_param[i]->forward_index.reset();
-            m_floor_param[i]->hineighbor.reset();
-            m_floor_param[i]->loneighbor.reset();
-            m_floor_param[i].reset();
+        if (m_floor_param.valid()) {
+            for (int32_t i = 0; i < m_nrOfFloors; i++) {
+                // A failed floor unpack stores an empty slot. Do not walk its members.
+                if (m_floor_param[i].valid()) {
+                    m_floor_param[i]->_class.reset();
+                    m_floor_param[i]->partitionclass.reset();
+                    m_floor_param[i]->postlist.reset();
+                    m_floor_param[i]->forward_index.reset();
+                    m_floor_param[i]->hineighbor.reset();
+                    m_floor_param[i]->loneighbor.reset();
+                }
+                m_floor_param[i].reset();
+            }
+            m_floor_param.reset();
         }
-        m_floor_param.reset();
         m_nrOfFloors = 0;
     }
 
@@ -122,6 +142,7 @@ void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
     if (m_residue_param.valid()) m_residue_param.reset();
     if (m_map_param.valid()) m_map_param.reset();
     if (m_mode_param.valid()) m_mode_param.reset();
+    m_nrOfModes = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
@@ -181,7 +202,7 @@ exit:
     if (ret >= 0) { m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft); }
     if (ret < 0) {
         VORBIS_LOG_ERROR("ret {}", ret);
-        m_ogg_items.segment_table.clear();
+        dropTransientOggState();
     }
     if (ret == 0) {
         if (m_vorbisChannels == 1) {
@@ -239,19 +260,36 @@ int32_t VorbisDecoder::vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uin
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
-    int32_t ret = VORBIS_PARSE_OGG_DONE;
-    int32_t idx = special_index_of(inbuf, "vorbis", 10);
-    if (idx == 1) {
-        m_oggPage3Len = segmentLength - 7;           // skip ".vorbis"
-        bitReader_setData(inbuf + 7, m_oggPage3Len); // skip also ".vorbis"
-        VORBIS_LOG_DEBUG(" segmentLength {}", segmentLength);
-        ret = parseVorbisCodebook();
+    int32_t ret = VORBIS_ERR;
+    if (segmentLength >= 7) {
+        int32_t idx = special_index_of(inbuf, "vorbis", 10);
+        if (idx == 1) {
+            m_oggPage3Len = segmentLength - 7;           // skip ".vorbis"
+            bitReader_setData(inbuf + 7, m_oggPage3Len); // skip also ".vorbis"
+            VORBIS_LOG_DEBUG(" segmentLength {}", segmentLength);
+            ret = parseVorbisCodebook();
+        } else {
+            VORBIS_LOG_ERROR("no \"vorbis\" something went wrong, segmentLenght: {}", segmentLength);
+        }
     } else {
-        VORBIS_LOG_ERROR("no \"vorbis\" something went wrong, segmentLenght: {}", segmentLength);
-        ret = VORBIS_ERR;
+        VORBIS_LOG_ERROR("setup segment too short, segmentLenght: {}", segmentLength);
     }
-    m_pageNr = 4;
-    m_dsp_state = vorbis_dsp_create();
+
+    // Page 4 is the audio decoder. Enter it only after a complete setup and a live DSP state.
+    // On failure return to page 0: leaving page 3 would let the next "vorbis" packet increment
+    // straight into audio without a new identification/comment/setup chain.
+    if (ret >= 0) {
+        m_dsp_state = vorbis_dsp_create();
+        if (m_dsp_state.valid()) {
+            m_pageNr = 4;
+        } else {
+            VORBIS_LOG_ERROR("Vorbis DSP state was not created");
+            ret = VORBIS_ERR;
+            m_pageNr = 0;
+        }
+    } else {
+        m_pageNr = 0;
+    }
 
     *bytesLeft -= segmentLength;
     return ret;
@@ -685,7 +723,24 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
     int32_t i;
     int32_t ret = 0;
 
-    m_nrOfCodebooks = bitReader(8) + 1;
+    // bitReader returns -1 at EOF. Adding 1 first turns that into a count of 0 and
+    // the following allocation still runs. A raw 0 is one real entry, so 0 is not
+    // used as the EOF signal.
+    auto read_count = [&](uint16_t width, uint8_t& slot) -> bool {
+        const int32_t raw = bitReader(width);
+        if (raw < 0) { return false; }
+        slot = static_cast<uint8_t>(raw + 1);
+        return true;
+    };
+
+    // The 8-bit field 255 means 256 codebooks. m_nrOfCodebooks is uint8_t, and the
+    // book indices stored by floor and residue are also single bytes, so 256 cannot
+    // be represented. Reject it before the allocation instead of wrapping to 0.
+    {
+        const int32_t rawBooks = bitReader(8);
+        if (rawBooks < 0 || rawBooks > 254) { goto err_out; }
+        m_nrOfCodebooks = static_cast<uint8_t>(rawBooks + 1);
+    }
     m_codebooks.calloc_array(m_nrOfCodebooks, "m_codebooks");
     VORBIS_LOG_DEBUG("nr of codebooks {}", m_nrOfCodebooks);
     for (i = 0; i < m_nrOfCodebooks; i++) {
@@ -705,7 +760,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
         }
     }
     /* floor backend settings */
-    m_nrOfFloors = bitReader(6) + 1;
+    if (!read_count(6, m_nrOfFloors)) { goto err_out; }
     m_floor_param.calloc_array(m_nrOfFloors, "m_floor_param");
     m_floor_type.alloc(sizeof(int8_t) * m_nrOfFloors, "m_floor_type");
     VORBIS_LOG_DEBUG("nr of floors {}", m_nrOfFloors);
@@ -728,7 +783,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
     }
 
     /* residue backend settings */
-    m_nrOfResidues = bitReader(6) + 1;
+    if (!read_count(6, m_nrOfResidues)) { goto err_out; }
     m_residue_param.calloc_array(m_nrOfResidues, "m_residue_param");
     VORBIS_LOG_DEBUG("nr of residues {}", m_nrOfResidues);
     for (i = 0; i < m_nrOfResidues; i++) {
@@ -740,7 +795,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
     }
 
     // /* map backend settings */
-    m_nrOfMaps = bitReader(6) + 1;
+    if (!read_count(6, m_nrOfMaps)) { goto err_out; }
     m_map_param.calloc_array(m_nrOfMaps, "m_map_param");
     for (i = 0; i < m_nrOfMaps; i++) {
         if (bitReader(16) != 0) goto err_out;
@@ -751,7 +806,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
     }
 
     /* mode settings */
-    m_nrOfModes = bitReader(6) + 1;
+    if (!read_count(6, m_nrOfModes)) { goto err_out; }
     m_mode_param.alloc(sizeof(vorbis_info_mode_t) * m_nrOfModes, "m_mode_param");
     for (i = 0; i < m_nrOfModes; i++) {
         m_mode_param[i].blockflag = bitReader(1);
@@ -787,7 +842,17 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
     int32_t  ret = 0;
     uint32_t ogg_lengt_total = 0;
     (void)ret;
+    // 8192 is the historical search window. bitReader() calls this with a dummy
+    // length of 256 that only measures bytes consumed, so *bytesLeft is not a
+    // physical bound on every path. Do not shrink the search to that dummy.
     int32_t idx = special_index_of(inbuf, "OggS", 8192);
+    // special_index_of returns -1 when the capture is absent. Reject that before
+    // any pointer update: inbuf += -1 reads the byte in front of the buffer, and
+    // *bytesLeft -= -1 makes the caller believe one extra byte is available.
+    if (idx < 0) {
+        VORBIS_LOG_ERROR("Vorbis decoder asynchron, 'OggS' not found");
+        return VORBIS_ERR;
+    }
     if (idx != 0) {
         if (m_f_oggContinuedPage) {
             VORBIS_LOG_ERROR("Vorbis decoder asynchron, 'OggS' not found");
@@ -799,7 +864,13 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
-    (void)headerType;
+    // A new BOS drops the previous page's packet assembly before any of its
+    // segments are queued. A continued page of the same stream is not BOS and
+    // must keep lastSegmentTableLen for the real cross-page packet.
+    const bool continuedPage = headerType & 0x01; // set: packet continued from the previous page
+    const bool firstPage = headerType & 0x02;     // set: first page of a logical bitstream (bos)
+    const bool lastPage = headerType & 0x04;      // set: last page of a logical bitstream (eos)
+    if (firstPage) { dropTransientOggState(); }
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
@@ -840,10 +911,6 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
         ogg_lengt_total += n;
     }
     m_vorbisCompressionRatio = (float)(960 * 2 * pageSegments) / ogg_lengt_total; // const 960 validBytes out
-
-    bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
-    bool lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
 
     uint16_t headerSize = pageSegments + 27;
 
@@ -1161,9 +1228,11 @@ int32_t VorbisDecoder::bitReader(uint16_t nBits) {
                 bits_left = m_bitReader.headbit;
             }
 
-            // Load new Ogg page
+            // Keep the page address locally. A BOS page resets m_bitReader inside
+            // parse_OGG, and the consumed count is taken from oggLen afterwards.
+            uint8_t* pageStart = m_bitReader.headptr;
             int32_t  oggLen = 256;
-            int32_t  ret = parse_OGG(m_bitReader.headptr, &oggLen);
+            int32_t  ret = parse_OGG(pageStart, &oggLen);
             uint32_t header_consumed = (256 - oggLen);
             VORBIS_LOG_DEBUG("header_consumed {}", header_consumed);
             if (ret != VORBIS_PARSE_OGG_DONE) {
@@ -1185,7 +1254,7 @@ int32_t VorbisDecoder::bitReader(uint16_t nBits) {
             }
 
             // New page data starts behind header+lacing
-            uint8_t* newPage = m_bitReader.headptr + header_consumed;
+            uint8_t* newPage = pageStart + header_consumed;
             bitReader_setData(newPage, m_vorbis_segment_length);
 
             // If remaining bits exist → append to the beginning of the new page
@@ -1802,16 +1871,16 @@ err_out:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 ps_ptr<VorbisDecoder::vorbis_dsp_state> VorbisDecoder::vorbis_dsp_create() {
     ps_ptr<vorbis_dsp_state> v;
-    v.calloc_array(1);
-    v->work.calloc_array(m_vorbisChannels);
-    v->mdctright.calloc_array(m_vorbisChannels);
+    if (!v.calloc_array(1)) { return {}; }
+    if (!v->work.calloc_array(m_vorbisChannels)) { return {}; }
+    if (!v->mdctright.calloc_array(m_vorbisChannels)) { return {}; }
 
     for (uint8_t i = 0; i < m_vorbisChannels; ++i) {
         const size_t work_size = (m_blocksizes[1] >> 1) * sizeof(int32_t);
-        v->work.at(i).calloc(work_size);
+        if (!v->work.at(i).calloc(work_size)) { return {}; }
 
         const size_t mdct_size = (m_blocksizes[1] >> 2) * sizeof(int32_t);
-        v->mdctright.at(i).calloc(mdct_size);
+        if (!v->mdctright.at(i).calloc(mdct_size)) { return {}; }
     }
 
     // Initialize state

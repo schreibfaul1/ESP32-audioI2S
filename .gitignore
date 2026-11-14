@@ -1,0 +1,19 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/out/build/x64-Debug
+/.vs/ESP32-audioI2S/CopilotIndices/17.14.1733.12456
+/.vs/ESP32-audioI2S/FileContentIndex
+/.vs/ESP32-audioI2S/v17/.wsuo
+/.vs/ESP32-audioI2S/v17/Browse.VC.db
+/.vs/ESP32-audioI2S/v17/Browse.VC.db-shm
+/.vs/ESP32-audioI2S/v17/Browse.VC.db-wal
+/.vs/ESP32-audioI2S/v17/Browse.VC.opendb
+/.vs/ESP32-audioI2S/v17/DocumentLayout.backup.json
+/.vs/CMake Overview
+/.vs/ProjectSettings.json
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
+.vs/
+.vs/
