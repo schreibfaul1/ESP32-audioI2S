@@ -605,9 +605,11 @@ bool Audio::httpPrint(const char* host) {
 
     info(*this, Audio::evt_info, "next URL: \"{}\"", c_host.get());
 
-    if (f_equal == false) {
+    if (f_equal == false || m_f_connectionClose) {
         if (m_client->connected()) m_client->stop();
     }
+    m_f_connectionClose = false;
+
     if (!m_client->connected()) {
         if (m_f_ssl) {
             m_client = static_cast<NetworkClientSecure*>(&clientsecure);
