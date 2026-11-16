@@ -2,11 +2,11 @@
  * bluetooth.cpp
  *
  *  Created on: 30.10.2026
- *  Updated on: 05.11.2026
+ *  Updated on: 16.11.2026
  */
 
 #include "Arduino.h"
-#if (defined(CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)) && (ESP_IDF_VERSION_MAJOR >= 6)
+#if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
     #include "../Audio.h"
     #include "bluetooth.h"
     #include "nvs.h"
@@ -332,7 +332,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     xEventGroupClearBits(m_btEvents, 0x00FFFFFF);
 
     info(Audio::evt_bt, "starting Bluetooth, device name: {}", devName);
-
+    vTaskDelay(10);
     // Initialize sample buffer
     bt_samplesBuffer.setBufsize(m_bt_buffSize);
 
@@ -355,7 +355,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bt_controller_init(&bt_cfg);
 
     if (err != ESP_OK) {
-        log_e("bt_controller_init error");
+        log_e("bt_controller_init error: %i,  %s", err, esp_err_to_name(err));
         goto error;
     }
 

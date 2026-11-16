@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#if (defined(CONFIG_IDF_TARGET_ESP32) || (CONFIG_IDF_TARGET_ESP32S31)) &&  (ESP_IDF_VERSION_MAJOR >= 6)
+#if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
         #include "../buffers.hpp"
         #include "../psram_unique_ptr.hpp"
         #include "esp_a2dp_api.h"
@@ -10,6 +10,7 @@
         #include "esp_bt_main.h"
         #include "esp_err.h"
         #include "esp_gap_bt_api.h"
+        #include "esp32-hal-alloc-bt-classic-mem.h"
         #include "freertos/FreeRTOS.h"
         #include "freertos/event_groups.h"
         #include <atomic>
