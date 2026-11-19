@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 12.10.2026
+ * Updated on: 19.11.2026
  *
  * Author: Wolle
  *
