@@ -54,6 +54,7 @@ class FlacDecoder : public Decoder {
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
         FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_OGG_PAGEHEADER = +3,
         FLAC_OGG_SYNC_FOUND = +2,
         GIVE_NEXT_LOOP = +1,
         FLAC_NONE = 0,
@@ -183,6 +184,7 @@ class FlacDecoder : public Decoder {
 
     size_t          m_outBuffSize = 0;
     uint64_t        m_flac_bitBuffer = 0;
+    uint64_t        m_granulePosition = 0;
     uint32_t        m_flacBitrate = 0;
     uint32_t        m_flacBlockPicLenUntilFrameEnd = 0;
     uint32_t        m_flacCurrentFilePos = 0;
