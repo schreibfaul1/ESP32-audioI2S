@@ -101,6 +101,7 @@ void FlacDecoder::setDefaults() {
     m_f_flacNewStreamtitle = false;
     m_f_flacFirstCall = true;
     m_f_oggWrapper = false;
+    m_f_isDecodeAudio = false;
     m_f_lastMetaDataBlock = false;
     m_f_flacNewMetadataBlockPicture = false;
     m_f_flacParseOgg = false;
@@ -832,6 +833,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
                 return FLAC_PARSE_OGG_DONE;
                 break;
         }
+        m_f_isDecodeAudio = true;
         if (segmLen > FLAC_MAX_BLOCKSIZE) {
             m_segmLenTmp = segmLen;
             return FLAC_PARSE_OGG_DONE;
@@ -845,7 +847,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool FlacDecoder::decodeAudio() {
-    return true;
+    return m_f_isDecodeAudio;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {

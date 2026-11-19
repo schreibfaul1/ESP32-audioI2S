@@ -129,6 +129,7 @@ class OpusDecoder : public Decoder {
     bool     m_f_lastPage = false;
     bool     m_f_nextChunk = false;
     bool     m_isValid = false;
+    bool     m_f_isDecodeAudio = false;
     int8_t   m_opusError = 0;
     int16_t  m_opusSegmentTableRdPtr = -1;
     int16_t  m_prev_mode = 0;

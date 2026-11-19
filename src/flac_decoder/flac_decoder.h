@@ -208,6 +208,7 @@ class FlacDecoder : public Decoder {
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;
     bool            m_f_oggWrapper = false;
+    bool            m_f_isDecodeAudio = false;
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
     bool            m_valid = false;
