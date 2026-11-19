@@ -177,6 +177,10 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool AACDecoder::decodeAudio() {
+    return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void AACDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t dummy1, uint32_t profile, uint32_t dummy2) {
     m_f_setRaWBlockParams = true;
     m_aacChannels = channels;     // 1: Mono, 2: Stereo

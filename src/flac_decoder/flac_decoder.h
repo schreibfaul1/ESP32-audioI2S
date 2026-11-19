@@ -43,6 +43,7 @@ class FlacDecoder : public Decoder {
     const char*           getStreamTitle() override;
     const char*           whoIsIt() override;
     int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) override;
+    bool                  decodeAudio() override;
     void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
     const char*           arg1() override;
@@ -53,6 +54,7 @@ class FlacDecoder : public Decoder {
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
         FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_OGG_PAGEHEADER = +3,
         FLAC_OGG_SYNC_FOUND = +2,
         GIVE_NEXT_LOOP = +1,
         FLAC_NONE = 0,
@@ -63,7 +65,7 @@ class FlacDecoder : public Decoder {
   private:
     Audio& audio;
 #define FLAC_MAX_CHANNELS  2
-#define FLAC_MAX_BLOCKSIZE 24576 // 24 * 1024
+#define FLAC_MAX_BLOCKSIZE 65535
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
@@ -182,6 +184,7 @@ class FlacDecoder : public Decoder {
 
     size_t          m_outBuffSize = 0;
     uint64_t        m_flac_bitBuffer = 0;
+    uint64_t        m_granulePosition = 0;
     uint32_t        m_flacBitrate = 0;
     uint32_t        m_flacBlockPicLenUntilFrameEnd = 0;
     uint32_t        m_flacCurrentFilePos = 0;
@@ -207,6 +210,7 @@ class FlacDecoder : public Decoder {
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;
     bool            m_f_oggWrapper = false;
+    bool            m_f_isDecodeAudio = false;
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
     bool            m_valid = false;

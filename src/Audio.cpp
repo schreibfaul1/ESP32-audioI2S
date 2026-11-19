@@ -4711,7 +4711,7 @@ void Audio::playAudioData() {
 
         if (m_pad.bytesDecoded > 0) {
             InBuff.bytesWasRead(m_pad.bytesDecoded);
-            m_audioDataReadPtr += m_pad.bytesDecoded;
+            if(m_decoder->decodeAudio()) m_audioDataReadPtr += m_pad.bytesDecoded; // Just count the audio data
         }
     }
 exit:

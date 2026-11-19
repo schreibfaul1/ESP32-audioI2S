@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 12.10.2026
+ * Updated on: 19.11.2026
  *
  * Author: Wolle
  *
@@ -92,6 +92,7 @@ void FlacDecoder::setDefaults() {
     m_flacAudioDataStart = 0;
     m_numOfOutSamples = 0;
     m_offset = 0;
+    m_granulePosition = 0;
     m_flacValidSamples = 0;
     m_rIndex = 0;
     m_flacStatus = DECODE_FRAME;
@@ -101,6 +102,7 @@ void FlacDecoder::setDefaults() {
     m_f_flacNewStreamtitle = false;
     m_f_flacFirstCall = true;
     m_f_oggWrapper = false;
+    m_f_isDecodeAudio = false;
     m_f_lastMetaDataBlock = false;
     m_f_flacNewMetadataBlockPicture = false;
     m_f_flacParseOgg = false;
@@ -382,7 +384,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     granulePosition += *(inbuf + 8) << 16;                    // and position information. A special value of -1 (in two's
     granulePosition += *(inbuf + 7) << 8;                     // complement) indicates that no packets finish on this page.
     granulePosition += *(inbuf + 6);
-    (void)granulePosition;
+    m_granulePosition = granulePosition;
     uint32_t bitstreamSerialNr = *(inbuf + 17) << 24; // bitstream_serial_number: a 4 Byte field containing the
     bitstreamSerialNr += *(inbuf + 16) << 16;         // unique serial number by which the logical bitstream
     bitstreamSerialNr += *(inbuf + 15) << 8;          // is identified.
@@ -443,10 +445,14 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
 
     int32_t ret = 0;
     int32_t idx = specialIndexOf(inbuf, "fLaC", nBytes);
-    // FLAC_LOG_INFO("idx {}, nBytes {}", idx, nBytes);
+
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
     } else {
+        if(m_f_oggWrapper && m_granulePosition == 0){
+            // FLAC_LOG_INFO("FLAC_OGG_PAGEHEADER found");
+            return FLAC_OGG_PAGEHEADER;
+        }
         FLAC_LOG_ERROR("Flac signature \"fLaC\" not found");
         ret = FLAC_ERR;
     }
@@ -799,6 +805,12 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         switch (m_flacPageNr) {
             case 0:
                 ret = parseFlacFirstPacket(inbuf, segmLen);
+                if(ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
+                    *bytesLeft -= segmLen;
+                    m_flacCurrentFilePos += segmLen;
+                    ret = FLAC_PARSE_OGG_DONE;
+                    return ret;
+                }
                 if (ret == segmLen) {
                     m_flacPageNr = 1;
                     ret = FLAC_PARSE_OGG_DONE;
@@ -824,6 +836,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
                     ret = FLAC_PARSE_OGG_DONE;
                     break;
                 }
+
                 ret = parseMetaDataBlockHeader(inbuf, segmLen);
                 if (m_f_lastMetaDataBlock) m_flacPageNr = 2;
                 break;
@@ -844,8 +857,13 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool FlacDecoder::decodeAudio() {
+    return m_f_isDecodeAudio;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
+    m_f_isDecodeAudio = true;
     int32_t        bl = *bytesLeft;
     static int32_t sbl = 0;
 

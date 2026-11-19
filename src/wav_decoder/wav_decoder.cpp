@@ -163,6 +163,10 @@ int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     return -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool WavDecoder::decodeAudio() {
+    return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void WavDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {
     m_channels = channels;
     m_sampleRate = sampleRate;

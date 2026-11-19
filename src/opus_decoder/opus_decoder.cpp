@@ -96,6 +96,7 @@ void OpusDecoder::OPUSsetDefaults() {
     m_f_newSteamTitle = false; // streamTitle
     m_f_opusNewMetadataBlockPicture = false;
     m_f_opusStereoFlag = false;
+    m_f_isDecodeAudio = false;
     m_f_lastPage = false;
     m_opusChannels = 0;
     m_frameCount = 0;
@@ -228,6 +229,10 @@ exit:
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool OpusDecoder::decodeAudio() {
+    return m_f_isDecodeAudio;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
     int32_t ret = 0;
     ret = parseOpusHead(inbuf, segmentLength);
@@ -243,6 +248,9 @@ int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
+
+    m_f_isDecodeAudio = true;
+    if(segmentLength == 0) return 0;
 
     if (m_opusAudioDataStart == 0) { m_opusAudioDataStart = m_opusCurrentFilePos; }
     m_endband = 21;
@@ -1396,19 +1404,13 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     if (m_f_firstPage) { m_opusPageNr = 0; }
 
     OPUS_LOG_DEBUG("firstPage {}, continuedPage {}, packetContinuesAfterPage {}, lastPage {}", m_f_firstPage, m_f_continuedPage, m_f_packetContinuesAfterPage, m_f_lastPage);
-    if (m_f_packetContinuesAfterPage)OPUS_LOG_WARN("packet continues after page"); // todo
+//    if (m_f_packetContinuesAfterPage)OPUS_LOG_WARN("packet continues after page"); // todo
 
     uint16_t headerSize = pageSegments + 27;
     *bytesLeft -= headerSize;
     //   m_opusCurrentFilePos += headerSize;
     m_opusOggHeaderSize = headerSize;
 
-    int32_t pLen = _min((int32_t)m_opusSegmentLength, m_opusRemainBlockPicLen);
-    //  OPUS_LOG_INFO("s_opusSegmentLength {}, m_opusRemainBlockPicLen {}", m_opusSegmentLength, m_opusRemainBlockPicLen);
-    if (m_opusBlockPicLen && pLen > 0) {
-        m_opusBlockPicItem.push_back(m_opusCurrentFilePos);
-        m_opusBlockPicItem.push_back(pLen);
-    }
     return OPUS_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
