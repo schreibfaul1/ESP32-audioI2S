@@ -276,6 +276,7 @@ class VorbisDecoder : public Decoder {
     bool     m_f_parseOggDone = true;
     bool     m_f_isValid = false;
     bool     m_f_comment_done = false;
+    bool     m_f_isDecodeAudio = false;
     size_t   m_outBuffSize = 0;
     uint16_t m_identificatonHeaderLength = 0;
     uint16_t m_vorbisCommentHeaderLength = 0;
