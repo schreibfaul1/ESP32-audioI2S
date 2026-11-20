@@ -255,6 +255,7 @@ struct pad_t { // used in playAudioData
 struct sbyt_t { // used in sendBytes
     int32_t     bytesLeft;
     bool        f_setDecodeParamsOnce = true;
+    bool        f_getCoverImageOnce = true;
     uint8_t     channels = 0;
     int         nextSync = 0;
     uint8_t     isPS = 0;

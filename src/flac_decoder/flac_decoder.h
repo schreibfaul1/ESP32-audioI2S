@@ -231,11 +231,12 @@ class FlacDecoder : public Decoder {
     ps_ptr<int64_t> m_samplesBuffer[2];
     uint16_t        m_maxBlocksize = FLAC_MAX_BLOCKSIZE;
     int32_t         m_nBytes = 0;
+    int32_t         m_flacRemainPictureBlock = 0;
 
     boolean  FLACFindMagicWord(unsigned char* buf, int32_t nBytes);
     int32_t  parseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t  parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes);
-    int32_t  parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes);
+    int32_t  parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes);
     void     setDefaults();
     void     dropTransientOggState();
     void     decoderReset();

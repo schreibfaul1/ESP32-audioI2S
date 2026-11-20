@@ -4711,7 +4711,7 @@ void Audio::playAudioData() {
 
         if (m_pad.bytesDecoded > 0) {
             InBuff.bytesWasRead(m_pad.bytesDecoded);
-            if(m_decoder->isAudioDecoding()) m_audioDataReadPtr += m_pad.bytesDecoded; // Just count the audio data
+            if (m_decoder->isAudioDecoding()) m_audioDataReadPtr += m_pad.bytesDecoded; // Just count the audio data
         }
     }
 exit:
@@ -5473,11 +5473,7 @@ void Audio::setDecoderItems() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
-    // for(int i = 0; i < 10; i++){printf("0x%02X ", data[i]);} printf("\n");
-    if (res == -100) {
-        stopSong();
-        return bytesDecoded;
-    } // serious error, e.g. decoder could not be initialized
+
     if (m_codec == CODEC_AAC && res == -21) { // mono <-> stereo change
         //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
         //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
@@ -5501,6 +5497,22 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
             return 0;
         }
     }
+
+    if (m_codec == CODEC_FLAC) {
+        for (int i = 0; i < 10; i++) { printf("0x%02X ", data[i]); }
+        printf("\n");
+        if (res == FlacDecoder::FLAC_STOP) {
+            info(*this, Audio::evt_info, "" ANSI_ESC_RED "FLAC stopped" ANSI_ESC_RESET "");
+            stopSong();
+            return 0;
+        }
+    }
+
+    if (res == -100) { // all oher decoder
+        stopSong();
+        return 0;
+    } // serious error, e.g. decoder could not be initialized
+
     m_f_playing = false;             // seek for new syncword
     if (bytesDecoded == 0) return 1; // skip one byte and seek for the next sync word
     return bytesDecoded;
@@ -5555,6 +5567,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         m_sbyt.channels = 2; // assume aac stereo
         m_sbyt.isPS = 0;
         m_sbyt.f_setDecodeParamsOnce = true;
+        m_sbyt.f_getCoverImageOnce = true;
         m_sbyt.nextSync = findNextSync(data, len);
         if (m_sbyt.nextSync < 0) return len; // no syncword found
         if (m_sbyt.nextSync == 0) { m_f_playing = true; }
@@ -5607,11 +5620,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if (st) { info(*this, Audio::evt_streamtitle, "{}", st); }
             vec = m_decoder->getMetadataBlockPicture();
             if (vec.size() > 0) { // get blockpic data
-                // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
-                // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
-                // for(int i = 0; i < vec.size(); i += 2) { AUDIO_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, vec[i], vec[i + 1]); }
-                // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
-                info(*this, Audio::evt_image, vec);
+                if (m_sbyt.f_getCoverImageOnce) {
+                    m_sbyt.f_getCoverImageOnce = false;
+                    // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
+                    // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
+                    // for(int i = 0; i < vec.size(); i += 2) { AUDIO_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, vec[i], vec[i + 1]); }
+                    // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
+                    info(*this, Audio::evt_image, vec);
+                }
             }
             break;
         case CODEC_OPUS:
@@ -6756,7 +6772,7 @@ void Audio::Gain(int32_t* buff, size_t len) {
 void Audio::antiAutoMute(int32_t* buff, size_t len) {
     bool allZero = true;
     for (size_t i = 0; i < len; i++) {
-        if ((buff[i *2] != 0) && (buff[i *2 + 1] != 0)) {
+        if ((buff[i * 2] != 0) && (buff[i * 2 + 1] != 0)) {
             allZero = false;
             break;
         }
