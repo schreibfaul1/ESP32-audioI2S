@@ -202,7 +202,6 @@ class FlacDecoder : public Decoder {
     uint32_t        m_segmLength = 0;
     uint32_t        m_flacAudioDataStart = 0;
     int32_t         m_flacRemainBlockPicLen = 0;
-    uint32_t        m_segmLenTmp = 0;
     uint16_t        m_numOfOutSamples = 0;
     uint16_t        m_flacValidSamples = 0;
     uint16_t        m_rIndex = 0;
@@ -221,7 +220,7 @@ class FlacDecoder : public Decoder {
     bool            m_f_oggLastPage = false;
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;
-    bool            m_f_oggWrapper = false;
+    bool            m_isOGG = false;
     bool            m_f_isDecodeAudio = false;
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
