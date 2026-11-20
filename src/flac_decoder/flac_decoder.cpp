@@ -766,105 +766,113 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) { //  MAIN LOOP
 
-    int32_t  ret = 0;
-    uint32_t segmLen = 0;
+    int32_t ret = 0;
 
     if (m_f_flacFirstCall) { // determine if ogg or flag
         m_f_flacFirstCall = false;
         m_nBytes = 0;
         if (specialIndexOf(inbuf, "OggS", 5) == 0) {
             m_isOGG = true;
+            m_flacPageNr = FLAC_IDENTIFICATION_HEADER;
             m_f_first_flac_frame = true;
         }
     }
 
-    if (m_isOGG) {
+    if (!m_isOGG) {
+        ret = decodeNative(inbuf, bytesLeft, outbuf);
+    } else {
+        ret = decodeOgg(inbuf, bytesLeft, outbuf);
+    }
+    return ret;
+}
 
-        if (m_nBytes > 0) {
-            int16_t diff = m_nBytes;
-            if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-            ret = decodeNative(inbuf, &m_nBytes, outbuf);
-            diff -= m_nBytes;
-            m_flacCurrentFilePos += diff;
-            *bytesLeft -= diff;
-            if (m_nBytes < 0) m_nBytes = 0; // When the FLAC frame is larger than the OGG frame m_nbytes becomes negative
-            return ret;
-        }
-        if (m_nBytes < 0) {
-            FLAC_LOG_ERROR("Flac decoder asynchron");
-            return FLAC_ERR;
-        }
+int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-        if (m_ogg_items.segment_table.empty()) {
-            ret = parseOGG(inbuf, bytesLeft);
-            return ret;
-        } else {
-            segmLen = m_ogg_items.segment_table.front();
-            m_segmLength = segmLen;
-            m_ogg_items.segment_table.pop_front();
-        }
-        //-------------------------------------------------------
+    uint32_t segmLen = 0;
+    int32_t ret = 0;
 
-        if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
-            if (m_flacBlockPicItem.size() > 0) { // get blockpic data
-                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
-                // FLAC_LOG_INFO("metadata blockpic found at pos {}, size {} bytes", m_flacBlockPicPos, m_flacBlockPicLen);
-                // for(int32_t i = 0; i < m_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, m_flacBlockPicItem[i], m_flacBlockPicItem[i + 1]); }
-                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
-                m_f_flacNewMetadataBlockPicture = true;
-            }
-        }
-
-        switch (m_flacPageNr) {
-            case 0:
-                ret = parseFlacFirstPacket(inbuf, segmLen);
-                if (ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
-                    *bytesLeft -= segmLen;
-                    m_flacCurrentFilePos += segmLen;
-                    ret = FLAC_PARSE_OGG_DONE;
-                    return ret;
-                }
-                if (ret == segmLen) {
-                    m_flacPageNr = 1;
-                    ret = FLAC_PARSE_OGG_DONE;
-                    break;
-                }
-                if (ret < 0) { // fLaC signature not found
-                    break;
-                }
-                if (ret < segmLen) {
-                    segmLen -= ret;
-                    *bytesLeft -= ret;
-                    m_flacCurrentFilePos += ret;
-                    inbuf += ret;
-                    m_flacPageNr = 1;
-                } /* fallthrough */
-            case 1:
-                if (m_flacRemainBlockPicLen > 0) {
-                    m_flacRemainBlockPicLen -= segmLen;
-                    // FLAC_LOG_INFO("s_flacCurrentFilePos {}, len {}, m_flacRemainBlockPicLen {}", m_flacCurrentFilePos, segmLen, m_flacRemainBlockPicLen);
-                    m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
-                    m_flacBlockPicItem.push_back(segmLen);
-                    if (m_flacRemainBlockPicLen <= 0) { m_flacPageNr = 2; }
-                    ret = FLAC_PARSE_OGG_DONE;
-                    break;
-                }
-
-                ret = parseMetaDataBlockHeader(inbuf, segmLen);
-                if (m_f_lastMetaDataBlock) m_flacPageNr = 2;
-                break;
-            case 2:
-                m_nBytes = segmLen;
-                return FLAC_PARSE_OGG_DONE;
-                break;
-        }
-        *bytesLeft -= segmLen;
-        m_flacCurrentFilePos += segmLen;
+    if (m_nBytes > 0) {
+        int16_t diff = m_nBytes;
+        if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
+        ret = decodeNative(inbuf, &m_nBytes, outbuf);
+        diff -= m_nBytes;
+        m_flacCurrentFilePos += diff;
+        *bytesLeft -= diff;
+        if (m_nBytes < 0) m_nBytes = 0; // When the FLAC frame is larger than the OGG frame m_nbytes becomes negative
         return ret;
     }
-    else { // is not ogg
-        ret = decodeNative(inbuf, bytesLeft, outbuf);
+    if (m_nBytes < 0) {
+        FLAC_LOG_ERROR("Flac decoder asynchron");
+        return FLAC_ERR;
     }
+
+    if (m_ogg_items.segment_table.empty() && m_nBytes == 0) {
+        ret = parseOGG(inbuf, bytesLeft);
+        return ret;
+    } else {
+        segmLen = m_ogg_items.segment_table.front();
+        m_segmLength = segmLen;
+        m_ogg_items.segment_table.pop_front();
+    }
+    //-------------------------------------------------------
+
+    if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
+        if (m_flacBlockPicItem.size() > 0) { // get blockpic data
+            // FLAC_LOG_INFO("---------------------------------------------------------------------------");
+            // FLAC_LOG_INFO("metadata blockpic found at pos {}, size {} bytes", m_flacBlockPicPos, m_flacBlockPicLen);
+            // for(int32_t i = 0; i < m_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, m_flacBlockPicItem[i], m_flacBlockPicItem[i + 1]); }
+            // FLAC_LOG_INFO("---------------------------------------------------------------------------");
+            m_f_flacNewMetadataBlockPicture = true;
+        }
+    }
+
+    switch (m_flacPageNr) {
+        case FLAC_IDENTIFICATION_HEADER:
+            ret = parseFlacFirstPacket(inbuf, segmLen);
+            if (ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
+                *bytesLeft -= segmLen;
+                m_flacCurrentFilePos += segmLen;
+                ret = FLAC_PARSE_OGG_DONE;
+                return ret;
+            }
+            if (ret == segmLen) {
+                m_flacPageNr = 1;
+                ret = FLAC_PARSE_OGG_DONE;
+                break;
+            }
+            if (ret < 0) { // fLaC signature not found
+                break;
+            }
+            if (ret < segmLen) {
+                segmLen -= ret;
+                *bytesLeft -= ret;
+                m_flacCurrentFilePos += ret;
+                inbuf += ret;
+                m_flacPageNr = FLAC_METADATA_BLOCK_HEADER;
+            } /* fallthrough */
+        case FLAC_METADATA_BLOCK_HEADER:
+            if (m_flacRemainBlockPicLen > 0) {
+                m_flacRemainBlockPicLen -= segmLen;
+                // FLAC_LOG_INFO("s_flacCurrentFilePos {}, len {}, m_flacRemainBlockPicLen {}", m_flacCurrentFilePos, segmLen, m_flacRemainBlockPicLen);
+                m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
+                m_flacBlockPicItem.push_back(segmLen);
+                if (m_flacRemainBlockPicLen <= 0) { m_flacPageNr = FLAC_DECODE; }
+                ret = FLAC_PARSE_OGG_DONE;
+                break;
+            }
+            ret = parseMetaDataBlockHeader(inbuf, segmLen);
+            if (m_f_lastMetaDataBlock) m_flacPageNr = 2;
+            break;
+        case FLAC_DECODE:
+            if (m_nBytes == 0) {
+                m_nBytes = segmLen;
+                return FLAC_PARSE_OGG_DONE;
+            }
+
+            break;
+    }
+    *bytesLeft -= segmLen;
+    m_flacCurrentFilePos += segmLen;
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

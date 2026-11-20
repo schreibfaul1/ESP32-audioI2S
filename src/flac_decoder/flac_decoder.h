@@ -69,6 +69,7 @@ class FlacDecoder : public Decoder {
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
+    enum : uint8_t { FLAC_IDENTIFICATION_HEADER, FLAC_METADATA_BLOCK_HEADER, FLAC_DECODE };
 
     typedef struct FLACMetadataBlock_t {
         // METADATA_BLOCK_STREAMINFO
@@ -238,6 +239,7 @@ class FlacDecoder : public Decoder {
     void     setDefaults();
     void     dropTransientOggState();
     void     decoderReset();
+    int32_t  decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
     uint64_t getTotoalSamplesInStream();
