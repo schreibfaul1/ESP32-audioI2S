@@ -14,7 +14,7 @@
 namespace {
 constexpr uint32_t FLAC_MAX_VORBIS_VENDOR_LENGTH = 1024;
 constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
-}
+} // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -46,7 +46,6 @@ bool FlacDecoder::init(size_t outBuffSize) {
 
     clear();
     setDefaults();
-    m_flacPageNr = 0;
     m_valid = true;
     m_outBuffSize = outBuffSize;
     return true;
@@ -59,7 +58,7 @@ void FlacDecoder::clear() {
     m_samplesBuffer[0].clear();
     m_samplesBuffer[1].clear();
     coefs.clear();
-    m_flacSegmTableVec.clear();
+    m_ogg_items.segment_table.clear();
     m_flacStatus = DECODE_FRAME;
     return;
 }
@@ -69,19 +68,31 @@ void FlacDecoder::reset() {
     FLACMetadataBlock.reset();
     m_flacStreamTitle.reset();
     m_flacVendorString.reset();
-
+    resetFlacPictureState();
     m_samplesBuffer[0].reset();
     m_samplesBuffer[1].reset();
     coefs.clear();
-    m_flacSegmTableVec.clear();
-    m_flacBlockPicItem.clear();
+    m_ogg_items.reset();
     m_valid = false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void FlacDecoder::resetFlacPictureState() {
+    m_flacBlockPicItem.clear();
+
+    m_flacBlockPicLen = 0;
+    m_flacBlockPicPos = 0;
+    m_flacBlockPicLenUntilFrameEnd = 0;
+    m_flacRemainBlockPicLen = 0;
+    m_flacRemainPictureBlock = 0;
+
+    m_f_flacNewMetadataBlockPicture = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void FlacDecoder::setDefaults() {
     coefs.clear();
-    m_flacSegmTableVec.clear();
+    m_ogg_items.reset();
     m_flacBlockPicItem.clear();
+    m_flacRemainPictureBlock = 0;
     m_flac_bitBuffer = 0;
     m_flacBitrate = 0;
     m_flacBlockPicLenUntilFrameEnd = 0;
@@ -101,14 +112,27 @@ void FlacDecoder::setDefaults() {
     m_flac_pageSegments = 0;
     m_f_flacNewStreamtitle = false;
     m_f_flacFirstCall = true;
-    m_f_oggWrapper = false;
-    m_f_isDecodeAudio = false;
+    m_isOGG = false;
+    m_f_isisAudioDecoding = false;
     m_f_lastMetaDataBlock = false;
     m_f_flacNewMetadataBlockPicture = false;
-    m_f_flacParseOgg = false;
     m_f_bitReaderError = false;
     m_nBytes = 0;
 }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void FlacDecoder::dropTransientOggState() {
+    // Confirmed parser failure or a new logical stream. Codebooks, floors, and the
+    // DSP object stay: setDefaults() would destroy them, and one bad audio packet
+    // must not force a new header chain. lastSegmentTable keeps its allocation.
+    m_ogg_items.segment_table.clear();
+    //    m_ogg_items.bytes_consumed_from_other = 0;
+    m_ogg_items.data_ptr = nullptr;
+    m_ogg_items.lastSegmentTableLen = 0;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
+    m_f_oggLastPage = false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool FlacDecoder::isValid() {
     return m_valid;
 }
@@ -127,15 +151,14 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
         m_rIndex++;
         (*bytesLeft)--;
         if (*bytesLeft == -1) {
-            if (m_f_oggWrapper) {
+            if (m_isOGG) {
                 m_rIndex--;
                 (*bytesLeft)++;
                 // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
                 if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
                     parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
-                    m_segmLength = m_flacSegmTableVec.back();                 // read the first table
-                    m_flacSegmTableVec.pop_back();                            // and remove them
-                    m_f_flacParseOgg = false;                                 // no next OGG parse necessary
+                    m_segmLength = m_ogg_items.segment_table.front();         // read the front table
+                    m_ogg_items.segment_table.pop_front();                    // and remove them
                     m_rIndex += abs(*bytesLeft);                              // increase m_rIndex
                     continue;                                                 // go ahead
                 } else {
@@ -262,7 +285,7 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         return 0;
     }
 
-    if (m_f_oggWrapper && i > 0) {
+    if (m_isOGG && i > 0) {
         m_f_bitReaderError = false;
         return i;
     }
@@ -363,48 +386,66 @@ const char* FlacDecoder::whoIsIt() {
     return "FLAC";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
+    // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    m_f_flacParseOgg = false;
     int32_t idx = specialIndexOf(inbuf, "OggS", 6);
-    if (idx != 0) {
+
+    if (idx < 0) {
         FLAC_LOG_ERROR("Flac decoder asyncron, \"OggS\" not found");
         return FLAC_ERR;
+    }
+
+    if (idx != 0) {
+        if (m_f_oggContinuedPage) {
+            FLAC_LOG_ERROR("Flac decoder asyncron, \"OggS\" not found");
+            return FLAC_ERR;
+        }
+        inbuf += idx;
+        *bytesLeft -= idx;
+        m_flacCurrentFilePos += idx;
     }
 
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
     (void)headerType;
+    // A new BOS drops the previous page's packet assembly before any of its
+    // segments are queued. A continued page of the same stream is not BOS and
+    // must keep lastSegmentTableLen for the real cross-page packet.
+    const bool continuedPage = headerType & 0x01;             // set: packet continued from the previous page
+    const bool firstPage = headerType & 0x02;                 // set: first page of a logical bitstream (bos)
+    const bool lastPage = headerType & 0x04;                  // set: last page of a logical bitstream (eos)
+    if (firstPage) { dropTransientOggState(); }               //
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
     granulePosition += (uint64_t)*(inbuf + 10) << 32;         // after including all frames finished on this page.
-    granulePosition += *(inbuf + 9) << 24;                    // This is a hint for the decoder and gives it some timing
+    granulePosition |= (uint64_t)inbuf[9] << 24;              // This is a hint for the decoder and gives it some timing
     granulePosition += *(inbuf + 8) << 16;                    // and position information. A special value of -1 (in two's
     granulePosition += *(inbuf + 7) << 8;                     // complement) indicates that no packets finish on this page.
-    granulePosition += *(inbuf + 6);
-    m_granulePosition = granulePosition;
-    uint32_t bitstreamSerialNr = *(inbuf + 17) << 24; // bitstream_serial_number: a 4 Byte field containing the
-    bitstreamSerialNr += *(inbuf + 16) << 16;         // unique serial number by which the logical bitstream
-    bitstreamSerialNr += *(inbuf + 15) << 8;          // is identified.
-    bitstreamSerialNr += *(inbuf + 14);
-    (void)bitstreamSerialNr;
-    uint32_t pageSequenceNr = *(inbuf + 21) << 24; // page_sequence_number: a 4 Byte field containing the sequence
-    pageSequenceNr += *(inbuf + 20) << 16;         // number of the page so the decoder can identify page loss
-    pageSequenceNr += *(inbuf + 19) << 8;          // This sequence number is increasing on each logical bitstream
-    pageSequenceNr += *(inbuf + 18);
+    granulePosition += *(inbuf + 6);                          //
+    m_granulePosition = granulePosition;                      //
+    uint32_t bitstreamSerialNr = (uint32_t)inbuf[17] << 24;   // bitsm_ogg_itemstream_serial_number: a 4 Byte field containing the
+    bitstreamSerialNr |= (uint32_t)inbuf[16] << 16;           // unique serial number by which the logical bitstream
+    bitstreamSerialNr |= (uint32_t)inbuf[15] << 8;            // is identified.
+    bitstreamSerialNr |= (uint32_t)inbuf[14];                 //
+    (void)bitstreamSerialNr;                                  //
+    uint32_t pageSequenceNr = (uint32_t)inbuf[21] << 24;      // page_sequence_number: a 4 Byte field containing the sequence
+    pageSequenceNr |= (uint32_t)inbuf[20] << 16;              // number of the page so the decoder can identify page loss
+    pageSequenceNr |= (uint32_t)inbuf[19] << 8;               // This sequence number is increasing on each logical bitstream
+    pageSequenceNr |= (uint32_t)inbuf[18];
     (void)pageSequenceNr;
-    uint32_t CRCchecksum = *(inbuf + 25) << 24;
-    CRCchecksum += *(inbuf + 24) << 16;
-    CRCchecksum += *(inbuf + 23) << 8;
-    CRCchecksum += *(inbuf + 22);
+    uint32_t CRCchecksum = (uint32_t)inbuf[25] << 24;
+    CRCchecksum |= (uint32_t)inbuf[24] << 16;
+    CRCchecksum |= (uint32_t)inbuf[23] << 8;
+    CRCchecksum |= (uint32_t)inbuf[22];
     (void)CRCchecksum;
     uint8_t pageSegments = *(inbuf + 26); // giving the number of segment entries
-
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
-    m_flacSegmTableVec.clear();
+
+
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -412,25 +453,26 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
             if (i == pageSegments) break;
             n += *(inbuf + 27 + i);
         }
-        m_flacSegmTableVec.insert(m_flacSegmTableVec.begin(), n);
+        m_ogg_items.segment_table.push_back(n);
     }
+
     // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
-
-    bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
-    bool lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
-    m_continued_page = continuedPage;
-    (void)lastPage;
-
-    // FLAC_LOG_INFO("firstPage {}, continuedPage {}, lastPage {}", firstPage, continuedPage, lastPage);
-
-    if (firstPage) m_flacPageNr = 0;
 
     uint32_t headerSize = pageSegments + 27;
 
+    if (firstPage || continuedPage || lastPage) {
+        // FLAC_LOG_INFO("firstPage {}  continuedPage {}  lastPage {}", firstPage, continuedPage, lastPage);
+    }
+
     *bytesLeft -= headerSize;
+    inbuf += headerSize;
     m_flacCurrentFilePos += headerSize;
-    return FLAC_NONE; // no error
+
+    m_f_oggFirstPage = firstPage;
+    m_f_oggContinuedPage = continuedPage;
+    m_f_oggLastPage = lastPage;
+
+    return FLAC_PARSE_OGG_DONE; // no error
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 std::vector<uint32_t> FlacDecoder::getMetadataBlockPicture() {
@@ -449,7 +491,7 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
     } else {
-        if(m_f_oggWrapper && m_granulePosition == 0){
+        if (m_isOGG && m_granulePosition == 0) {
             // FLAC_LOG_INFO("FLAC_OGG_PAGEHEADER found");
             return FLAC_OGG_PAGEHEADER;
         }
@@ -459,10 +501,10 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
+int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
 
     int8_t                    ret = FLAC_PARSE_OGG_DONE;
-    uint16_t                  pos = 0;
+    uint32_t                  pos = 0;
     int32_t                   blockLength = 0;
     uint16_t                  minBlocksize = 0;
     uint16_t                  maxBlocksize = 0;
@@ -477,12 +519,9 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
     uint64_t                  totalSamplesInStream = 0;
     uint8_t                   mdBlockHeader = 0;
     uint8_t                   blockType = 0;
-    uint8_t                   bt = 0;
     std::vector<ps_ptr<char>> vb(8); // vorbis comment
 
-    auto readLE32 = [](const uint8_t* p) -> uint32_t {
-        return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    };
+    auto readLE32 = [](const uint8_t* p) -> uint32_t { return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); };
 
     auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
         if (commentLength < valueOffset) return false;
@@ -495,375 +534,396 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
         return true;
     };
 
+    auto storePictureSegment = [&](uint64_t filePos, uint32_t length) {
+        if (length == 0) return;
+        m_flacBlockPicItem.push_back(filePos);
+        m_flacBlockPicItem.push_back(length);
+    };
+
     enum { streamInfo, padding, application, seekTable, vorbisComment, cueSheet, picture };
 
-    while (true) {
-        mdBlockHeader = *(inbuf + pos);
-        m_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; // FLAC_LOG_INFO("lastMdBlockFlag {}", m_f_lastMetaDataBlock);
-        blockType = mdBlockHeader & 0b01111111;             // FLAC_LOG_INFO("blockType {}", blockType);
+    // Continue reading a PICTURE metadata block
+    if (m_flacRemainPictureBlock > 0) {
+        const uint32_t take = std::min((uint32_t)nBytes, (uint32_t)m_flacRemainPictureBlock);
+        storePictureSegment(m_flacCurrentFilePos, take);
+        m_flacRemainPictureBlock -= take;
+        return FLAC_PARSE_OGG_DONE;
+    }
 
-        blockLength = *(inbuf + pos + 1) << 16;
-        blockLength += *(inbuf + pos + 2) << 8;
-        blockLength += *(inbuf + pos + 3); // FLAC_LOG_INFO("blockLength {}", blockLength);
+    mdBlockHeader = *(inbuf + pos);
+    m_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; // FLAC_LOG_INFO("lastMdBlockFlag {}", m_f_lastMetaDataBlock);
+    blockType = mdBlockHeader & 0b01111111;             // FLAC_LOG_INFO("blockType {}", blockType);
 
-        nBytes -= 4;
-        pos += 4;
+    blockLength = *(inbuf + pos + 1) << 16;
+    blockLength += *(inbuf + pos + 2) << 8;
+    blockLength += *(inbuf + pos + 3); // FLAC_LOG_INFO("blockLength {}", blockLength);
+    nBytes -= 4;
+    pos += 4;
 
-        switch (blockType) {
-            case 0: bt = streamInfo; break;
-            case 1:
-                bt = padding;
-                //  FLAC_LOG_ERROR("padding");
-                return FLAC_NONE;
-                break;
-            case 2:
-                bt = application;
-                FLAC_LOG_ERROR("Flac unimplemented block type: {}", blockType);
+    switch (blockType) {
+        case streamInfo:
+
+            minBlocksize += *(inbuf + pos + 0) << 8;
+            minBlocksize += *(inbuf + pos + 1);
+            maxBlocksize += *(inbuf + pos + 2) << 8;
+            maxBlocksize += *(inbuf + pos + 3);
+            // FLAC_LOG_INFO("minBlocksize {}", minBlocksize);
+            // FLAC_LOG_INFO("maxBlocksize {}", maxBlocksize);
+            FLACMetadataBlock->minblocksize = minBlocksize;
+            FLACMetadataBlock->maxblocksize = maxBlocksize;
+
+            if (maxBlocksize > m_maxBlocksize) {
+                FLAC_LOG_ERROR("s_blocksize is too big: {} bytes, max block size: {}", maxBlocksize, m_maxBlocksize);
                 return FLAC_ERR;
-                break;
-            case 3:
-                bt = seekTable;
-                FLAC_LOG_ERROR("Flac unimplemented seek table: {}", seekTable);
-                return FLAC_ERR;
-                break;
-            case 4: bt = vorbisComment; break;
-            case 5:
-                bt = cueSheet;
-                FLAC_LOG_ERROR("Flac unimplemented cue sheet: {}", cueSheet);
-                return FLAC_ERR;
-                break;
-            case 6: bt = picture; break;
-            default:
-                bt = streamInfo;
-                // return ERR_FLAC_UNIMPLEMENTED;
-                break;
-        }
-
-        switch (bt) {
-            case streamInfo:
-                minBlocksize += *(inbuf + pos + 0) << 8;
-                minBlocksize += *(inbuf + pos + 1);
-                maxBlocksize += *(inbuf + pos + 2) << 8;
-                maxBlocksize += *(inbuf + pos + 3);
-                // FLAC_LOG_INFO("minBlocksize {}", minBlocksize);
-                // FLAC_LOG_INFO("maxBlocksize {}", maxBlocksize);
-                FLACMetadataBlock->minblocksize = minBlocksize;
-                FLACMetadataBlock->maxblocksize = maxBlocksize;
-
-                if (maxBlocksize > m_maxBlocksize) {
-                    FLAC_LOG_ERROR("s_blocksize is too big: {} bytes, max block size: {}", maxBlocksize, m_maxBlocksize);
-                    return FLAC_ERR;
-                }
-
-                minFrameSize = *(inbuf + pos + 4) << 16;
-                minFrameSize += *(inbuf + pos + 5) << 8;
-                minFrameSize += *(inbuf + pos + 6);
-                maxFrameSize = *(inbuf + pos + 7) << 16;
-                maxFrameSize += *(inbuf + pos + 8) << 8;
-                maxFrameSize += *(inbuf + pos + 9);
-                // FLAC_LOG_INFO("minFrameSize {}", minFrameSize);
-                // FLAC_LOG_INFO("maxFrameSize {}", maxFrameSize);
-                FLACMetadataBlock->minframesize = minFrameSize;
-                FLACMetadataBlock->maxframesize = maxFrameSize;
-
-                sampleRate = *(inbuf + pos + 10) << 12;
-                sampleRate += *(inbuf + pos + 11) << 4;
-                sampleRate += (*(inbuf + pos + 12) & 0xF0) >> 4;
-                // FLAC_LOG_INFO("sampleRate {}", sampleRate);
-                FLACMetadataBlock->sampleRate = sampleRate;
-
-                nrOfChannels = ((*(inbuf + pos + 12) & 0x0E) >> 1) + 1;
-                // FLAC_LOG_INFO("nrOfChannels {}", nrOfChannels);
-                FLACMetadataBlock->numChannels = nrOfChannels;
-
-                bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 4;
-                bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
-                FLACMetadataBlock->bitsPerSample = bitsPerSample;
-                // FLAC_LOG_INFO("bitsPerSample {}", bitsPerSample);
-
-                totalSamplesInStream = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
-                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
-                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 15)) << 16;
-                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 16)) << 8;
-                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 17));
-                // FLAC_LOG_INFO("totalSamplesInStream {}", totalSamplesInStream);
-                FLACMetadataBlock->totalSamples = totalSamplesInStream;
-
-                // FLAC_LOG_INFO("nBytes {}, blockLength {}", nBytes, blockLength);
-                pos += blockLength;
-                nBytes -= blockLength;
-                if (ret == FLAC_PARSE_OGG_DONE) return ret;
-                break;
-
-            case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
-                if (blockLength < 8 || blockLength > nBytes) {
-                    FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: {}, bytes available: {}", blockLength, nBytes);
-                    return FLAC_ERR;
-                }
-
-                const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
-                vendorLength = readLE32(inbuf + pos);
-                if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
-                    FLAC_LOG_ERROR("Flac Vorbis vendor string too long: {} bytes, max: {}", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
-                    return FLAC_ERR;
-                }
-                if (vendorLength > (uint32_t)blockLength - 8) {
-                    FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: {}, block length: {}", vendorLength, blockLength);
-                    return FLAC_ERR;
-                }
-
-                if (!m_flacVendorString.alloc(vendorLength + 1, "m_flacVendorString")) {
-                    m_valid = false;
-                    return FLAC_ERR;
-                }
-                m_flacVendorString.clear();
-                m_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
-                // FLAC_LOG_VERBOSE("Vendor: {}", m_flacVendorString.c_get());
-
-                pos += 4 + vendorLength;
-                userCommentListLength = readLE32(inbuf + pos);
-
-                pos += 4;
-                commemtStringLength = 0;
-                for (uint32_t i = 0; i < userCommentListLength; i++) {
-                    if ((uint32_t)pos + 4 > vorbisBlockEnd) {
-                        FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: {}", userCommentListLength);
-                        return FLAC_ERR;
-                    }
-
-                    commemtStringLength = readLE32(inbuf + pos);
-                    if (commemtStringLength > FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH) {
-                        FLAC_LOG_ERROR("Flac Vorbis comment string too long: {} bytes, max: {}", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
-                        return FLAC_ERR;
-                    }
-                    if (commemtStringLength > vorbisBlockEnd - ((uint32_t)pos + 4)) {
-                        FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: {}", commemtStringLength);
-                        return FLAC_ERR;
-                    }
-
-                    const uint8_t* comment = inbuf + pos + 4;
-
-                    if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
-                        assignVorbisValue(vb[0], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Title: {}", vb[0].c_get());
-                        // FLAC_LOG_VERBOSE("TITLE: {}", vb[0].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
-                        assignVorbisValue(vb[1], comment, commemtStringLength, 7);
-                        audio.info(audio, Audio::evt_id3data, "Artist: {}", vb[1].c_get());
-                        // FLAC_LOG_VERBOSE("ARTIST: {}", vb[1].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
-                        assignVorbisValue(vb[2], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Genre: {}", vb[2].c_get());
-                        FLAC_LOG_VERBOSE("GENRE: {}", vb[2].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
-                        assignVorbisValue(vb[3], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Album: {}", vb[3].c_get());
-                        FLAC_LOG_VERBOSE("ALBUM: {}", vb[3].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
-                        assignVorbisValue(vb[4], comment, commemtStringLength, 8);
-                        audio.info(audio, Audio::evt_id3data, "Comments: {}", vb[4].c_get());
-                        FLAC_LOG_VERBOSE("COMMENT: {}", vb[4].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
-                        assignVorbisValue(vb[5], comment, commemtStringLength, 5);
-                        audio.info(audio, Audio::evt_id3data, "Date: {}", vb[5].c_get());
-                        FLAC_LOG_VERBOSE("DATE: {}", vb[5].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
-                        assignVorbisValue(vb[6], comment, commemtStringLength, 12);
-                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: {}", vb[6].c_get());
-                        FLAC_LOG_VERBOSE("TRACKNUMBER: {}", vb[6].c_get());
-                    }
-                    if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
-                        if (commemtStringLength < 23) {
-                            FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: {}", commemtStringLength);
-                            return FLAC_ERR;
-                        }
-                        FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength {}", commemtStringLength);
-                        m_flacBlockPicLen = commemtStringLength - 23;
-                        m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
-                        m_flacBlockPicLenUntilFrameEnd = 0;
-                        if ((uint32_t)nBytes > (uint32_t)pos + 23) m_flacBlockPicLenUntilFrameEnd = (uint32_t)nBytes - ((uint32_t)pos + 23);
-                        if (m_flacBlockPicLen < m_flacBlockPicLenUntilFrameEnd) m_flacBlockPicLenUntilFrameEnd = m_flacBlockPicLen;
-                        m_flacRemainBlockPicLen = m_flacBlockPicLen - m_flacBlockPicLenUntilFrameEnd;
-                        // FLAC_LOG_INFO("s_flacBlockPicPos {}, m_flacBlockPicLen {}", m_flacBlockPicPos, m_flacBlockPicLen);
-                        // FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd {}, m_flacRemainBlockPicLen {}", m_flacBlockPicLenUntilFrameEnd, m_flacRemainBlockPicLen);
-                        if (m_flacRemainBlockPicLen <= 0) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
-                        if (m_flacBlockPicLen) {
-                            m_flacBlockPicItem.push_back(m_flacBlockPicPos);
-                            m_flacBlockPicItem.push_back(m_flacBlockPicLenUntilFrameEnd);
-                        }
-                    }
-                    pos += 4 + commemtStringLength;
-                    FLAC_LOG_VERBOSE("nBytes {}, pos {}, commemtStringLength {}", nBytes, pos, commemtStringLength);
-                }
-                if (vb[1].valid() && vb[0].valid()) { // artist and title
-                    m_flacStreamTitle.assign(vb[1].c_get());
-                    m_flacStreamTitle.append(" - ");
-                    m_flacStreamTitle.append(vb[0].c_get());
-                    m_f_flacNewStreamtitle = true;
-                } else if (vb[1].valid()) {
-                    m_flacStreamTitle.assign(vb[1].c_get());
-                    m_f_flacNewStreamtitle = true;
-                } else if (vb[0].valid()) {
-                    m_flacStreamTitle.assign(vb[0].c_get());
-                    m_f_flacNewStreamtitle = true;
-                }
-                if (!m_flacBlockPicLen && m_flacSegmTableVec.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
-                if (ret == FLAC_PARSE_OGG_DONE) return ret;
-                break;
             }
 
-            case picture:
-                if (ret == FLAC_PARSE_OGG_DONE) return ret;
-                break;
+            minFrameSize = *(inbuf + pos + 4) << 16;
+            minFrameSize += *(inbuf + pos + 5) << 8;
+            minFrameSize += *(inbuf + pos + 6);
+            maxFrameSize = *(inbuf + pos + 7) << 16;
+            maxFrameSize += *(inbuf + pos + 8) << 8;
+            maxFrameSize += *(inbuf + pos + 9);
+            // FLAC_LOG_INFO("minFrameSize {}", minFrameSize);
+            // FLAC_LOG_INFO("maxFrameSize {}", maxFrameSize);
+            FLACMetadataBlock->minframesize = minFrameSize;
+            FLACMetadataBlock->maxframesize = maxFrameSize;
 
-            default: return ret; break;
+            sampleRate = *(inbuf + pos + 10) << 12;
+            sampleRate += *(inbuf + pos + 11) << 4;
+            sampleRate += (*(inbuf + pos + 12) & 0xF0) >> 4;
+            // FLAC_LOG_INFO("sampleRate {}", sampleRate);
+            FLACMetadataBlock->sampleRate = sampleRate;
+            nrOfChannels = ((*(inbuf + pos + 12) & 0x0E) >> 1) + 1;
+            // FLAC_LOG_INFO("nrOfChannels {}", nrOfChannels);
+            FLACMetadataBlock->numChannels = nrOfChannels;
+            bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 4;
+            bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
+            FLACMetadataBlock->bitsPerSample = bitsPerSample;
+            // FLAC_LOG_INFO("bitsPerSample {}", bitsPerSample);
+            totalSamplesInStream = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
+            totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
+            totalSamplesInStream += (uint64_t)(*(inbuf + pos + 15)) << 16;
+            totalSamplesInStream += (uint64_t)(*(inbuf + pos + 16)) << 8;
+            totalSamplesInStream += (uint64_t)(*(inbuf + pos + 17));
+            // FLAC_LOG_INFO("totalSamplesInStream {}", totalSamplesInStream);
+            FLACMetadataBlock->totalSamples = totalSamplesInStream;
+
+            // FLAC_LOG_INFO("nBytes {}, blockLength {}", nBytes, blockLength);
+
+            if (blockLength != 34 || nBytes < 34) {
+                FLAC_LOG_ERROR("Invalid STREAMINFO block length: {}", blockLength);
+                return FLAC_ERR;
+            }
+
+            pos += blockLength;
+            nBytes -= blockLength;
+            return ret;
+
+        case padding: { // PADDING
+            if (blockLength > (uint32_t)nBytes) {
+                FLAC_LOG_ERROR("Flac invalid PADDING block length: {}", blockLength);
+                return FLAC_ERR;
+            }
+            // Skip complete padding block
+            pos += blockLength;
+            nBytes -= blockLength;
+            return FLAC_PARSE_OGG_DONE;
+        }
+
+        case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
+            if (blockLength < 8 || blockLength > nBytes) {
+                FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: {}, bytes available: {}", blockLength, nBytes);
+                return FLAC_ERR;
+            }
+
+            const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
+            vendorLength = readLE32(inbuf + pos);
+            if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
+                FLAC_LOG_ERROR("Flac Vorbis vendor string too long: {} bytes, max: {}", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
+                return FLAC_ERR;
+            }
+            if (vendorLength > (uint32_t)blockLength - 8) {
+                FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: {}, block length: {}", vendorLength, blockLength);
+                return FLAC_ERR;
+            }
+
+            if (!m_flacVendorString.alloc(vendorLength + 1, "m_flacVendorString")) {
+                m_valid = false;
+                return FLAC_ERR;
+            }
+            m_flacVendorString.clear();
+            m_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
+            // FLAC_LOG_VERBOSE("Vendor: {}", m_flacVendorString.c_get());
+
+            pos += 4 + vendorLength;
+            userCommentListLength = readLE32(inbuf + pos);
+
+            pos += 4;
+            commemtStringLength = 0;
+            for (uint32_t i = 0; i < userCommentListLength; i++) {
+                if ((uint32_t)pos + 4 > vorbisBlockEnd) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: {}", userCommentListLength);
+                    return FLAC_ERR;
+                }
+
+                commemtStringLength = readLE32(inbuf + pos);
+                if (commemtStringLength > FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH) {
+                    FLAC_LOG_ERROR("Flac Vorbis comment string too long: {} bytes, max: {}", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
+                    return FLAC_ERR;
+                }
+                if (commemtStringLength > vorbisBlockEnd - ((uint32_t)pos + 4)) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: {}", commemtStringLength);
+                    return FLAC_ERR;
+                }
+
+                const uint8_t* comment = inbuf + pos + 4;
+
+                if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
+                    assignVorbisValue(vb[0], comment, commemtStringLength, 6);
+                    audio.info(audio, Audio::evt_id3data, "Title: {}", vb[0].c_get());
+                    // FLAC_LOG_VERBOSE("TITLE: {}", vb[0].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
+                    assignVorbisValue(vb[1], comment, commemtStringLength, 7);
+                    audio.info(audio, Audio::evt_id3data, "Artist: {}", vb[1].c_get());
+                    // FLAC_LOG_VERBOSE("ARTIST: {}", vb[1].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
+                    assignVorbisValue(vb[2], comment, commemtStringLength, 6);
+                    audio.info(audio, Audio::evt_id3data, "Genre: {}", vb[2].c_get());
+                    FLAC_LOG_VERBOSE("GENRE: {}", vb[2].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
+                    assignVorbisValue(vb[3], comment, commemtStringLength, 6);
+                    audio.info(audio, Audio::evt_id3data, "Album: {}", vb[3].c_get());
+                    FLAC_LOG_VERBOSE("ALBUM: {}", vb[3].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
+                    assignVorbisValue(vb[4], comment, commemtStringLength, 8);
+                    audio.info(audio, Audio::evt_id3data, "Comments: {}", vb[4].c_get());
+                    FLAC_LOG_VERBOSE("COMMENT: {}", vb[4].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
+                    assignVorbisValue(vb[5], comment, commemtStringLength, 5);
+                    audio.info(audio, Audio::evt_id3data, "Date: {}", vb[5].c_get());
+                    FLAC_LOG_VERBOSE("DATE: {}", vb[5].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
+                    assignVorbisValue(vb[6], comment, commemtStringLength, 12);
+                    audio.info(audio, Audio::evt_id3data, "Track number/Position in set: {}", vb[6].c_get());
+                    FLAC_LOG_VERBOSE("TRACKNUMBER: {}", vb[6].c_get());
+                }
+                if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
+                    if (commemtStringLength < 23) {
+                        FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: {}", commemtStringLength);
+                        return FLAC_ERR;
+                    }
+                    FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength {}", commemtStringLength);
+                    m_flacBlockPicLen = commemtStringLength - 23;
+                    m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
+                    m_flacBlockPicLenUntilFrameEnd = 0;
+                    if ((uint32_t)nBytes > (uint32_t)pos + 23) m_flacBlockPicLenUntilFrameEnd = (uint32_t)nBytes - ((uint32_t)pos + 23);
+                    if (m_flacBlockPicLen < m_flacBlockPicLenUntilFrameEnd) m_flacBlockPicLenUntilFrameEnd = m_flacBlockPicLen;
+                    m_flacRemainBlockPicLen = m_flacBlockPicLen - m_flacBlockPicLenUntilFrameEnd;
+                    // FLAC_LOG_INFO("s_flacBlockPicPos {}, m_flacBlockPicLen {}", m_flacBlockPicPos, m_flacBlockPicLen);
+                    // FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd {}, m_flacRemainBlockPicLen {}", m_flacBlockPicLenUntilFrameEnd, m_flacRemainBlockPicLen);
+                    if (m_flacRemainBlockPicLen <= 0) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
+                    if (m_flacBlockPicLen) {
+                        m_flacBlockPicItem.push_back(m_flacBlockPicPos);
+                        m_flacBlockPicItem.push_back(m_flacBlockPicLenUntilFrameEnd);
+                    }
+                }
+                pos += 4 + commemtStringLength;
+                FLAC_LOG_VERBOSE("nBytes {}, pos {}, commemtStringLength {}", nBytes, pos, commemtStringLength);
+            }
+            if (vb[1].valid() && vb[0].valid()) { // artist and title
+                m_flacStreamTitle.assign(vb[1].c_get());
+                m_flacStreamTitle.append(" - ");
+                m_flacStreamTitle.append(vb[0].c_get());
+                m_f_flacNewStreamtitle = true;
+            } else if (vb[1].valid()) {
+                m_flacStreamTitle.assign(vb[1].c_get());
+                m_f_flacNewStreamtitle = true;
+            } else if (vb[0].valid()) {
+                m_flacStreamTitle.assign(vb[0].c_get());
+                m_f_flacNewStreamtitle = true;
+            }
+            if (!m_flacBlockPicLen && m_ogg_items.segment_table.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
+            return ret;
+        }
+
+        case picture: {
+            m_flacBlockPicLen = blockLength;
+            const uint32_t take = std::min((uint32_t)nBytes, (uint32_t)blockLength);
+            // Position immediately after the 4-byte metadata header
+            storePictureSegment(m_flacCurrentFilePos + pos, take);
+            m_flacRemainPictureBlock = blockLength - take;
+            return FLAC_PARSE_OGG_DONE;
+        }
+        case application:
+        case seekTable:
+        case cueSheet: {
+            if (blockLength > nBytes) {
+                FLAC_LOG_ERROR("Metadata block {} too large: {} bytes available, {} required", blockType, nBytes, blockLength);
+                return FLAC_ERR;
+            }
+
+            pos += blockLength;
+            nBytes -= blockLength;
+
+            // OGG-FLAC: Ein Metadatenblock pro OGG-Paket.
+            return FLAC_PARSE_OGG_DONE;
+        }
+        default: {
+            if (blockLength > (uint32_t)nBytes) {
+                FLAC_LOG_ERROR("Invalid metadata block type {}, length {}", blockType, blockLength);
+                return FLAC_ERR;
+            }
+
+            pos += blockLength;
+            nBytes -= blockLength;
+            return FLAC_PARSE_OGG_DONE;
         }
     }
-    return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) { //  MAIN LOOP
 
-    int32_t  ret = 0;
-    uint32_t segmLen = 0;
-
-    m_segmLenTmp = 0;
+    int32_t ret = 0;
 
     if (m_f_flacFirstCall) { // determine if ogg or flag
         m_f_flacFirstCall = false;
         m_nBytes = 0;
-        m_segmLenTmp = 0;
         if (specialIndexOf(inbuf, "OggS", 5) == 0) {
-            m_f_oggWrapper = true;
-            m_f_flacParseOgg = true;
+            m_isOGG = true;
+            m_flacPageNr = FLAC_IDENTIFICATION_HEADER;
             m_f_first_flac_frame = true;
         }
     }
 
-    if (m_f_oggWrapper) {
-
-        if (m_segmLenTmp) { // can't skip more than 16K
-            if (m_segmLenTmp > FLAC_MAX_BLOCKSIZE) {
-                m_flacCurrentFilePos += FLAC_MAX_BLOCKSIZE;
-                *bytesLeft -= FLAC_MAX_BLOCKSIZE;
-                m_segmLenTmp -= FLAC_MAX_BLOCKSIZE;
-            } else {
-                m_flacCurrentFilePos += m_segmLenTmp;
-                *bytesLeft -= m_segmLenTmp;
-                m_segmLenTmp = 0;
-            }
-            return FLAC_PARSE_OGG_DONE;
-        }
-
-        if (m_nBytes > 0) {
-            int16_t diff = m_nBytes;
-            if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-            ret = decodeNative(inbuf, &m_nBytes, outbuf);
-            diff -= m_nBytes;
-            m_flacCurrentFilePos += diff;
-            *bytesLeft -= diff;
-            if (m_nBytes < 0) m_nBytes = 0; // When the FLAC frame is larger than the OGG frame m_nbytes becomes negative
-            return ret;
-        }
-        if (m_nBytes < 0) {
-            FLAC_LOG_ERROR("Flac decoder asynchron");
-            return FLAC_ERR;
-        }
-
-        if (m_f_flacParseOgg == true) {
-            m_f_flacParseOgg = false;
-            ret = parseOGG(inbuf, bytesLeft);
-            if (ret == FLAC_NONE)
-                return FLAC_PARSE_OGG_DONE; // ok
-            else
-                return ret; // error
-        }
-        //-------------------------------------------------------
-        if (!m_flacSegmTableVec.size()) { FLAC_LOG_ERROR("size is 0"); }
-        segmLen = m_flacSegmTableVec.back();
-        m_segmLength = segmLen;
-        m_flacSegmTableVec.pop_back();
-        if (!m_flacSegmTableVec.size()) m_f_flacParseOgg = true;
-        //-------------------------------------------------------
-
-        if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
-            if (m_flacBlockPicItem.size() > 0) { // get blockpic data
-                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
-                // FLAC_LOG_INFO("metadata blockpic found at pos {}, size {} bytes", m_flacBlockPicPos, m_flacBlockPicLen);
-                // for(int32_t i = 0; i < m_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, m_flacBlockPicItem[i], m_flacBlockPicItem[i + 1]); }
-                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
-                m_f_flacNewMetadataBlockPicture = true;
-            }
-        }
-
-        switch (m_flacPageNr) {
-            case 0:
-                ret = parseFlacFirstPacket(inbuf, segmLen);
-                if(ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
-                    *bytesLeft -= segmLen;
-                    m_flacCurrentFilePos += segmLen;
-                    ret = FLAC_PARSE_OGG_DONE;
-                    return ret;
-                }
-                if (ret == segmLen) {
-                    m_flacPageNr = 1;
-                    ret = FLAC_PARSE_OGG_DONE;
-                    break;
-                }
-                if (ret < 0) { // fLaC signature not found
-                    break;
-                }
-                if (ret < segmLen) {
-                    segmLen -= ret;
-                    *bytesLeft -= ret;
-                    m_flacCurrentFilePos += ret;
-                    inbuf += ret;
-                    m_flacPageNr = 1;
-                } /* fallthrough */
-            case 1:
-                if (m_flacRemainBlockPicLen > 0) {
-                    m_flacRemainBlockPicLen -= segmLen;
-                    // FLAC_LOG_INFO("s_flacCurrentFilePos {}, len {}, m_flacRemainBlockPicLen {}", m_flacCurrentFilePos, segmLen, m_flacRemainBlockPicLen);
-                    m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
-                    m_flacBlockPicItem.push_back(segmLen);
-                    if (m_flacRemainBlockPicLen <= 0) { m_flacPageNr = 2; }
-                    ret = FLAC_PARSE_OGG_DONE;
-                    break;
-                }
-
-                ret = parseMetaDataBlockHeader(inbuf, segmLen);
-                if (m_f_lastMetaDataBlock) m_flacPageNr = 2;
-                break;
-            case 2:
-                m_nBytes = segmLen;
-                return FLAC_PARSE_OGG_DONE;
-                break;
-        }
-        if (segmLen > FLAC_MAX_BLOCKSIZE) {
-            m_segmLenTmp = segmLen;
-            return FLAC_PARSE_OGG_DONE;
-        }
-        *bytesLeft -= segmLen;
-        m_flacCurrentFilePos += segmLen;
-        return ret;
+    if (!m_isOGG) {
+        ret = decodeNative(inbuf, bytesLeft, outbuf);
+    } else {
+        ret = decodeOgg(inbuf, bytesLeft, outbuf);
     }
-    ret = decodeNative(inbuf, bytesLeft, outbuf);
+    if (ret == FLAC_STOP) FLAC_LOG_ERROR("stop");
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool FlacDecoder::decodeAudio() {
-    return m_f_isDecodeAudio;
+
+int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    int32_t ret = 0;
+
+    // -------------------------------------------------------
+    // 1. Process pending FLAC audio data
+    // -------------------------------------------------------
+    if (m_nBytes > 0) {
+        const int32_t remaining = m_nBytes;
+
+        if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
+
+        const int32_t ret = decodeNative(inbuf, &m_nBytes, outbuf);
+        const int32_t consumed = remaining - m_nBytes;
+
+        m_flacCurrentFilePos += consumed;
+        *bytesLeft -= consumed;
+
+        // FLAC frame extends beyond the current OGG segment
+        if (m_nBytes < 0) { m_nBytes = 0; }
+
+        return ret;
+    }
+
+    if (m_nBytes < 0) {
+        FLAC_LOG_ERROR("Flac decoder asynchronous");
+        return FLAC_ERR;
+    }
+
+    // -------------------------------------------------------
+    // 2. Get next OGG segment
+    // -------------------------------------------------------
+    if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
+
+    m_segmLength = m_ogg_items.segment_table.front();
+    m_ogg_items.segment_table.pop_front();
+
+    // -------------------------------------------------------
+    // 3. Check for pending cover picture
+    // -------------------------------------------------------
+    if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture && !m_flacBlockPicItem.empty()) { m_f_flacNewMetadataBlockPicture = true; }
+
+    // -------------------------------------------------------
+    // 4. Process current FLAC packet
+    // -------------------------------------------------------
+    switch (m_flacPageNr) {
+
+        case FLAC_IDENTIFICATION_HEADER: {
+
+            ret = parseFlacFirstPacket(inbuf, m_segmLength);
+
+            if (ret == FLAC_OGG_PAGEHEADER) {
+                // Page header found, identification header follows
+                *bytesLeft -= m_segmLength;
+                m_flacCurrentFilePos += m_segmLength;
+                return FLAC_PARSE_OGG_DONE;
+            }
+
+            if (ret == m_segmLength) {
+                m_flacPageNr = FLAC_METADATA_BLOCK_HEADER;
+                break;
+            }
+
+            if (ret < 0) { break; }
+
+            if (ret < m_segmLength) {
+                m_segmLength -= ret;
+                *bytesLeft -= ret;
+                m_flacCurrentFilePos += ret;
+                inbuf += ret;
+
+                m_flacPageNr = FLAC_METADATA_BLOCK_HEADER;
+            }
+
+            [[fallthrough]];
+        }
+
+        case FLAC_METADATA_BLOCK_HEADER: {
+            if (m_flacRemainBlockPicLen > 0) {
+                m_flacRemainBlockPicLen -= m_segmLength;
+                m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
+                m_flacBlockPicItem.push_back(m_segmLength);
+                if (m_flacRemainBlockPicLen <= 0 && m_flacRemainPictureBlock == 0) { m_flacPageNr = FLAC_DECODE; }
+                ret = FLAC_PARSE_OGG_DONE;
+                break;
+            }
+            ret = parseMetaDataBlockHeader(inbuf, m_segmLength);
+            if (m_f_lastMetaDataBlock && m_flacRemainBlockPicLen <= 0 && m_flacRemainPictureBlock == 0) { m_flacPageNr = FLAC_DECODE; }
+            break;
+        }
+
+        case FLAC_DECODE: {
+            m_nBytes = m_segmLength;
+            return FLAC_PARSE_OGG_DONE;
+        }
+    }
+
+    // -------------------------------------------------------
+    // 5. Update input position
+    // -------------------------------------------------------
+    *bytesLeft -= m_segmLength;
+    m_flacCurrentFilePos += m_segmLength;
+
+    return ret;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool FlacDecoder::isAudioDecoding() {
+    return m_f_isisAudioDecoding;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    m_f_isDecodeAudio = true;
+    m_f_isisAudioDecoding = true;
     int32_t        bl = *bytesLeft;
     static int32_t sbl = 0;
 
@@ -918,7 +978,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = (val);
                     outbuf[i * 2 + 1] = (val);
                 }
-                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
+                if (i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 
@@ -944,7 +1004,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = l;
                     outbuf[i * 2 + 1] = r;
                 }
-                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
+                if (i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 
@@ -971,13 +1031,13 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
+
     if (specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
         decoderReset();
-        m_flacPageNr = 2;
         return FLAC_OGG_SYNC_FOUND;
     }
     if (inbuf[0] != 0xFF || inbuf[1] != 0xF8) {
-        if (m_f_first_flac_frame && m_continued_page) { // these are the remains of a previous FLAC frame that was interrupted by OGG. We continue with the next segment,
+        if (m_f_first_flac_frame && m_f_oggContinuedPage) { // these are the remains of a previous FLAC frame that was interrupted by OGG. We continue with the next segment,
             // FLAC_LOG_WARN("need next segment");
             m_f_first_flac_frame = false;
             *bytesLeft -= m_segmLength;
@@ -1002,12 +1062,13 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         if (FLACFrameHeader->chanAsgn == 1) FLACMetadataBlock->numChannels = 2;
         if (FLACFrameHeader->chanAsgn > 7) FLACMetadataBlock->numChannels = 2;
     }
+
     if (FLACMetadataBlock->numChannels < 1) {
         FLAC_LOG_ERROR("Flac unknown channel assignment, ch: {}", FLACMetadataBlock->numChannels);
         return FLAC_STOP;
     }
     if (FLACMetadataBlock->numChannels > FLAC_MAX_CHANNELS) {
-        FLAC_LOG_ERROR("Flac unsupported channel count: {}, max: {}", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS);
+        FLAC_LOG_ERROR("Flac unsupported channel count: {}, max: {}, at pos {}", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS, m_flacCurrentFilePos);
         return FLAC_STOP;
     }
     if (FLACFrameHeader->chanAsgn <= 7) {
@@ -1378,7 +1439,7 @@ int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t base
 
     const size_t haystackLen = (size_t)baselen;
     const size_t needleLen = strlen(str);
-    const size_t matchLen = needleLen + (exact ? 1U : 0U); // if exact == true search string must include "\0" at the end
+    const size_t matchLen = needleLen + (exact ? 1U : 0U); // // exact == true: require a terminating zero byte after the match
 
     if (matchLen > haystackLen) return -1;
     if (matchLen == 0) return 0;

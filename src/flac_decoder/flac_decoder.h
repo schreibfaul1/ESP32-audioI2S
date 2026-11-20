@@ -43,7 +43,7 @@ class FlacDecoder : public Decoder {
     const char*           getStreamTitle() override;
     const char*           whoIsIt() override;
     int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) override;
-    bool                  decodeAudio() override;
+    bool                  isAudioDecoding() override; // audio or metadata?
     void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
     const char*           arg1() override;
@@ -65,10 +65,11 @@ class FlacDecoder : public Decoder {
   private:
     Audio& audio;
 #define FLAC_MAX_CHANNELS  2
-#define FLAC_MAX_BLOCKSIZE 65535
+#define FLAC_MAX_BLOCKSIZE 65535 / 2
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
+    enum : uint8_t { FLAC_IDENTIFICATION_HEADER, FLAC_METADATA_BLOCK_HEADER, FLAC_DECODE };
 
     typedef struct FLACMetadataBlock_t {
         // METADATA_BLOCK_STREAMINFO
@@ -165,6 +166,15 @@ class FlacDecoder : public Decoder {
         uint32_t bitrate;          // bitrate
     } FLACFrameHeader_t;
 
+    typedef struct _ogg_items {
+        std::deque<uint32_t> segment_table{};
+        uint8_t*             data_ptr{};
+        uint32_t             lastSegmentTableLen{};
+        ps_ptr<uint8_t>      lastSegmentTable{};
+        void                 reset() { *this = _ogg_items{}; }
+    } ogg_items_t;
+    ogg_items_t m_ogg_items;
+
     const std::deque<std::deque<int>> FIXED_PREDICTION_COEFFICIENTS = {
         {},            // {}
         {1},           // {1}
@@ -178,7 +188,7 @@ class FlacDecoder : public Decoder {
     ps_ptr<FLACFrameHeader_t>   FLACFrameHeader;
     ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
 
-    std::vector<uint32_t> m_flacSegmTableVec;
+  //  std::vector<uint32_t> m_flacSegmTableVec;
     std::vector<int32_t>  coefs;
     std::vector<uint32_t> m_flacBlockPicItem;
 
@@ -193,7 +203,6 @@ class FlacDecoder : public Decoder {
     uint32_t        m_segmLength = 0;
     uint32_t        m_flacAudioDataStart = 0;
     int32_t         m_flacRemainBlockPicLen = 0;
-    uint32_t        m_segmLenTmp = 0;
     uint16_t        m_numOfOutSamples = 0;
     uint16_t        m_flacValidSamples = 0;
     uint16_t        m_rIndex = 0;
@@ -202,31 +211,37 @@ class FlacDecoder : public Decoder {
     uint8_t*        m_flacInptr;
     float           m_flacCompressionRatio = 0;
     uint8_t         m_flacBitBufferLen = 0;
-    bool            m_f_flacParseOgg = false;
-    bool            m_f_bitReaderError = false;
     uint8_t         m_flac_pageSegments = 0;
     ps_ptr<char>    m_flacStreamTitle = {};
     ps_ptr<char>    m_flacVendorString = {};
+   // bool            m_f_flacParseOgg = false;
+    bool            m_f_bitReaderError = false;
+    bool            m_f_oggFirstPage = false;
+    bool            m_f_oggContinuedPage = false;
+    bool            m_f_oggLastPage = false;
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;
-    bool            m_f_oggWrapper = false;
-    bool            m_f_isDecodeAudio = false;
+    bool            m_isOGG = false;
+    bool            m_f_isisAudioDecoding = false;
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
     bool            m_valid = false;
-    bool            m_continued_page = false;
     bool            m_f_first_flac_frame = false;
     uint8_t         m_flacPageNr = 0;
     ps_ptr<int64_t> m_samplesBuffer[2];
     uint16_t        m_maxBlocksize = FLAC_MAX_BLOCKSIZE;
     int32_t         m_nBytes = 0;
+    int32_t         m_flacRemainPictureBlock = 0;
 
+    void     resetFlacPictureState();
     boolean  FLACFindMagicWord(unsigned char* buf, int32_t nBytes);
     int32_t  parseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t  parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes);
-    int32_t  parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes);
+    int32_t  parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes);
     void     setDefaults();
+    void     dropTransientOggState();
     void     decoderReset();
+    int32_t  decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
     uint64_t getTotoalSamplesInStream();
