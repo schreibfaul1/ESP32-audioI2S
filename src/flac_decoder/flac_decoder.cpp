@@ -46,7 +46,6 @@ bool FlacDecoder::init(size_t outBuffSize) {
 
     clear();
     setDefaults();
-    m_flacPageNr = 0;
     m_valid = true;
     m_outBuffSize = outBuffSize;
     return true;
@@ -466,8 +465,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     m_f_oggContinuedPage = continuedPage;
     m_f_oggLastPage = lastPage;
 
-    if (firstPage) { m_flacPageNr = 0; }
-
     return FLAC_PARSE_OGG_DONE; // no error
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -789,7 +786,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-        int32_t ret = 0;
+    int32_t ret = 0;
 
     // -------------------------------------------------------
     // 1. Process pending FLAC audio data
@@ -827,10 +824,8 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
         return parseOGG(inbuf, bytesLeft);
     }
 
-    uint32_t segmLen = m_ogg_items.segment_table.front();
+    m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
-
-    m_segmLength = segmLen;
 
     // -------------------------------------------------------
     // 3. Check for pending cover picture
@@ -849,16 +844,16 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
 
         case FLAC_IDENTIFICATION_HEADER: {
 
-            ret = parseFlacFirstPacket(inbuf, segmLen);
+            ret = parseFlacFirstPacket(inbuf, m_segmLength);
 
             if (ret == FLAC_OGG_PAGEHEADER) {
                 // Page header found, identification header follows
-                *bytesLeft -= segmLen;
-                m_flacCurrentFilePos += segmLen;
+                *bytesLeft -= m_segmLength;
+                m_flacCurrentFilePos += m_segmLength;
                 return FLAC_PARSE_OGG_DONE;
             }
 
-            if (ret == segmLen) {
+            if (ret == m_segmLength) {
                 m_flacPageNr = FLAC_METADATA_BLOCK_HEADER;
                 break;
             }
@@ -867,8 +862,8 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
                 break;
             }
 
-            if (ret < segmLen) {
-                segmLen -= ret;
+            if (ret < m_segmLength) {
+                m_segmLength -= ret;
                 *bytesLeft -= ret;
                 m_flacCurrentFilePos += ret;
                 inbuf += ret;
@@ -883,10 +878,10 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
 
             if (m_flacRemainBlockPicLen > 0) {
 
-                m_flacRemainBlockPicLen -= segmLen;
+                m_flacRemainBlockPicLen -= m_segmLength;
 
                 m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
-                m_flacBlockPicItem.push_back(segmLen);
+                m_flacBlockPicItem.push_back(m_segmLength);
 
                 if (m_flacRemainBlockPicLen <= 0) {
                     m_flacPageNr = FLAC_DECODE;
@@ -896,7 +891,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
                 break;
             }
 
-            ret = parseMetaDataBlockHeader(inbuf, segmLen);
+            ret = parseMetaDataBlockHeader(inbuf, m_segmLength);
 
             if (m_f_lastMetaDataBlock) {
                 m_flacPageNr = FLAC_DECODE;
@@ -907,7 +902,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
 
         case FLAC_DECODE: {
 
-            m_nBytes = segmLen;
+            m_nBytes = m_segmLength;
             return FLAC_PARSE_OGG_DONE;
         }
     }
@@ -915,8 +910,8 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // -------------------------------------------------------
     // 5. Update input position
     // -------------------------------------------------------
-    *bytesLeft -= segmLen;
-    m_flacCurrentFilePos += segmLen;
+    *bytesLeft -= m_segmLength;
+    m_flacCurrentFilePos += m_segmLength;
 
     return ret;
 }
@@ -1037,7 +1032,6 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
 int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     if (specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
         decoderReset();
-        m_flacPageNr = 2;
         return FLAC_OGG_SYNC_FOUND;
     }
     if (inbuf[0] != 0xFF || inbuf[1] != 0xF8) {
