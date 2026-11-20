@@ -920,7 +920,6 @@ int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
 
     uint16_t headerSize = pageSegments + 27;
 
-    // VORBIS_LOG_INFO("headerSize {}, m_vorbisSegmentLength {}, m_vorbisSegmentTableSize {}", headerSize, m_vorbisSegmentLength, m_vorbisSegmentTableSize);
     if (firstPage || continuedPage || lastPage) {
         // VORBIS_LOG_INFO("firstPage {}  continuedPage {}  lastPage {}", firstPage, continuedPage, lastPage);
     }

@@ -14,7 +14,7 @@
 namespace {
 constexpr uint32_t FLAC_MAX_VORBIS_VENDOR_LENGTH = 1024;
 constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
-}
+} // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -59,7 +59,7 @@ void FlacDecoder::clear() {
     m_samplesBuffer[0].clear();
     m_samplesBuffer[1].clear();
     coefs.clear();
-    m_flacSegmTableVec.clear();
+    m_ogg_items.segment_table.clear();
     m_flacStatus = DECODE_FRAME;
     return;
 }
@@ -73,14 +73,14 @@ void FlacDecoder::reset() {
     m_samplesBuffer[0].reset();
     m_samplesBuffer[1].reset();
     coefs.clear();
-    m_flacSegmTableVec.clear();
+    m_ogg_items.reset();
     m_flacBlockPicItem.clear();
     m_valid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void FlacDecoder::setDefaults() {
     coefs.clear();
-    m_flacSegmTableVec.clear();
+    m_ogg_items.reset();
     m_flacBlockPicItem.clear();
     m_flac_bitBuffer = 0;
     m_flacBitrate = 0;
@@ -114,13 +114,13 @@ void FlacDecoder::dropTransientOggState() {
     // DSP object stay: setDefaults() would destroy them, and one bad audio packet
     // must not force a new header chain. lastSegmentTable keeps its allocation.
     m_ogg_items.segment_table.clear();
-//    m_ogg_items.bytes_consumed_from_other = 0;
+    //    m_ogg_items.bytes_consumed_from_other = 0;
     m_ogg_items.data_ptr = nullptr;
     m_ogg_items.lastSegmentTableLen = 0;
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
     m_f_oggLastPage = false;
-//    m_bitReader.reset();
+    //    m_bitReader.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool FlacDecoder::isValid() {
@@ -147,8 +147,8 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
                 // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
                 if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
                     parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
-                    m_segmLength = m_flacSegmTableVec.back();                 // read the first table
-                    m_flacSegmTableVec.pop_back();                            // and remove them
+                    m_segmLength = m_ogg_items.segment_table.front();         // read the front table
+                    m_ogg_items.segment_table.pop_front();                    // and remove them
                     m_rIndex += abs(*bytesLeft);                              // increase m_rIndex
                     continue;                                                 // go ahead
                 } else {
@@ -396,6 +396,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
         }
         inbuf += idx;
         *bytesLeft -= idx;
+        m_flacCurrentFilePos += idx;
     }
 
     uint8_t version = *(inbuf + 4);
@@ -409,11 +410,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     const bool firstPage = headerType & 0x02;     // set: first page of a logical bitstream (bos)
     const bool lastPage = headerType & 0x04;      // set: last page of a logical bitstream (eos)
     if (firstPage) { dropTransientOggState(); }
-
-
-
-
-
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
@@ -423,7 +419,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     granulePosition += *(inbuf + 7) << 8;                     // complement) indicates that no packets finish on this page.
     granulePosition += *(inbuf + 6);
     m_granulePosition = granulePosition;
-    uint32_t bitstreamSerialNr = *(inbuf + 17) << 24; // bitstream_serial_number: a 4 Byte field containing the
+    uint32_t bitstreamSerialNr = *(inbuf + 17) << 24; // bitsm_ogg_itemstream_serial_number: a 4 Byte field containing the
     bitstreamSerialNr += *(inbuf + 16) << 16;         // unique serial number by which the logical bitstream
     bitstreamSerialNr += *(inbuf + 15) << 8;          // is identified.
     bitstreamSerialNr += *(inbuf + 14);
@@ -439,10 +435,10 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     CRCchecksum += *(inbuf + 22);
     (void)CRCchecksum;
     uint8_t pageSegments = *(inbuf + 26); // giving the number of segment entries
-
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
-    m_flacSegmTableVec.clear();
+
+    ogg_lengt_total = 27 + pageSegments;
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -450,24 +446,27 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
             if (i == pageSegments) break;
             n += *(inbuf + 27 + i);
         }
-        m_flacSegmTableVec.insert(m_flacSegmTableVec.begin(), n);
+        m_ogg_items.segment_table.push_back(n);
+        ogg_lengt_total += n;
     }
+
     // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
-
-    // bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    // bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
-    // bool lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
-    m_continued_page = continuedPage;
-    (void)lastPage;
-
-    // FLAC_LOG_INFO("firstPage {}, continuedPage {}, lastPage {}", firstPage, continuedPage, lastPage);
-
-    if (firstPage) m_flacPageNr = 0;
 
     uint32_t headerSize = pageSegments + 27;
 
+    if (firstPage || continuedPage || lastPage) {
+        // FLAC_LOG_INFO("firstPage {}  continuedPage {}  lastPage {}", firstPage, continuedPage, lastPage);
+    }
+
     *bytesLeft -= headerSize;
+    inbuf += headerSize;
     m_flacCurrentFilePos += headerSize;
+
+    m_f_oggFirstPage = firstPage;
+    m_f_oggContinuedPage = continuedPage;
+    m_f_oggLastPage = lastPage;
+
+    if (firstPage) m_flacPageNr = 0;
     return FLAC_NONE; // no error
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -487,7 +486,7 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
     } else {
-        if(m_f_oggWrapper && m_granulePosition == 0){
+        if (m_f_oggWrapper && m_granulePosition == 0) {
             // FLAC_LOG_INFO("FLAC_OGG_PAGEHEADER found");
             return FLAC_OGG_PAGEHEADER;
         }
@@ -518,9 +517,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
     uint8_t                   bt = 0;
     std::vector<ps_ptr<char>> vb(8); // vorbis comment
 
-    auto readLE32 = [](const uint8_t* p) -> uint32_t {
-        return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    };
+    auto readLE32 = [](const uint8_t* p) -> uint32_t { return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); };
 
     auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
         if (commentLength < valueOffset) return false;
@@ -751,7 +748,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                     m_flacStreamTitle.assign(vb[0].c_get());
                     m_f_flacNewStreamtitle = true;
                 }
-                if (!m_flacBlockPicLen && m_flacSegmTableVec.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
+                if (!m_flacBlockPicLen && m_ogg_items.segment_table.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
             }
@@ -813,7 +810,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
             return FLAC_ERR;
         }
 
-        if (!m_flacSegmTableVec.size()) {
+        if (!m_ogg_items.segment_table.size()) {
             ret = parseOGG(inbuf, bytesLeft);
             if (ret == FLAC_NONE)
                 return FLAC_PARSE_OGG_DONE; // ok
@@ -821,10 +818,10 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
                 return ret; // error
         }
         //-------------------------------------------------------
-        if (!m_flacSegmTableVec.size()) { FLAC_LOG_ERROR("size is 0"); }
-        segmLen = m_flacSegmTableVec.back();
+        if (m_ogg_items.segment_table.empty()) { FLAC_LOG_ERROR("ogg table size is 0"); }
+        segmLen = m_ogg_items.segment_table.front();
         m_segmLength = segmLen;
-        m_flacSegmTableVec.pop_back();
+        m_ogg_items.segment_table.pop_front();
         //-------------------------------------------------------
 
         if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
@@ -840,7 +837,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         switch (m_flacPageNr) {
             case 0:
                 ret = parseFlacFirstPacket(inbuf, segmLen);
-                if(ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
+                if (ret == FLAC_OGG_PAGEHEADER) { // Page-Header found, Identification-Header follows
                     *bytesLeft -= segmLen;
                     m_flacCurrentFilePos += segmLen;
                     ret = FLAC_PARSE_OGG_DONE;
@@ -953,7 +950,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = (val);
                     outbuf[i * 2 + 1] = (val);
                 }
-                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
+                if (i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 
@@ -979,7 +976,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                     outbuf[i * 2] = l;
                     outbuf[i * 2 + 1] = r;
                 }
-                if(i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
+                if (i * 2 + 1 > m_outBuffSize) FLAC_LOG_ERROR("output buffer word capacity > outBuffSize");
             }
         }
 
@@ -1012,7 +1009,7 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         return FLAC_OGG_SYNC_FOUND;
     }
     if (inbuf[0] != 0xFF || inbuf[1] != 0xF8) {
-        if (m_f_first_flac_frame && m_continued_page) { // these are the remains of a previous FLAC frame that was interrupted by OGG. We continue with the next segment,
+        if (m_f_first_flac_frame && m_f_oggContinuedPage) { // these are the remains of a previous FLAC frame that was interrupted by OGG. We continue with the next segment,
             // FLAC_LOG_WARN("need next segment");
             m_f_first_flac_frame = false;
             *bytesLeft -= m_segmLength;

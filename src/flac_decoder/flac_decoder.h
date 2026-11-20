@@ -187,7 +187,7 @@ class FlacDecoder : public Decoder {
     ps_ptr<FLACFrameHeader_t>   FLACFrameHeader;
     ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
 
-    std::vector<uint32_t> m_flacSegmTableVec;
+  //  std::vector<uint32_t> m_flacSegmTableVec;
     std::vector<int32_t>  coefs;
     std::vector<uint32_t> m_flacBlockPicItem;
 
@@ -226,7 +226,6 @@ class FlacDecoder : public Decoder {
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
     bool            m_valid = false;
-    bool            m_continued_page = false;
     bool            m_f_first_flac_frame = false;
     uint8_t         m_flacPageNr = 0;
     ps_ptr<int64_t> m_samplesBuffer[2];
