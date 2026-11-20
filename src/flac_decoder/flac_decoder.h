@@ -65,7 +65,7 @@ class FlacDecoder : public Decoder {
   private:
     Audio& audio;
 #define FLAC_MAX_CHANNELS  2
-#define FLAC_MAX_BLOCKSIZE 65535
+#define FLAC_MAX_BLOCKSIZE 65535 / 2
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };

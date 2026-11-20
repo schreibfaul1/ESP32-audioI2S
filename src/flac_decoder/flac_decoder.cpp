@@ -131,7 +131,6 @@ void FlacDecoder::dropTransientOggState() {
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
     m_f_oggLastPage = false;
-    //    m_bitReader.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool FlacDecoder::isValid() {
@@ -446,10 +445,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
 
-    if (*bytesLeft < 27) {
-        FLAC_LOG_ERROR("insufficient data");
-        return FLAC_ERR;
-    }
 
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
@@ -460,8 +455,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
         }
         m_ogg_items.segment_table.push_back(n);
     }
-
-
 
     // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
 
