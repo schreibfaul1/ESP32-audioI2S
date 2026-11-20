@@ -96,7 +96,7 @@ void OpusDecoder::OPUSsetDefaults() {
     m_f_newSteamTitle = false; // streamTitle
     m_f_opusNewMetadataBlockPicture = false;
     m_f_opusStereoFlag = false;
-    m_f_isDecodeAudio = false;
+    m_f_isisAudioDecoding = false;
     m_f_lastPage = false;
     m_opusChannels = 0;
     m_frameCount = 0;
@@ -229,8 +229,8 @@ exit:
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool OpusDecoder::decodeAudio() {
-    return m_f_isDecodeAudio;
+bool OpusDecoder::isAudioDecoding() {
+    return m_f_isisAudioDecoding;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
@@ -249,7 +249,7 @@ int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
 
-    m_f_isDecodeAudio = true;
+    m_f_isisAudioDecoding = true;
     if(segmentLength == 0) return 0;
 
     if (m_opusAudioDataStart == 0) { m_opusAudioDataStart = m_opusCurrentFilePos; }

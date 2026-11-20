@@ -46,7 +46,7 @@ class VorbisDecoder : public Decoder {
     const char*           getStreamTitle() override;
     const char*           whoIsIt() override;
     int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) override;
-    bool                  decodeAudio() override;
+    bool                  isAudioDecoding() override; // audio or metadata?
     void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
     const char*           arg1() override;
@@ -276,7 +276,7 @@ class VorbisDecoder : public Decoder {
     bool     m_f_parseOggDone = true;
     bool     m_f_isValid = false;
     bool     m_f_comment_done = false;
-    bool     m_f_isDecodeAudio = false;
+    bool     m_f_isisAudioDecoding = false;
     size_t   m_outBuffSize = 0;
     uint16_t m_identificatonHeaderLength = 0;
     uint16_t m_vorbisCommentHeaderLength = 0;
