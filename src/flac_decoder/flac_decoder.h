@@ -165,6 +165,15 @@ class FlacDecoder : public Decoder {
         uint32_t bitrate;          // bitrate
     } FLACFrameHeader_t;
 
+    typedef struct _ogg_items {
+        std::deque<uint32_t> segment_table{};
+        uint8_t*             data_ptr{};
+        uint32_t             lastSegmentTableLen{};
+        ps_ptr<uint8_t>      lastSegmentTable{};
+        void                 reset() { *this = _ogg_items{}; }
+    } ogg_items_t;
+    ogg_items_t m_ogg_items;
+
     const std::deque<std::deque<int>> FIXED_PREDICTION_COEFFICIENTS = {
         {},            // {}
         {1},           // {1}
@@ -202,11 +211,14 @@ class FlacDecoder : public Decoder {
     uint8_t*        m_flacInptr;
     float           m_flacCompressionRatio = 0;
     uint8_t         m_flacBitBufferLen = 0;
-    bool            m_f_flacParseOgg = false;
-    bool            m_f_bitReaderError = false;
     uint8_t         m_flac_pageSegments = 0;
     ps_ptr<char>    m_flacStreamTitle = {};
     ps_ptr<char>    m_flacVendorString = {};
+   // bool            m_f_flacParseOgg = false;
+    bool            m_f_bitReaderError = false;
+    bool            m_f_oggFirstPage = false;
+    bool            m_f_oggContinuedPage = false;
+    bool            m_f_oggLastPage = false;
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;
     bool            m_f_oggWrapper = false;
@@ -226,6 +238,7 @@ class FlacDecoder : public Decoder {
     int32_t  parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes);
     int32_t  parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes);
     void     setDefaults();
+    void     dropTransientOggState();
     void     decoderReset();
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
