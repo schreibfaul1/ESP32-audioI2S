@@ -233,6 +233,7 @@ class FlacDecoder : public Decoder {
     int32_t         m_nBytes = 0;
     int32_t         m_flacRemainPictureBlock = 0;
 
+    void     resetFlacPictureState();
     boolean  FLACFindMagicWord(unsigned char* buf, int32_t nBytes);
     int32_t  parseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t  parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes);

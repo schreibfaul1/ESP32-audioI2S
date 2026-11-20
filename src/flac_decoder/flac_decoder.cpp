@@ -68,13 +68,24 @@ void FlacDecoder::reset() {
     FLACMetadataBlock.reset();
     m_flacStreamTitle.reset();
     m_flacVendorString.reset();
-
+    resetFlacPictureState();
     m_samplesBuffer[0].reset();
     m_samplesBuffer[1].reset();
     coefs.clear();
     m_ogg_items.reset();
-    m_flacBlockPicItem.clear();
     m_valid = false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void FlacDecoder::resetFlacPictureState() {
+    m_flacBlockPicItem.clear();
+
+    m_flacBlockPicLen = 0;
+    m_flacBlockPicPos = 0;
+    m_flacBlockPicLenUntilFrameEnd = 0;
+    m_flacRemainBlockPicLen = 0;
+    m_flacRemainPictureBlock = 0;
+
+    m_f_flacNewMetadataBlockPicture = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void FlacDecoder::setDefaults() {
@@ -378,9 +389,6 @@ const char* FlacDecoder::whoIsIt() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // reference https://www.xiph.org/ogg/doc/rfc3533.txt
-    int32_t  ret = 0;
-    uint32_t ogg_lengt_total = 0;
-    (void)ret;
 
     int32_t idx = specialIndexOf(inbuf, "OggS", 6);
 
@@ -406,10 +414,10 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // A new BOS drops the previous page's packet assembly before any of its
     // segments are queued. A continued page of the same stream is not BOS and
     // must keep lastSegmentTableLen for the real cross-page packet.
-    const bool continuedPage = headerType & 0x01; // set: packet continued from the previous page
-    const bool firstPage = headerType & 0x02;     // set: first page of a logical bitstream (bos)
-    const bool lastPage = headerType & 0x04;      // set: last page of a logical bitstream (eos)
-    if (firstPage) { dropTransientOggState(); }
+    const bool continuedPage = headerType & 0x01;             // set: packet continued from the previous page
+    const bool firstPage = headerType & 0x02;                 // set: first page of a logical bitstream (bos)
+    const bool lastPage = headerType & 0x04;                  // set: last page of a logical bitstream (eos)
+    if (firstPage) { dropTransientOggState(); }               //
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
@@ -417,28 +425,32 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     granulePosition |= (uint64_t)inbuf[9] << 24;              // This is a hint for the decoder and gives it some timing
     granulePosition += *(inbuf + 8) << 16;                    // and position information. A special value of -1 (in two's
     granulePosition += *(inbuf + 7) << 8;                     // complement) indicates that no packets finish on this page.
-    granulePosition += *(inbuf + 6);
-    m_granulePosition = granulePosition;
-    uint32_t bitstreamSerialNr = *(inbuf + 17) << 24; // bitsm_ogg_itemstream_serial_number: a 4 Byte field containing the
-    bitstreamSerialNr += *(inbuf + 16) << 16;         // unique serial number by which the logical bitstream
-    bitstreamSerialNr += *(inbuf + 15) << 8;          // is identified.
-    bitstreamSerialNr += *(inbuf + 14);
-    (void)bitstreamSerialNr;
-    uint32_t pageSequenceNr = *(inbuf + 21) << 24; // page_sequence_number: a 4 Byte field containing the sequence
-    pageSequenceNr += *(inbuf + 20) << 16;         // number of the page so the decoder can identify page loss
-    pageSequenceNr += *(inbuf + 19) << 8;          // This sequence number is increasing on each logical bitstream
-    pageSequenceNr += *(inbuf + 18);
+    granulePosition += *(inbuf + 6);                          //
+    m_granulePosition = granulePosition;                      //
+    uint32_t bitstreamSerialNr = (uint32_t)inbuf[17] << 24;   // bitsm_ogg_itemstream_serial_number: a 4 Byte field containing the
+    bitstreamSerialNr |= (uint32_t)inbuf[16] << 16;           // unique serial number by which the logical bitstream
+    bitstreamSerialNr |= (uint32_t)inbuf[15] << 8;            // is identified.
+    bitstreamSerialNr |= (uint32_t)inbuf[14];                 //
+    (void)bitstreamSerialNr;                                  //
+    uint32_t pageSequenceNr = (uint32_t)inbuf[21] << 24;      // page_sequence_number: a 4 Byte field containing the sequence
+    pageSequenceNr |= (uint32_t)inbuf[20] << 16;              // number of the page so the decoder can identify page loss
+    pageSequenceNr |= (uint32_t)inbuf[19] << 8;               // This sequence number is increasing on each logical bitstream
+    pageSequenceNr |= (uint32_t)inbuf[18];
     (void)pageSequenceNr;
-    uint32_t CRCchecksum = *(inbuf + 25) << 24;
-    CRCchecksum += *(inbuf + 24) << 16;
-    CRCchecksum += *(inbuf + 23) << 8;
-    CRCchecksum += *(inbuf + 22);
+    uint32_t CRCchecksum = (uint32_t)inbuf[25] << 24;
+    CRCchecksum |= (uint32_t)inbuf[24] << 16;
+    CRCchecksum |= (uint32_t)inbuf[23] << 8;
+    CRCchecksum |= (uint32_t)inbuf[22];
     (void)CRCchecksum;
     uint8_t pageSegments = *(inbuf + 26); // giving the number of segment entries
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
 
-    ogg_lengt_total = 27 + pageSegments;
+    if (*bytesLeft < 27) {
+        FLAC_LOG_ERROR("insufficient data");
+        return FLAC_ERR;
+    }
+
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -447,8 +459,9 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
             n += *(inbuf + 27 + i);
         }
         m_ogg_items.segment_table.push_back(n);
-        ogg_lengt_total += n;
     }
+
+
 
     // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
 
@@ -1433,7 +1446,7 @@ int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t base
 
     const size_t haystackLen = (size_t)baselen;
     const size_t needleLen = strlen(str);
-    const size_t matchLen = needleLen + (exact ? 1U : 0U); // if exact == true search string must include "\0" at the end
+    const size_t matchLen = needleLen + (exact ? 1U : 0U); // // exact == true: require a terminating zero byte after the match
 
     if (matchLen > haystackLen) return -1;
     if (matchLen == 0) return 0;
