@@ -414,7 +414,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
     granulePosition += (uint64_t)*(inbuf + 10) << 32;         // after including all frames finished on this page.
-    granulePosition += *(inbuf + 9) << 24;                    // This is a hint for the decoder and gives it some timing
+    granulePosition |= (uint64_t)inbuf[9] << 24;              // This is a hint for the decoder and gives it some timing
     granulePosition += *(inbuf + 8) << 16;                    // and position information. A special value of -1 (in two's
     granulePosition += *(inbuf + 7) << 8;                     // complement) indicates that no packets finish on this page.
     granulePosition += *(inbuf + 6);
@@ -789,10 +789,10 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     uint32_t segmLen = 0;
-    int32_t ret = 0;
+    int32_t  ret = 0;
 
     if (m_nBytes > 0) {
-        int16_t diff = m_nBytes;
+        int32_t diff = m_nBytes;
         if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
         ret = decodeNative(inbuf, &m_nBytes, outbuf);
         diff -= m_nBytes;
@@ -806,15 +806,14 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
         return FLAC_ERR;
     }
 
-    if (m_ogg_items.segment_table.empty() && m_nBytes == 0) {
-        ret = parseOGG(inbuf, bytesLeft);
-        return ret;
-    } else {
-        segmLen = m_ogg_items.segment_table.front();
-        m_segmLength = segmLen;
-        m_ogg_items.segment_table.pop_front();
-    }
-    //-------------------------------------------------------
+    //-----------------------------------------------------------------------------------
+    if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
+
+    segmLen = m_ogg_items.segment_table.front();
+    m_ogg_items.segment_table.pop_front();
+
+    m_segmLength = segmLen;
+    //-----------------------------------------------------------------------------------
 
     if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
         if (m_flacBlockPicItem.size() > 0) { // get blockpic data
@@ -849,7 +848,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
                 m_flacCurrentFilePos += ret;
                 inbuf += ret;
                 m_flacPageNr = FLAC_METADATA_BLOCK_HEADER;
-            } /* fallthrough */
+            } [[fallthrough]];
         case FLAC_METADATA_BLOCK_HEADER:
             if (m_flacRemainBlockPicLen > 0) {
                 m_flacRemainBlockPicLen -= segmLen;
