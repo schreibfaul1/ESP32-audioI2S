@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 19.11.2026
+ * Updated on: 21.11.2026
  *
  * Author: Wolle
  *
@@ -471,6 +471,8 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     m_f_oggFirstPage = firstPage;
     m_f_oggContinuedPage = continuedPage;
     m_f_oggLastPage = lastPage;
+
+    if (firstPage) m_flacPageNr = FLAC_IDENTIFICATION_HEADER;
 
     return FLAC_PARSE_OGG_DONE; // no error
 }
