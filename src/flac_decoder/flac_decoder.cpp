@@ -631,10 +631,6 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
         }
 
         case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
-            if (blockLength < 8 || blockLength > nBytes) {
-                FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: {}, bytes available: {}", blockLength, nBytes);
-                return FLAC_ERR;
-            }
 
             const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
             vendorLength = readLE32(inbuf + pos);
