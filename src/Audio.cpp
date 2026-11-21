@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 4.0.1f                                                                                                                         ";
-/*  Updated on: Nov 13, 2026
+    Version 4.0.1g                                                                                                                         ";
+/*  Updated on: Nov 21, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -149,6 +149,7 @@ void Audio::setDefaults() {
     m_cab.reset();
     m_cat.reset();
     m_content_type.reset();
+    m_sbyt.reset();
 
     m_outBuff.clear();       // Clear OutputBuffer
     m_resamplesBuff.clear(); // Clear ResamplesBuff
@@ -5566,8 +5567,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if (!len) return 0;
         m_sbyt.channels = 2; // assume aac stereo
         m_sbyt.isPS = 0;
-        m_sbyt.f_setDecodeParamsOnce = true;
-        m_sbyt.f_getCoverImageOnce = true;
         m_sbyt.nextSync = findNextSync(data, len);
         if (m_sbyt.nextSync < 0) return len; // no syncword found
         if (m_sbyt.nextSync == 0) { m_f_playing = true; }

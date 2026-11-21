@@ -253,13 +253,15 @@ struct pad_t { // used in playAudioData
 };
 
 struct sbyt_t { // used in sendBytes
-    int32_t     bytesLeft;
+    int32_t     bytesLeft{};
     bool        f_setDecodeParamsOnce = true;
     bool        f_getCoverImageOnce = true;
-    uint8_t     channels = 0;
-    int         nextSync = 0;
-    uint8_t     isPS = 0;
-    const char* opus_mode = nullptr;
+    uint8_t     channels{};
+    int         nextSync{};
+    uint8_t     isPS{};
+    const char* opus_mode{};
+
+    void reset() { *this = sbyt_t{}; }
 };
 
 struct rmet_t {          // used in readMetadata
