@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 21.11.2026
+ * Updated on: 22.11.2026
  *
  * Author: Wolle
  *
@@ -746,8 +746,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
                 m_flacStreamTitle.assign(vb[0].c_get());
                 m_f_flacNewStreamtitle = true;
             }
-            if (!m_flacBlockPicLen && m_ogg_items.segment_table.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
-            return ret;
+           return ret;
         }
 
         case picture: {
