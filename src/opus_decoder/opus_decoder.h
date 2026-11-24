@@ -1,3 +1,4 @@
+// opus decoder.h
 // based on Xiph.Org Foundation celt decoder
 #pragma once
 
@@ -51,7 +52,15 @@ class OpusDecoder : public Decoder {
     std::unique_ptr<SilkDecoder>  silkdec;
     std::unique_ptr<CeltDecoder>  celtdec;
 
-    enum : int8_t { OPUS_END = 120, OPUS_CONTINUE = 10, OPUS_PARSE_OGG_DONE = 100, OPUS_NONE = 0, OPUS_ERR = -1 };
+    enum : int8_t {                //
+        OPUS_NONE = 0,             //
+        OPUS_NEXT_FRAME = 10,      //
+        OPUS_PARSE_OGG_DONE = 100, //
+        OPUS_LAST_PAGE = 105,      //
+        OPUS_END = 110,            //
+        OPUS_CONTINUE = 115,       //
+        OPUS_ERR = -1
+    };
 
   private:
     Audio& audio;
@@ -102,43 +111,55 @@ class OpusDecoder : public Decoder {
     enum { OPUS_BANDWIDTH_NARROWBAND = 1101, OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103, OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105 };
     enum ParseResult { OPUS_COMMENT_INVALID = -1, OPUS_COMMENT_NEED_MORE = 1, OPUS_COMMENT_DONE = 2 };
 
-    size_t   m_outBuffSize = 0;
-    uint8_t  m_opusChannels = 0;
-    uint8_t  m_opusCountCode = 0;
-    uint8_t  m_opusPageNr = 0;
-    uint8_t  m_frameCount = 0;
-    uint8_t  m_opusSegmentTableSize = 0;
-    uint16_t m_mode = 0;
-    uint16_t m_opusOggHeaderSize = 0;
-    uint16_t m_bandWidth = 0;
-    uint16_t m_internalSampleRate = 0;
-    uint16_t m_endband = 0;
-    uint32_t m_opusSamplerate = 0;
-    uint32_t m_opusSegmentLength = 0;
-    uint32_t m_opusCurrentFilePos = 0;
-    uint32_t m_opusAudioDataStart = 0;
-    uint32_t m_opusBlockPicPos = 0;
-    uint32_t m_opusBlockLen = 0;
-    bool     m_f_opusParseOgg = false;
-    bool     m_f_newSteamTitle = false;               // streamTitle
-    bool     m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
-    bool     m_f_opusStereoFlag = false;
-    bool     m_f_continuedPage = false;
-    bool     m_f_packetContinuesAfterPage = false;
-    bool     m_f_firstPage = false;
-    bool     m_f_lastPage = false;
-    bool     m_f_nextChunk = false;
-    bool     m_isValid = false;
-    bool     m_f_isisAudioDecoding = false;
-    int8_t   m_opusError = 0;
-    int16_t  m_opusSegmentTableRdPtr = -1;
-    int16_t  m_prev_mode = 0;
-    int32_t  m_opusValidSamples = 0;
-    int32_t  m_opusBlockPicLen = 0;
-    int32_t  m_blockPicLenUntilFrameEnd = 0;
-    int32_t  m_opusRemainBlockPicLen = 0;
-    int32_t  m_opusCommentBlockSize = 0;
-    float    m_opusCompressionRatio = 0;
+    size_t          m_outBuffSize = 0;
+    uint8_t         m_opusChannels = 0;
+    uint8_t         m_opusCountCode = 0;
+    uint8_t         m_opusPageNr = 0;
+    uint8_t         m_frameCount = 0;
+    uint16_t        m_mode = 0;
+    uint16_t        m_bandWidth = 0;
+    uint16_t        m_internalSampleRate = 0;
+    uint16_t        m_endband = 0;
+    uint32_t        m_opusSamplerate = 0;
+    uint32_t        m_opusCurrentFilePos = 0;
+    uint32_t        m_opusAudioDataStart = 0;
+    uint32_t        m_opusBlockPicPos = 0;
+    uint32_t        m_opusBlockLen = 0;
+    bool            m_f_opusParseOgg = false;
+    bool            m_f_newSteamTitle = false;               // streamTitle
+    bool            m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
+    bool            m_f_opusStereoFlag = false;
+    bool            m_f_oggContinuedPacket = false;  //      lastSegment       OggS...     firstSegment
+    bool            m_f_oggContinuedPage = false;    // m_f_oggContinuedPacket          m_f_oggContinuedPage
+    bool            m_f_oggFirstPage = false;
+    bool            m_f_oggLastPage = false;
+    bool            m_f_nextChunk = false;
+    bool            m_isValid = false;
+    bool            m_f_isisAudioDecoding = false;
+    bool            m_f_parseOggDone = true;
+    int8_t          m_opusError = 0;
+    int16_t         m_prev_mode = 0;
+    int32_t         m_opusValidSamples = 0;
+    int32_t         m_opusBlockPicLen = 0;
+    int32_t         m_blockPicLenUntilFrameEnd = 0;
+    int32_t         m_opusRemainBlockPicLen = 0;
+    int32_t         m_opusCommentBlockSize = 0;
+    float           m_opusCompressionRatio = 0;
+
+    struct continued {
+        ps_ptr<uint8_t> buffer;
+        uint32_t filled = 0;
+    } m_continued;
+
+    typedef struct _ogg_items {
+        std::deque<uint32_t> segment_table{};
+        uint32_t             bytes_consumed_from_other{};
+        uint8_t*             data_ptr{};
+        uint32_t             lastSegmentTableLen{};
+        ps_ptr<uint8_t>      lastSegmentTable{};
+        void                 reset() { *this = _ogg_items{}; }
+    } ogg_items_t;
+    ogg_items_t m_ogg_items;
 
     struct picture_segment_t {
         uint32_t start_page_index{};
@@ -169,8 +190,6 @@ class OpusDecoder : public Decoder {
     } comment_t;
     comment_t m_comment;
 
-    ps_ptr<uint16_t> m_opusSegmentTable;
-
     ofp2_t m_ofp2; // used in opus_FramePacking_Code2
     ofp3_t m_ofp3; // used in opus_FramePacking_Code3
     odp3_t m_odp3; // used in opusDecodePage3
@@ -178,6 +197,7 @@ class OpusDecoder : public Decoder {
     std::vector<uint32_t> m_opusBlockPicItem;
 
     void    OPUSsetDefaults();
+    void    dropTransientOggState();
     int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
     int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf);
     int8_t  opus_FramePacking_Code0(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame);
