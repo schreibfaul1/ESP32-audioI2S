@@ -52,7 +52,7 @@ bool OpusDecoder::init(size_t outBuffSize) {
     m_isValid = true;
     m_continued.filled = 0;
     m_continued.buffer.alloc(UINT16_MAX + 1, "m_continued_buffer");
-    if(!m_continued.buffer.valid()){
+    if (!m_continued.buffer.valid()) {
         OPUS_LOG_ERROR("m_continued_buffer oom");
         return false;
     }
@@ -76,6 +76,7 @@ void OpusDecoder::clear() {
     m_opusValidSamples = 0;
     m_opusCountCode = 0;
     m_opusCurrentFilePos = 0;
+    m_continued.filled = 0;
     m_comment.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -129,6 +130,7 @@ void OpusDecoder::dropTransientOggState() {
     m_ogg_items.bytes_consumed_from_other = 0;
     m_ogg_items.data_ptr = nullptr;
     m_ogg_items.lastSegmentTableLen = 0;
+    m_continued.filled = 0;
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
     m_f_oggContinuedPacket = false;
@@ -177,7 +179,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         m_f_parseOggDone = true;
         bytes_consumed = bytesLeft_begin - (*bytesLeft);
         if (ret == OPUS_PARSE_OGG_DONE)
-            return ret;
+            goto exit;
         else
             goto exit; // error
     }
@@ -186,20 +188,24 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         segmLen = m_ogg_items.segment_table[0];
         m_ogg_items.segment_table.pop_front();
         // OPUS_LOG_INFO("segmLen {}", segmLen);
-        if( m_continued.filled && m_f_oggContinuedPage){
+        if (m_continued.filled && m_f_oggContinuedPage) {
+            if (m_continued.filled + segmLen > UINT16_MAX + 1) {
+                OPUS_LOG_ERROR("Continued packet exceeds buffer size");
+                m_continued.filled = 0;
+                return OPUS_ERR;
+            }
             memcpy(m_continued.buffer.get() + m_continued.filled, inbuf, segmLen);
             *bytesLeft += m_continued.filled;
             segmLen += m_continued.filled;
             m_continued.filled = 0;
             inbuf = m_continued.buffer.get();
-            OPUS_LOG_WARN("segmLen {}", segmLen);
         }
         if (!m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
             memcpy(m_continued.buffer.get(), inbuf, segmLen);
             m_continued.filled = segmLen;
             *bytesLeft -= segmLen;
-            OPUS_LOG_WARN("segmLen {}", segmLen);
-            return OPUS_CONTINUE;
+            ret = OPUS_CONTINUE;
+            goto exit;
         }
     }
 
@@ -736,226 +742,321 @@ int8_t OpusDecoder::opus_FramePacking_Code3(uint8_t* inbuf, int32_t* bytesLeft, 
          :                  Opus Padding (Optional)...                   |
          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
+
+
+        Opus Code 3: Arbitrary number of frames.
+
+        A single call decodes exactly one frame.
+
+        First call:
+        - Analyze the packet header
+        - Determine the number of frames and frame lengths
+        - Consume the header bytes
+        - Decode the first frame
+
+        Subsequent calls:
+        - inbuf already points to the next frame
+        - Decode the next frame
+
+        After the last frame:
+        - Use up the padding
+        - Reset the state for the next packet
+
+        Return:
+        OPUS_NEXT_FRAME : additional frames present in the packet
+        OPUS_NONE : packet fully processed
+        OPUS_ERR : invalid packet or decoder error
     */
-    int32_t ret = 0;
-    int32_t current_payload_offset = 0; // Offset from inbuf start where the current frame data begins
-    m_ofp3.idx = 0;
 
+    if (!inbuf || !bytesLeft || !frameCount || !outbuf) { return OPUS_ERR; }
+
+    if (*bytesLeft < 0) { return OPUS_ERR; }
+
+    // ------------------------------------------------------------
+    // Help Function: Completely Discard Package and Reset Status
+    // ------------------------------------------------------------
+    auto discardPacket = [&](int32_t bytesToDiscard) -> int8_t {
+        if (bytesToDiscard < 0) bytesToDiscard = 0;
+
+        if (bytesToDiscard > *bytesLeft) { bytesToDiscard = *bytesLeft; }
+
+        *bytesLeft -= bytesToDiscard;
+        *frameCount = 0;
+
+        m_ofp3.firstCall = true;
+        m_ofp3.idx = 0;
+        m_opusValidSamples = 0;
+
+        return OPUS_ERR;
+    };
+
+    // ------------------------------------------------------------
+    // 1. First Call: Analyze the Code-3 Header
+    // ------------------------------------------------------------
     if (m_ofp3.firstCall) {
-        //    OPUS_LOG_WARN("0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} 0x{:02X} ",
-        //          inbuf[0], inbuf[1], inbuf[2], inbuf[3], inbuf[4], inbuf[5], inbuf[6], inbuf[7], inbuf[8], inbuf[9]);
 
-        // Reset all relevant state for a new packet
+        // A Code 3 packet requires at least a TOC and a frame count.
+        if (packetLen < 2 || packetLen > *bytesLeft) {
+            OPUS_LOG_ERROR("Invalid Opus Code 3 packet length: {}, available: {}", packetLen, *bytesLeft);
+            return discardPacket(packetLen);
+        }
+
+        // An Opus packet may contain a maximum of 120 ms of audio.
         m_ofp3.firstCall = false;
-        m_ofp3.paddingLength = 0;
         m_ofp3.v = false;
         m_ofp3.p = false;
         m_ofp3.M = 0;
         m_ofp3.fs = 0;
-        // Ensure vfs is cleared or handled appropriately if it's a static member
-        // memset(m_ofp3.vfs, 0, sizeof(m_ofp3.vfs)); // Only if m_ofp3.vfs is part of m_ofp3
-
-        //   m_opusCurrentFilePos += packetLen;
-        m_ofp3.idx = 1; // Start reading after TOC byte (inbuf[0])
+        m_ofp3.paddingLength = 0;
+        m_ofp3.idx = 1;
         m_ofp3.spf = samplesPerFrame;
 
-        // Parse Frame Count Byte (inbuf[1])
-        if (m_ofp3.idx >= packetLen) { // Check bounds before accessing
-            *bytesLeft -= packetLen;   // Consume this potentially malformed packet
-            *frameCount = 0;
-            m_ofp3.firstCall = true;
-            return OPUS_NONE; // Packet too short
-        }
-        if (inbuf[m_ofp3.idx] & 0b10000000) m_ofp3.v = true; // VBR indicator
-        if (inbuf[m_ofp3.idx] & 0b01000000) m_ofp3.p = true; // padding bit
-        m_ofp3.M = inbuf[m_ofp3.idx] & 0b00111111;           // framecount
-        *frameCount = m_ofp3.M;                              // Set the output frameCount for this packet
-        m_ofp3.idx++;                                        // Move past the frame count byte
+        memset(m_ofp3.vfs, 0, sizeof(m_ofp3.vfs));
 
-        // M MUST NOT be zero (from spec)
-        if (m_ofp3.M == 0) {
-            // OPUS_LOG_INFO("Error: Opus Code 3 packet with M = 0 (no frames)");
-            *bytesLeft -= packetLen;
-            *frameCount = 0;
-            m_ofp3.firstCall = true;
-            OPUS_LOG_ERROR("Opus code 3; packet with no frames");
-            return OPUS_ERR;
+        // --------------------------------------------------------
+        // Frame-Count-Byte
+        // --------------------------------------------------------
+        const uint8_t frameCountByte = inbuf[m_ofp3.idx++];
+
+        m_ofp3.v = (frameCountByte & 0x80) != 0;
+        m_ofp3.p = (frameCountByte & 0x40) != 0;
+        m_ofp3.M = frameCountByte & 0x3F;
+
+        *frameCount = m_ofp3.M;
+
+        if (m_ofp3.M == 0 || m_ofp3.M > 48) {
+            OPUS_LOG_ERROR("Invalid Opus Code 3 frame count: {}", m_ofp3.M);
+            return discardPacket(packetLen);
         }
 
-        // Parse Padding Length
+        // An Opus packet may contain a maximum of 120 ms of audio.
+        if ((uint32_t)m_ofp3.M * samplesPerFrame > 5760) {
+            OPUS_LOG_ERROR("Opus packet duration exceeds 120 ms");
+            return discardPacket(packetLen);
+        }
+
+        // --------------------------------------------------------
+        // Read padding length
+        //
+        // 0..254: Padding length directly
+        // 255: 254 bytes + next length byte
+        // --------------------------------------------------------
         if (m_ofp3.p) {
-            uint32_t current_padding_chunk_val;
+
+            uint32_t paddingByte = 0;
+
             do {
-                if (m_ofp3.idx >= packetLen) { // Check bounds
-                    // OPUS_LOG_INFO("Error: Packet truncated during padding length parsing");
-                    *bytesLeft -= packetLen;
-                    *frameCount = 0;
-                    m_ofp3.firstCall = true;
-                    OPUS_LOG_ERROR("Opus packet is truncated during padding length parsing");
-                    return OPUS_ERR;
+                if (m_ofp3.idx >= (uint32_t)packetLen) {
+                    OPUS_LOG_ERROR("Truncated Opus padding header");
+                    return discardPacket(packetLen);
                 }
-                current_padding_chunk_val = inbuf[m_ofp3.idx];
-                m_ofp3.idx++;
-                m_ofp3.paddingLength += current_padding_chunk_val;
-            } while (current_padding_chunk_val == 255); // Continue if the last byte read was 255
-            // OPUS_LOG_WARN("we have {} padding bytes", m_ofp3.paddingLength);
-        }
 
-        // Parse Variable Frame Sizes (N1 to N[M-1] for VBR)
-        if (m_ofp3.v && m_ofp3.M > 1) { // Only M-1 lengths are signaled if M > 1
-            for (int m = 0; m < (m_ofp3.M - 1); m++) {
-                if (m_ofp3.idx >= packetLen) { // Check bounds
-                    *bytesLeft -= packetLen;
-                    *frameCount = 0;
-                    m_ofp3.firstCall = true;
-                    OPUS_LOG_ERROR("Opus packet has been truncated at VBR parsing");
-                    return OPUS_ERR;
+                paddingByte = inbuf[m_ofp3.idx++];
+
+                if (paddingByte == 255) {
+                    m_ofp3.paddingLength += 254;
+                } else {
+                    m_ofp3.paddingLength += paddingByte;
                 }
-                uint16_t current_frame_len_val = inbuf[m_ofp3.idx];
-                m_ofp3.idx++;
-                if (current_frame_len_val == 255) {
-                    if (m_ofp3.idx >= packetLen) { // Check bounds for second byte
-                        // OPUS_LOG_INFO("Error: Packet truncated during VBR frame length parsing (second byte)");
-                        *bytesLeft -= packetLen;
-                        *frameCount = 0;
-                        m_ofp3.firstCall = true;
-                        OPUS_LOG_ERROR("Opus packet has been truncated at VBR parsing");
-                        return OPUS_ERR;
-                    }
-                    current_frame_len_val += inbuf[m_ofp3.idx]; // Add the next byte's value
-                    m_ofp3.idx++;
+
+                if (m_ofp3.paddingLength > (uint32_t)packetLen) {
+                    OPUS_LOG_ERROR("Invalid Opus padding length");
+                    return discardPacket(packetLen);
                 }
-                m_ofp3.vfs[m] = current_frame_len_val;
-                // OPUS_LOG_INFO("VFS[{}]: {}", m, m_ofp3.vfs[m]);
-            }
+
+            } while (paddingByte == 255);
         }
 
-        // Calculate bytes available for compressed audio frames
-        int32_t total_header_bytes = m_ofp3.idx; // idx now points to start of first compressed frame data
-        int32_t remaining_bytes_for_data_and_padding = packetLen - total_header_bytes;
-
-        // Verify enough data for padding
-        if (remaining_bytes_for_data_and_padding < m_ofp3.paddingLength) {
-            // OPUS_LOG_INFO("Error: Padding length {} exceeds remaining packet bytes {}", m_ofp3.paddingLength, remaining_bytes_for_data_and_padding);
-            *bytesLeft -= packetLen;
-            *frameCount = 0;
-            m_ofp3.firstCall = true;
-            OPUS_LOG_ERROR("Too many parsing bytes: {}, padding length; {}", remaining_bytes_for_data_and_padding, m_ofp3.paddingLength);
-            return OPUS_ERR;
-        }
-
-        // Bytes containing actual compressed data (excluding padding at the end)
-        int32_t compressed_data_bytes = remaining_bytes_for_data_and_padding - m_ofp3.paddingLength;
-
-        // OPUS_LOG_INFO("packetLen {}, total_header_bytes {}, compressed_data_bytes {}, paddingLength {}, framecount {}",
-        //      packetLen, total_header_bytes, compressed_data_bytes, m_ofp3.paddingLength, *frameCount);
-
-        if (!m_ofp3.v) { // Constant Bitrates (CBR)
-            // R = N - 2 - P
-            // R = packetLen (N) - (TOC + FrameCountByte) - (Padding Header Bytes + Padding Data Bytes)
-            // R = packetLen - m_ofp3.idx (which is total header bytes) - m_ofp3.paddingLength (which is actual padding data)
-            // But simplified: R = compressed_data_bytes (calculated above)
-
-            if (m_ofp3.M == 0) { // Already checked, but good for robustness
-                // OPUS_LOG_INFO("Error: CBR with 0 frames (should not happen based on spec M>0)");
-                *bytesLeft -= packetLen;
-                *frameCount = 0;
-                m_ofp3.firstCall = true;
-                OPUS_LOG_ERROR("Opus CBR wihtout frames");
-                return OPUS_ERR;
-            }
-
-            m_ofp3.fs = compressed_data_bytes / m_ofp3.M;
-            int r = compressed_data_bytes % m_ofp3.M;
-            if (r > 0) {
-                OPUS_LOG_WARN("CBR data not perfectly divisible by frame count. remainingBytes {}, frames {}, remainder {}", compressed_data_bytes, m_ofp3.M, r);
-                // This might indicate a malformed packet, or a small rounding difference for very short packets.
-                // For strict compliance, R MUST be a non-negative integer multiple of M.
-                *bytesLeft -= packetLen;
-                *frameCount = 0;
-                m_ofp3.firstCall = true;
-                return OPUS_NONE;
-            }
-
-            // In CBR, all frames have size m_ofp3.fs. We don't use vfs here.
-        } else { // Variable Bitrates (VBR)
-            // Calculate the length of the last frame (M)
-            uint32_t sum_of_signaled_lengths = 0;
-            for (int m = 0; m < (m_ofp3.M - 1); m++) { sum_of_signaled_lengths += m_ofp3.vfs[m]; }
-
-            if (sum_of_signaled_lengths > compressed_data_bytes) {
-                OPUS_LOG_ERROR("Opus wrong VBR length, sum_of_signaled_lengths: {}, compressed_data_bytes: {}", sum_of_signaled_lengths, compressed_data_bytes);
-                return OPUS_ERR;
-                *bytesLeft -= packetLen;
-                *frameCount = 0;
-                m_ofp3.firstCall = true;
-                return OPUS_NONE;
-            }
-            m_ofp3.vfs[m_ofp3.M - 1] = compressed_data_bytes - sum_of_signaled_lengths;
-            // OPUS_LOG_INFO("Calculated VFS[{}] (last frame): {}", m_ofp3.M - 1, m_ofp3.vfs[s_ofp3.M - 1]);
-        }
-        current_payload_offset = total_header_bytes; // This is where the first frame data starts
-        (void)current_payload_offset;
-        (*bytesLeft) -= total_header_bytes; // Account for all header bytes consumed
-    }
-
-    // Decoding loop (outside the firstCall block)
-    if (*frameCount > 0) {
-        int32_t frame_len;
+        // --------------------------------------------------------
+        // VBR: Read the frame lengths of the first M-1 frames
+        // --------------------------------------------------------
         if (m_ofp3.v) {
-            // Get the length of the current frame to decode
-            uint8_t current_frame_idx = m_ofp3.M - (*frameCount); // 0 for first, M-1 for last
-            if (current_frame_idx >= m_ofp3.M) {                  // Safety check
-                // OPUS_LOG_INFO("Error: Invalid VFS index access. current_frame_idx {}, M {}", current_frame_idx, m_ofp3.M);
-                *bytesLeft -= (*bytesLeft > 0 ? *bytesLeft : 0); // Consume remaining bytes to reset
-                *frameCount = 0;
-                m_ofp3.firstCall = true;
-                OPUS_LOG_ERROR("opus invalid VFS index access, current_frame_idx; {}, nr of frames: {}", current_frame_idx, m_ofp3.M);
-                return OPUS_ERR;
+
+            for (uint8_t i = 0; i < m_ofp3.M - 1; i++) {
+
+                if (m_ofp3.idx >= (uint32_t)packetLen) {
+                    OPUS_LOG_ERROR("Truncated Opus VBR frame length");
+                    return discardPacket(packetLen);
+                }
+
+                uint32_t frameLen = inbuf[m_ofp3.idx++];
+                // Two-byte length specification:
+                // frameLen = first byte + 4 * second byte
+                if (frameLen >= 252) {
+
+                    if (m_ofp3.idx >= (uint32_t)packetLen) {
+                        OPUS_LOG_ERROR("Truncated two-byte Opus VBR length");
+                        return discardPacket(packetLen);
+                    }
+
+                    frameLen += 4 * inbuf[m_ofp3.idx++];
+                }
+
+                if (frameLen > 1275) {
+                    OPUS_LOG_ERROR("Opus VBR frame too large: {}", frameLen);
+                    return discardPacket(packetLen);
+                }
+
+                m_ofp3.vfs[i] = (uint16_t)frameLen;
             }
-            frame_len = m_ofp3.vfs[current_frame_idx];
-        } else {
-            frame_len = m_ofp3.fs;
-        }
-        // Check if enough bytes are left for the current frame
-        if (*bytesLeft < frame_len) {
-            OPUS_LOG_ERROR("Opus not enough bytes: {}, required: {}", *bytesLeft, frame_len);
-            return OPUS_ERR;
-            *bytesLeft -= (*bytesLeft > 0 ? *bytesLeft : 0); // Consume remaining bytes to reset
-            *frameCount = 0;
-            m_ofp3.firstCall = true;
-            return OPUS_NONE;
         }
 
-        // Decode the frame
-        // The inbuf + current_payload_offset points to the start of the current frame data
+        // --------------------------------------------------------
+        // Calculate header length and remaining data
+        // --------------------------------------------------------
+        const uint32_t headerBytes = m_ofp3.idx;
 
-        ret = opus_decode_frame(inbuf + m_ofp3.idx, outbuf, frame_len, m_ofp3.spf);
-        // OPUS_LOG_INFO("code 3, fs {}, spf {}, ret {}, offs {}", frame_len, m_ofp3.spf, ret, m_ofp3.idx);
-        // Update bytesLeft and frameCount
-        *bytesLeft -= frame_len;
-        *frameCount -= 1;
-        m_opusValidSamples = ret;
-
-        if (*frameCount > 0) {
-            return OPUS_NEXT_FRAME; // More frames in this packet
+        if (headerBytes + (uint32_t)m_ofp3.paddingLength > (uint32_t)packetLen) {
+            OPUS_LOG_ERROR("Opus header and padding exceed packet length");
+            return discardPacket(packetLen);
         }
+
+        const uint32_t compressedBytes = (uint32_t)packetLen - headerBytes - (uint32_t)m_ofp3.paddingLength;
+
+        // --------------------------------------------------------
+        // CBR: All frames are the same length
+        // --------------------------------------------------------
+        if (!m_ofp3.v) {
+
+            if (compressedBytes % m_ofp3.M != 0) {
+                OPUS_LOG_ERROR("Invalid Opus CBR packet: {} bytes for {} frames", compressedBytes, m_ofp3.M);
+                return discardPacket(packetLen);
+            }
+
+            const uint32_t frameLen = compressedBytes / m_ofp3.M;
+
+            if (frameLen > 1275) {
+                OPUS_LOG_ERROR("Opus CBR frame too large: {}", frameLen);
+                return discardPacket(packetLen);
+            }
+
+            m_ofp3.fs = (int16_t)frameLen;
+        }
+
+        // --------------------------------------------------------
+        // VBR: Calculate the length of the last frame
+        // --------------------------------------------------------
+        else {
+
+            uint32_t signaledBytes = 0;
+
+            for (uint8_t i = 0; i < m_ofp3.M - 1; i++) { signaledBytes += m_ofp3.vfs[i]; }
+
+            if (signaledBytes > compressedBytes) {
+                OPUS_LOG_ERROR("Invalid Opus VBR lengths: {} > {}", signaledBytes, compressedBytes);
+                return discardPacket(packetLen);
+            }
+
+            const uint32_t lastFrameLen = compressedBytes - signaledBytes;
+
+            if (lastFrameLen > 1275) {
+                OPUS_LOG_ERROR("Opus last VBR frame too large: {}", lastFrameLen);
+                return discardPacket(packetLen);
+            }
+
+            m_ofp3.vfs[m_ofp3.M - 1] = (uint16_t)lastFrameLen;
+        }
+
+        // --------------------------------------------------------
+        // Header bytes have now been used up.
+        //
+        // idx still contains the offset of the first frame within
+        // the original input buffer.
+        // --------------------------------------------------------
+        *bytesLeft -= (int32_t)headerBytes;
     }
 
-    // After all frames are decoded, account for padding bytes if any remain.
-    // The *bytesLeft at this point should ideally be equal to m_ofp3.paddingLength
-    // because total_header_bytes and frame_len (for all frames) have been subtracted.
-    // If there's a mismatch, it indicates an issue or just consume the rest.
-    *bytesLeft -= m_ofp3.paddingLength; // Consume padding bytes from *bytesLeft for the packet
-    if (*bytesLeft < 0) {
-        OPUS_LOG_WARN("Warning: Negative bytesLeft after consuming padding. Remaining: {}", *bytesLeft);
-        *bytesLeft = 0; // Prevent negative
+    // ------------------------------------------------------------
+    // 2. Decode the current frame
+    // ------------------------------------------------------------
+    if (*frameCount == 0) {
+        OPUS_LOG_ERROR("Opus Code 3 called without pending frames");
+        m_ofp3.firstCall = true;
+        m_ofp3.idx = 0;
+        return OPUS_ERR;
     }
 
-    *frameCount = 0;                      // All frames processed for this packet
-    m_opusValidSamples = samplesPerFrame; // Reset for next packet's first frame
-    m_ofp3.firstCall = true;              // Signal for next packet
-    return OPUS_NONE;                     // Packet finished
+    const uint8_t frameIndex = m_ofp3.M - *frameCount;
+
+    if (frameIndex >= m_ofp3.M) {
+        OPUS_LOG_ERROR("Invalid Opus frame index: {}", frameIndex);
+        return discardPacket(*bytesLeft);
+    }
+
+    const int32_t frameLen = m_ofp3.v ? m_ofp3.vfs[frameIndex] : m_ofp3.fs;
+
+    if (frameLen < 0 || frameLen > *bytesLeft) {
+        OPUS_LOG_ERROR("Invalid Opus frame length: {}, available: {}", frameLen, *bytesLeft);
+        return discardPacket(*bytesLeft);
+    }
+
+    // ------------------------------------------------------------
+    // Input position:
+    //
+    // For the first frame, the header offset must be taken into account.
+    // For subsequent frames, `inbuf` already points to the
+    // beginning of the respective frame.
+    // ------------------------------------------------------------
+    uint8_t* frameData = inbuf + m_ofp3.idx;
+
+    // Offset nur einmal verwenden!
+    m_ofp3.idx = 0;
+
+    // ------------------------------------------------------------
+    // Decode Frame
+    // ------------------------------------------------------------
+    const int32_t ret = opus_decode_frame(frameData, outbuf, frameLen, m_ofp3.spf);
+
+    if (ret < 0) {
+
+        OPUS_LOG_ERROR("Opus Code 3 frame decode failed: {}", ret);
+
+        // Aktuellen und alle noch folgenden Frame-Bytes verwerfen.
+        uint32_t remainingBytes = 0;
+
+        for (uint8_t i = frameIndex; i < m_ofp3.M; i++) { remainingBytes += m_ofp3.v ? m_ofp3.vfs[i] : m_ofp3.fs; }
+
+        remainingBytes += m_ofp3.paddingLength;
+
+        return discardPacket((int32_t)remainingBytes);
+    }
+
+    // ------------------------------------------------------------
+    // Use the current frame
+    // ------------------------------------------------------------
+    *bytesLeft -= frameLen;
+    *frameCount -= 1;
+
+    m_opusValidSamples = ret;
+
+    // ------------------------------------------------------------
+    // Are there any other frames?
+    // ------------------------------------------------------------
+    if (*frameCount > 0) { return OPUS_NEXT_FRAME; }
+
+    // ------------------------------------------------------------
+    // 3. Last frame: Use up the padding
+    // ------------------------------------------------------------
+    if (m_ofp3.paddingLength > *bytesLeft) {
+        OPUS_LOG_ERROR("Not enough bytes for Opus padding: {}, available: {}", m_ofp3.paddingLength, *bytesLeft);
+
+        *frameCount = 0;
+        m_ofp3.firstCall = true;
+        m_ofp3.idx = 0;
+
+        return OPUS_ERR;
+    }
+
+    *bytesLeft -= m_ofp3.paddingLength;
+
+    // ------------------------------------------------------------
+    // Package fully processed
+    // ------------------------------------------------------------
+    *frameCount = 0;
+    m_ofp3.firstCall = true;
+    m_ofp3.idx = 0;
+
+    return OPUS_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::opus_packet_get_samples_per_frame(const uint8_t* data, int32_t Fs) {
@@ -1413,7 +1514,16 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     CRCchecksum += *(inbuf + 23) << 8;
     CRCchecksum += *(inbuf + 22);
     (void)CRCchecksum;
-    uint8_t pageSegments = *(inbuf + 26); // giving the number of segment entries
+
+    if (*bytesLeft < 27) {
+        return OPUS_CONTINUE; // Header not yet complete
+    }
+
+    uint8_t pageSegments = inbuf[26]; // giving the number of segment entries
+
+    if (*bytesLeft < 27 + pageSegments) {
+        return OPUS_CONTINUE; // Segment table is not yet complete
+    }
 
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
@@ -1465,19 +1575,16 @@ int32_t OpusDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
-    int32_t result = -1;                  // seek for str in buffer or in header up to baselen, not nullterninated
-    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
-    for (int32_t i = 0; i < baselen - strlen(str); i++) {
-        result = i;
-        for (int32_t j = 0; j < strlen(str) + exact; j++) {
-            if (*(base + i + j) != *(str + j)) {
-                result = -1;
-                break;
-            }
+    const size_t len = strlen(str);                // seek for str in buffer or in header up to baselen, not nullterninated
+    const size_t required = len + (exact ? 1 : 0); // if exact == true seekstr in buffer must have "\0" at the end
+
+    if (!base || required > static_cast<size_t>(baselen)) return -1;
+    for (int32_t i = 0; i <= baselen - required; i++) {
+        if (memcmp(base + i, str, len) == 0) {
+            if (!exact || base[i + len] == '\0') return i;
         }
-        if (result >= 0) break;
     }
-    return result;
+    return -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::OPUS_specialIndexOf_icase(uint8_t* base, const char* str, int32_t baselen, bool exact) {
