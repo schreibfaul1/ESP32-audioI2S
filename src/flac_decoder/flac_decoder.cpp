@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 22.11.2026
+ * Updated on: 24.11.2026
  *
  * Author: Wolle
  *
@@ -445,7 +445,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
 
-
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -746,7 +745,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
                 m_flacStreamTitle.assign(vb[0].c_get());
                 m_f_flacNewStreamtitle = true;
             }
-           return ret;
+            return ret;
         }
 
         case picture: {
@@ -1333,7 +1332,8 @@ int8_t FlacDecoder::decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sam
         FLAC_LOG_ERROR("Flac preorder too big: {}", predOrder);
         return FLAC_ERR;
     } // Error: preorder > 4"
-    restoreLinearPrediction(ch, 0);
+    //    restoreLinearPrediction(ch, 0);
+    restoreLinearPrediction(ch, 0, sampleDepth);
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1350,7 +1350,7 @@ int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32
     }
     ret = decodeResiduals(lpcOrder, ch, bytesLeft);
     if (ret) return ret;
-    restoreLinearPrediction(ch, shift);
+    restoreLinearPrediction(ch, shift, sampleDepth);
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1422,12 +1422,33 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift) {
+void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, uint8_t sampleDepth) {
 
-    for (int32_t i = coefs.size(); i < m_numOfOutSamples; i++) {
-        int64_t sum = 0;
-        for (int32_t j = 0; j < coefs.size(); j++) { sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j]; }
-        m_samplesBuffer[ch][i] += (sum >> shift);
+    const int32_t  order = (int32_t)coefs.size();
+    const int32_t* c = coefs.data();
+    int64_t*       buf = m_samplesBuffer[ch].get();
+    if (!buf || order <= 0) return;
+
+    // The 64-bit accumulator is only needed if the sum can exceed 32 bit. |sample| < 2^(sampleDepth-1), so
+    // |sum| <= sum(|coef|) * 2^(sampleDepth-1). If that fits into int32 use the much cheaper 32-bit path (Xtensa has no 64-bit multiplier).
+    int64_t sumAbs = 0;
+    for (int32_t j = 0; j < order; j++) { sumAbs += (c[j] < 0) ? -(int64_t)c[j] : (int64_t)c[j]; }
+    const bool fits32 = (sampleDepth >= 1) && (sampleDepth <= 32) && ((sumAbs << (sampleDepth - 1)) <= (int64_t)INT32_MAX);
+
+    if (fits32) {
+        for (int32_t i = order; i < m_numOfOutSamples; i++) {
+            const int64_t* p = buf + i - 1;
+            uint32_t       sum = 0;
+            for (int32_t j = 0; j < order; j++) { sum += (uint32_t)((int32_t)p[-j]) * (uint32_t)c[j]; }
+            buf[i] += (int32_t)sum >> shift;
+        }
+    } else {
+        for (int32_t i = order; i < m_numOfOutSamples; i++) {
+            const int64_t* p = buf + i - 1;
+            int64_t        sum = 0;
+            for (int32_t j = 0; j < order; j++) { sum += p[-j] * c[j]; }
+            buf[i] += (sum >> shift);
+        }
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
