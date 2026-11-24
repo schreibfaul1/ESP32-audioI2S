@@ -845,9 +845,7 @@ err_out:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::parse_OGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // reference https://www.xiph.org/ogg/doc/rfc3533.txt
-    int32_t  ret = 0;
     uint32_t ogg_lengt_total = 0;
-    (void)ret;
     // 8192 is the historical search window. bitReader() calls this with a dummy
     // length of 256 that only measures bytes consumed, so *bytesLeft is not a
     // physical bound on every path. Do not shrink the search to that dummy.

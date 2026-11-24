@@ -32,8 +32,6 @@ bool OpusDecoder::init(size_t outBuffSize) {
     }
     celtdec->init();
 
-    if (!m_opusSegmentTable.alloc_array(256)) return false;
-    ;
     celtdec->clear();
 
     clear();
@@ -59,25 +57,17 @@ void OpusDecoder::reset() {
     rangedec.reset();
     silkdec.reset();
     celtdec.reset();
-    m_opusSegmentTable.reset();
+    m_ogg_items.segment_table.clear();
     m_frameCount = 0;
-    m_opusSegmentLength = 0;
     m_opusValidSamples = 0;
-    m_opusSegmentTableSize = 0;
-    m_opusOggHeaderSize = 0;
-    m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
     m_isValid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::clear() {
-    m_opusSegmentTable.clear();
+    m_ogg_items.segment_table.clear();
     m_frameCount = 0;
-    m_opusSegmentLength = 0;
     m_opusValidSamples = 0;
-    m_opusSegmentTableSize = 0;
-    m_opusOggHeaderSize = 0;
-    m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
     m_opusCurrentFilePos = 0;
     m_comment.reset();
@@ -97,18 +87,16 @@ void OpusDecoder::OPUSsetDefaults() {
     m_f_opusNewMetadataBlockPicture = false;
     m_f_opusStereoFlag = false;
     m_f_isisAudioDecoding = false;
-    m_f_lastPage = false;
+    m_f_oggLastPage = false;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
     m_opusChannels = 0;
     m_frameCount = 0;
     m_mode = 0;
     m_opusSamplerate = 0;
     m_internalSampleRate = 0;
     m_bandWidth = 0;
-    m_opusSegmentLength = 0;
     m_opusValidSamples = 0;
-    m_opusSegmentTableSize = 0;
-    m_opusOggHeaderSize = 0;
-    m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
     m_opusBlockPicPos = 0;
     m_opusCurrentFilePos = 0;
@@ -126,6 +114,20 @@ void OpusDecoder::OPUSsetDefaults() {
     m_opusBlockPicItem.shrink_to_fit();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void OpusDecoder::dropTransientOggState() {
+    // Confirmed parser failure or a new logical stream. Codebooks, floors, and the
+    // DSP object stay: setDefaults() would destroy them, and one bad audio packet
+    // must not force a new header chain. lastSegmentTable keeps its allocation.
+    m_ogg_items.segment_table.clear();
+    m_ogg_items.bytes_consumed_from_other = 0;
+    m_ogg_items.data_ptr = nullptr;
+    m_ogg_items.lastSegmentTableLen = 0;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
+    m_f_oggLastPage = false;
+    m_f_parseOggDone = false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     int32_t  ret = OPUS_NONE;
@@ -134,7 +136,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     int32_t  bytes_consumed = 0;
     int16_t* pcm16 = (int16_t*)outbuf;
 
-    if (m_f_lastPage && m_opusSegmentTableSize == 0) {
+    if (m_f_oggLastPage && m_ogg_items.segment_table.size() == 0) {
         if (OPUS_specialIndexOf(inbuf, "OggS", 5) == 0) { // next round
             m_opusPageNr = 0;
         } else {
@@ -160,19 +162,21 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         goto exit;
     }
 
-    if (!m_opusSegmentTableSize) {
+    if (!m_ogg_items.segment_table.size()) {
         m_f_opusParseOgg = false;
         m_opusCountCode = 0;
         ret = parseOGG(inbuf, bytesLeft);
+        m_f_parseOggDone = true;
         bytes_consumed = bytesLeft_begin - (*bytesLeft);
-        if (ret != OPUS_NONE) goto exit; // error
-        inbuf += m_opusOggHeaderSize;    // no return, fall through
+        if(ret == OPUS_PARSE_OGG_DONE) return ret;
+        else goto exit; // error
     }
 
-    if (m_opusSegmentTableSize > 0) {
-        m_opusSegmentTableRdPtr++;
-        m_opusSegmentTableSize--;
-        segmLen = m_opusSegmentTable[m_opusSegmentTableRdPtr];
+    if (m_ogg_items.segment_table.size()) {
+        segmLen = m_ogg_items.segment_table[0];
+        OPUS_LOG_INFO("segmLen {}", segmLen);
+        m_ogg_items.segment_table.pop_front();
+        if (!m_ogg_items.segment_table.size() && m_f_oggContinuedPage) { OPUS_LOG_WARN("segmLen {}", segmLen);}
     }
 
     if (m_opusPageNr == 0) { // OpusHead
@@ -220,9 +224,6 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     }
 
 exit:
-    if (m_opusSegmentTableSize == 0) {
-        m_opusSegmentTableRdPtr = -1; // back to the parking position
-    }
 
     if (ret >= 0) { m_opusCurrentFilePos += bytesLeft_begin - (*bytesLeft); }
 
@@ -250,7 +251,7 @@ int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
 
     m_f_isisAudioDecoding = true;
-    if(segmentLength == 0) return 0;
+    if (segmentLength == 0) return 0;
 
     if (m_opusAudioDataStart == 0) { m_opusAudioDataStart = m_opusCurrentFilePos; }
     m_endband = 21;
@@ -322,7 +323,7 @@ int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 
     //    celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, m_endband);
     if (m_mode == MODE_CELT_ONLY) {
-         // celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, m_endband);
+        // celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, m_endband);
     } else if (m_mode == MODE_SILK_ONLY) {
         // silk_InitDecoder();
     }
@@ -1333,20 +1334,37 @@ int32_t OpusDecoder::parseOpusHead(uint8_t* inbuf, int32_t nBytes) { // referenc
     return 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
+    // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+    uint32_t ogg_lengt_total = 0;
 
     int32_t idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
-    if (idx != 0) {
-        OPUS_LOG_ERROR("Opus dec async, OGG capture pattern \"OggS\" not found");
+    // special_index_of returns -1 when the capture is absent. Reject that before
+    // any pointer update: inbuf += -1 reads the byte in front of the buffer, and
+    // *bytesLeft -= -1 makes the caller believe one extra byte is available.
+    if (idx < 0) {
+        OPUS_LOG_ERROR("Opus decoder asynchron, 'OggS' not found");
         return OPUS_ERR;
     }
-
-    int16_t segmentTableWrPtr = -1;
+    if (idx != 0) {
+        if (m_f_oggContinuedPage) {
+            OPUS_LOG_ERROR("Opus decoder asynchron, 'OggS' not found");
+            return OPUS_ERR;
+        }
+        inbuf += idx;
+        *bytesLeft -= idx;
+    }
 
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
-    (void)headerType;
+    // A new BOS drops the previous page's packet assembly before any of its
+    // segments are queued. A continued page of the same stream is not BOS and
+    // must keep lastSegmentTableLen for the real cross-page packet.
+    const bool continuedPage = headerType & 0x01; // set: packet continued from the previous page
+    const bool firstPage = headerType & 0x02;     // set: first page of a logical bitstream (bos)
+    const bool lastPage = headerType & 0x04;      // set: last page of a logical bitstream (eos)
+    if (firstPage) { dropTransientOggState(); }
     uint64_t granulePosition = (uint64_t)*(inbuf + 13) << 56; // granule_position: an 8 Byte field containing -
     granulePosition += (uint64_t)*(inbuf + 12) << 48;         // position information. For an audio stream, it MAY
     granulePosition += (uint64_t)*(inbuf + 11) << 40;         // contain the total number of PCM samples encoded
@@ -1375,10 +1393,8 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
 
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
-    m_opusSegmentLength = 0;
-    segmentTableWrPtr = -1;
 
-    m_f_packetContinuesAfterPage = false;
+    ogg_lengt_total = 27 + pageSegments;
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -1386,32 +1402,27 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
             if (i == pageSegments) break;
             n += *(inbuf + 27 + i);
         }
-        segmentTableWrPtr++;
-        m_opusSegmentTable[segmentTableWrPtr] = n;
-        m_opusSegmentLength += n;
+        m_ogg_items.segment_table.push_back(n);
+        ogg_lengt_total += n;
     }
-
-    // The last lacing value determines whether the last packet continues
-    if (pageSegments > 0) { m_f_packetContinuesAfterPage = (*(inbuf + 27 + pageSegments - 1) == 255); }
-
-    m_opusSegmentTableSize = segmentTableWrPtr + 1;
-    m_opusCompressionRatio = (float)(960 * 2 * pageSegments) / m_opusSegmentLength; // const 960 validBytes out
-
-    m_f_continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    m_f_firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
-    m_f_lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
-
-    if (m_f_firstPage) { m_opusPageNr = 0; }
-
-    OPUS_LOG_DEBUG("firstPage {}, continuedPage {}, packetContinuesAfterPage {}, lastPage {}", m_f_firstPage, m_f_continuedPage, m_f_packetContinuesAfterPage, m_f_lastPage);
-//    if (m_f_packetContinuesAfterPage)OPUS_LOG_WARN("packet continues after page"); // todo
+    m_opusCompressionRatio = (float)(960 * 2 * pageSegments) / ogg_lengt_total; // const 960 validBytes out
 
     uint16_t headerSize = pageSegments + 27;
-    *bytesLeft -= headerSize;
-    //   m_opusCurrentFilePos += headerSize;
-    m_opusOggHeaderSize = headerSize;
 
-    return OPUS_NONE;
+    if (firstPage || continuedPage || lastPage) {
+        // OPUS_LOG_INFO("firstPage {}  continuedPage {}  lastPage {}", firstPage, continuedPage, lastPage);
+    }
+
+    *bytesLeft -= headerSize;
+    inbuf += headerSize;
+
+    m_f_oggFirstPage = firstPage;
+    m_f_oggContinuedPage = continuedPage;
+    m_f_oggLastPage = lastPage;
+
+    if (firstPage) { m_opusPageNr = 0; }
+
+    return OPUS_PARSE_OGG_DONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
