@@ -50,6 +50,12 @@ bool OpusDecoder::init(size_t outBuffSize) {
     silkdec->silk_InitDecoder();
     m_outBuffSize = outBuffSize;
     m_isValid = true;
+    m_continued.filled = 0;
+    m_continued.buffer.alloc(UINT16_MAX + 1, "m_continued_buffer");
+    if(!m_continued.buffer.valid()){
+        OPUS_LOG_ERROR("m_continued_buffer oom");
+        return false;
+    }
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -90,6 +96,7 @@ void OpusDecoder::OPUSsetDefaults() {
     m_f_oggLastPage = false;
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
+    m_f_oggContinuedPacket = false;
     m_opusChannels = 0;
     m_frameCount = 0;
     m_mode = 0;
@@ -124,6 +131,7 @@ void OpusDecoder::dropTransientOggState() {
     m_ogg_items.lastSegmentTableLen = 0;
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
+    m_f_oggContinuedPacket = false;
     m_f_oggLastPage = false;
     m_f_parseOggDone = false;
 }
@@ -168,15 +176,31 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         ret = parseOGG(inbuf, bytesLeft);
         m_f_parseOggDone = true;
         bytes_consumed = bytesLeft_begin - (*bytesLeft);
-        if(ret == OPUS_PARSE_OGG_DONE) return ret;
-        else goto exit; // error
+        if (ret == OPUS_PARSE_OGG_DONE)
+            return ret;
+        else
+            goto exit; // error
     }
 
     if (m_ogg_items.segment_table.size()) {
         segmLen = m_ogg_items.segment_table[0];
-        OPUS_LOG_INFO("segmLen {}", segmLen);
         m_ogg_items.segment_table.pop_front();
-        if (!m_ogg_items.segment_table.size() && m_f_oggContinuedPage) { OPUS_LOG_WARN("segmLen {}", segmLen);}
+        // OPUS_LOG_INFO("segmLen {}", segmLen);
+        if( m_continued.filled && m_f_oggContinuedPage){
+            memcpy(m_continued.buffer.get() + m_continued.filled, inbuf, segmLen);
+            *bytesLeft += m_continued.filled;
+            segmLen += m_continued.filled;
+            m_continued.filled = 0;
+            inbuf = m_continued.buffer.get();
+            OPUS_LOG_WARN("segmLen {}", segmLen);
+        }
+        if (!m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
+            memcpy(m_continued.buffer.get(), inbuf, segmLen);
+            m_continued.filled = segmLen;
+            *bytesLeft -= segmLen;
+            OPUS_LOG_WARN("segmLen {}", segmLen);
+            return OPUS_CONTINUE;
+        }
     }
 
     if (m_opusPageNr == 0) { // OpusHead
@@ -251,7 +275,7 @@ int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_
 int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
 
     m_f_isisAudioDecoding = true;
-    if (segmentLength == 0) return 0;
+    if (segmentLength == 0 && m_frameCount == 0) return 0;
 
     if (m_opusAudioDataStart == 0) { m_opusAudioDataStart = m_opusCurrentFilePos; }
     m_endband = 21;
@@ -914,7 +938,7 @@ int8_t OpusDecoder::opus_FramePacking_Code3(uint8_t* inbuf, int32_t* bytesLeft, 
         m_opusValidSamples = ret;
 
         if (*frameCount > 0) {
-            return OPUS_CONTINUE; // More frames in this packet
+            return OPUS_NEXT_FRAME; // More frames in this packet
         }
     }
 
@@ -1405,6 +1429,8 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
         m_ogg_items.segment_table.push_back(n);
         ogg_lengt_total += n;
     }
+    m_f_oggContinuedPacket = (pageSegments > 0 && inbuf[27 + pageSegments - 1] == 255);
+
     m_opusCompressionRatio = (float)(960 * 2 * pageSegments) / ogg_lengt_total; // const 960 validBytes out
 
     uint16_t headerSize = pageSegments + 27;
