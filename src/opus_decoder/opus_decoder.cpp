@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 24.11.2026
+ *  Updated on: 25.11.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -200,7 +200,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
             m_continued.filled = 0;
             inbuf = m_continued.buffer.get();
         }
-        if (!m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
+        if (m_opusPageNr == 3 && !m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
             memcpy(m_continued.buffer.get(), inbuf, segmLen);
             m_continued.filled = segmLen;
             *bytesLeft -= segmLen;
@@ -1483,7 +1483,7 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
-    
+
     // A new BOS drops the previous page's packet assembly before any of its
     // segments are queued. A continued page of the same stream is not BOS and
     // must keep lastSegmentTableLen for the real cross-page packet.
