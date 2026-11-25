@@ -850,9 +850,9 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // 1. Process pending FLAC audio data
     // -------------------------------------------------------
 
-    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) { return decodeContinuedBuffer(outbuf); }
+    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) { return decodeContinuedBuffer(outbuf); } // audio segment with OggS in between
 
-    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); }
+    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); } // regular audio
 
     if (m_nBytes < 0) {
         FLAC_LOG_ERROR("Flac decoder asynchronous");
@@ -860,9 +860,32 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     }
 
     // -------------------------------------------------------
-    // 2. Get next OGG segment
+    // Check end of OGG stream
     // -------------------------------------------------------
+
+    if (m_f_oggLastPage && m_ogg_items.segment_table.empty()) {
+        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) {
+            m_flacPageNr = 0;
+        } else {
+            return FLAC_END;
+        }
+    }
+
+    // -------------------------------------------------------
+    // 3. Get next OGG page if necessary
+    // -------------------------------------------------------
+
     if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
+
+    // -------------------------------------------------------
+    // 4. Get next OGG segment
+    // -------------------------------------------------------
+
+
+
+
+
+
 
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
