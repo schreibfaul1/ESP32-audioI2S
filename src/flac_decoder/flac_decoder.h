@@ -170,9 +170,9 @@ class FlacDecoder : public Decoder {
 
     struct continued {
         ps_ptr<uint8_t> buffer;
-        int32_t        filled = 0;
-        int32_t        consumed = 0;
-        bool            need_next_segment = false;
+        int32_t         remaining = 0;
+        int32_t         readOffset = 0;
+        bool            waitingForContinuation = false;
     } m_continued;
 
     typedef struct _ogg_items {
@@ -253,6 +253,7 @@ class FlacDecoder : public Decoder {
     void     setDefaults();
     void     dropTransientOggState();
     void     decoderReset();
+    int32_t  decodeContinuedBuffer(int32_t* outbuf);
     int32_t  decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);

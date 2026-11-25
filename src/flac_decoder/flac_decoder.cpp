@@ -803,37 +803,37 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::decodeContinuedBuffer(int32_t* outbuf) {
 
+    const int32_t available = m_continued.remaining;
+    int32_t       remaining = available;
+
+    const int32_t ret = decodeNative(m_continued.buffer.get() + m_continued.readOffset, &remaining, outbuf);
+
+    const int32_t consumed = available - remaining;
+
+    m_flacCurrentFilePos += consumed;
+
+    m_continued.remaining -= consumed;
+    m_continued.readOffset += consumed;
+
+    if (m_continued.remaining < 0) { m_continued.remaining = 0; }
+
+    FLAC_LOG_INFO("filled {}, consumed {}", m_continued.remaining, consumed);
+
+    return ret;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     int32_t ret = FLAC_NONE;
-
-    if (m_f_oggLastPage && m_ogg_items.segment_table.size() == 0) {
-        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) { // next round
-            m_flacPageNr = 0;
-        } else {
-            return FLAC_END;
-        }
-    }
 
     // -------------------------------------------------------
     // 1. Process pending FLAC audio data
     // -------------------------------------------------------
 
-    if (!m_continued.need_next_segment && m_continued.filled > 0) {
-
-        int32_t       nBytes = m_continued.filled;
-        const int32_t ret = decodeNative(m_continued.buffer.get() + m_continued.consumed, &nBytes, outbuf);
-        const int32_t consumed = m_continued.filled - nBytes;
-
-        m_flacCurrentFilePos += consumed;
-        m_continued.filled -= consumed;
-        m_continued.consumed += consumed;
-
-        FLAC_LOG_INFO("filled {}, consumed {}", m_continued.filled, consumed);
-        if (m_continued.filled < 0) m_continued.filled = 0;
-
-        return ret;
+    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) {
+        return decodeContinuedBuffer(outbuf);
     }
 
     if (m_nBytes > 0) {
@@ -866,29 +866,29 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
 
-    if (m_continued.need_next_segment && m_f_oggContinuedPage) {
-        m_continued.need_next_segment = false;
-        if (m_continued.filled + m_segmLength > UINT16_MAX + 1) {
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
+        m_continued.waitingForContinuation = false;
+        if (m_continued.remaining + m_segmLength > UINT16_MAX + 1) {
             FLAC_LOG_ERROR("Continued packet exceeds buffer size");
-            m_continued.filled = 0;
+            m_continued.remaining = 0;
             return FLAC_ERR;
         }
-        memcpy(m_continued.buffer.get() + m_continued.filled, inbuf, m_segmLength);
+        memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, m_segmLength);
         *bytesLeft -= m_segmLength;
-        m_continued.filled += m_segmLength;
+        m_continued.remaining += m_segmLength;
 
-        FLAC_LOG_INFO("filled {}", m_continued.filled);
-        m_continued.consumed = 0;
+        FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
+        m_continued.readOffset = 0;
         ret = FLAC_CONTINUE;
         return ret;
     }
 
     if (m_flacPageNr == FLAC_DECODE && !m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
         memcpy(m_continued.buffer.get(), inbuf, m_segmLength);
-        m_continued.filled = m_segmLength;
+        m_continued.remaining = m_segmLength;
         *bytesLeft -= m_segmLength;
-        m_continued.need_next_segment = true;
-        FLAC_LOG_INFO("filled {}", m_continued.filled);
+        m_continued.waitingForContinuation = true;
+        FLAC_LOG_INFO("buffer filled 1 {}", m_continued.remaining);
         ret = FLAC_CONTINUE;
         return ret;
     }
