@@ -1483,6 +1483,7 @@ int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     uint8_t version = *(inbuf + 4);
     (void)version;
     uint8_t headerType = *(inbuf + 5);
+    
     // A new BOS drops the previous page's packet assembly before any of its
     // segments are queued. A continued page of the same stream is not BOS and
     // must keep lastSegmentTableLen for the real cross-page packet.

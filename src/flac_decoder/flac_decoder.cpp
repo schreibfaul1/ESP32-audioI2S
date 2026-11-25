@@ -43,6 +43,11 @@ bool FlacDecoder::init(size_t outBuffSize) {
         m_valid = false;
         return false;
     }
+    m_continued.buffer.alloc(UINT16_MAX + 1, "m_continued_buffer");
+    if (!m_continued.buffer.valid()) {
+        FLAC_LOG_ERROR("m_continued_buffer oom");
+        return false;
+    }
 
     clear();
     setDefaults();
@@ -109,6 +114,10 @@ void FlacDecoder::setDefaults() {
     m_flacStatus = DECODE_FRAME;
     m_flacCompressionRatio = 0;
     m_flacBitBufferLen = 0;
+    m_f_oggFirstPage = false;
+    m_f_oggContinuedPage = false;
+    m_f_oggLastPage = false;
+    m_f_oggContinuedPacket = false;
     m_flac_pageSegments = 0;
     m_f_flacNewStreamtitle = false;
     m_f_flacFirstCall = true;
@@ -130,6 +139,7 @@ void FlacDecoder::dropTransientOggState() {
     m_ogg_items.lastSegmentTableLen = 0;
     m_f_oggFirstPage = false;
     m_f_oggContinuedPage = false;
+    m_f_oggContinuedPacket = false;
     m_f_oggLastPage = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -454,6 +464,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
         }
         m_ogg_items.segment_table.push_back(n);
     }
+    m_f_oggContinuedPacket = (pageSegments > 0 && inbuf[27 + pageSegments - 1] == 255);
 
     // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
 

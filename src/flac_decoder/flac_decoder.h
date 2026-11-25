@@ -54,6 +54,7 @@ class FlacDecoder : public Decoder {
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
         FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_CONTINUE = 115,
         FLAC_OGG_PAGEHEADER = +3,
         FLAC_OGG_SYNC_FOUND = +2,
         GIVE_NEXT_LOOP = +1,
@@ -166,8 +167,14 @@ class FlacDecoder : public Decoder {
         uint32_t bitrate;          // bitrate
     } FLACFrameHeader_t;
 
+    struct continued {
+        ps_ptr<uint8_t> buffer;
+        uint32_t        filled = 0;
+    } m_continued;
+
     typedef struct _ogg_items {
         std::deque<uint32_t> segment_table{};
+        std::deque<bool>     segmentContinues{};
         uint8_t*             data_ptr{};
         uint32_t             lastSegmentTableLen{};
         ps_ptr<uint8_t>      lastSegmentTable{};
@@ -188,36 +195,38 @@ class FlacDecoder : public Decoder {
     ps_ptr<FLACFrameHeader_t>   FLACFrameHeader;
     ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
 
-  //  std::vector<uint32_t> m_flacSegmTableVec;
+    //  std::vector<uint32_t> m_flacSegmTableVec;
     std::vector<int32_t>  coefs;
     std::vector<uint32_t> m_flacBlockPicItem;
 
-    size_t          m_outBuffSize = 0;
-    uint64_t        m_flac_bitBuffer = 0;
-    uint64_t        m_granulePosition = 0;
-    uint32_t        m_flacBitrate = 0;
-    uint32_t        m_flacBlockPicLenUntilFrameEnd = 0;
-    uint32_t        m_flacCurrentFilePos = 0;
-    uint32_t        m_flacBlockPicPos = 0;
-    uint32_t        m_flacBlockPicLen = 0;
-    uint32_t        m_segmLength = 0;
-    uint32_t        m_flacAudioDataStart = 0;
-    int32_t         m_flacRemainBlockPicLen = 0;
-    uint16_t        m_numOfOutSamples = 0;
-    uint16_t        m_flacValidSamples = 0;
-    uint16_t        m_rIndex = 0;
-    uint16_t        m_offset = 0;
-    uint8_t         m_flacStatus = 0;
-    uint8_t*        m_flacInptr;
-    float           m_flacCompressionRatio = 0;
-    uint8_t         m_flacBitBufferLen = 0;
-    uint8_t         m_flac_pageSegments = 0;
-    ps_ptr<char>    m_flacStreamTitle = {};
-    ps_ptr<char>    m_flacVendorString = {};
-   // bool            m_f_flacParseOgg = false;
+    size_t       m_outBuffSize = 0;
+    uint64_t     m_flac_bitBuffer = 0;
+    uint64_t     m_granulePosition = 0;
+    uint32_t     m_flacBitrate = 0;
+    uint32_t     m_flacBlockPicLenUntilFrameEnd = 0;
+    uint32_t     m_flacCurrentFilePos = 0;
+    uint32_t     m_flacBlockPicPos = 0;
+    uint32_t     m_flacBlockPicLen = 0;
+    uint32_t     m_segmLength = 0;
+    uint32_t     m_flacAudioDataStart = 0;
+    int32_t      m_flacRemainBlockPicLen = 0;
+    uint16_t     m_numOfOutSamples = 0;
+    uint16_t     m_flacValidSamples = 0;
+    uint16_t     m_rIndex = 0;
+    uint16_t     m_offset = 0;
+    uint8_t      m_flacStatus = 0;
+    uint8_t*     m_flacInptr;
+    float        m_flacCompressionRatio = 0;
+    uint8_t      m_flacBitBufferLen = 0;
+    uint8_t      m_flac_pageSegments = 0;
+    ps_ptr<char> m_flacStreamTitle = {};
+    ps_ptr<char> m_flacVendorString = {};
+    // bool            m_f_flacParseOgg = false;
     bool            m_f_bitReaderError = false;
     bool            m_f_oggFirstPage = false;
-    bool            m_f_oggContinuedPage = false;
+    bool            m_f_oggContinuedPacket = false; //      lastSegment       OggS...     firstSegment
+    bool            m_f_oggContinuedPage = false;   // m_f_oggContinuedPacket          m_f_oggContinuedPage
+    bool            m_f_decodeFromContinuedBuffer = false;
     bool            m_f_oggLastPage = false;
     bool            m_f_flacNewStreamtitle = false;
     bool            m_f_flacFirstCall = true;

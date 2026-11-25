@@ -5532,6 +5532,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 
     if (m_codec == CODEC_FLAC) {
         if (res == FlacDecoder::FLAC_PARSE_OGG_DONE) return bytesDecoded;
+        if (res == FlacDecoder::FLAC_CONTINUE) return bytesDecoded;
         if (res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_OPUS) {
@@ -5543,6 +5544,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
     if (m_codec == CODEC_VORBIS) {
         if (res == VorbisDecoder::VORBIS_PARSE_OGG_DONE) return bytesDecoded;
         if (res == VorbisDecoder::VORBIS_COMMENT_DONE) return bytesDecoded;
+        if (res == VorbisDecoder::VORBIS_CONTINUE) return bytesDecoded;
         if (res == VorbisDecoder::VORBIS_COMMENT_NEED_MORE) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_MP3) {
