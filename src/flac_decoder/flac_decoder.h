@@ -254,6 +254,7 @@ class FlacDecoder : public Decoder {
     void     dropTransientOggState();
     void     decoderReset();
     int32_t  decodeContinuedBuffer(int32_t* outbuf);
+    int32_t  decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int32_t  decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);

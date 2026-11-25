@@ -824,6 +824,24 @@ int32_t FlacDecoder::decodeContinuedBuffer(int32_t* outbuf) {
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    const int32_t remaining = m_nBytes;
+
+    if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
+
+    const int32_t ret = decodeNative(inbuf, &m_nBytes, outbuf);
+    const int32_t consumed = remaining - m_nBytes;
+
+    m_flacCurrentFilePos += consumed;
+    *bytesLeft -= consumed;
+
+    // FLAC frame extends beyond the current OGG segment.
+    if (m_nBytes < 0) { m_nBytes = 0; }
+
+    return ret;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     int32_t ret = FLAC_NONE;
@@ -832,26 +850,9 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // 1. Process pending FLAC audio data
     // -------------------------------------------------------
 
-    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) {
-        return decodeContinuedBuffer(outbuf);
-    }
+    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) { return decodeContinuedBuffer(outbuf); }
 
-    if (m_nBytes > 0) {
-        const int32_t remaining = m_nBytes;
-
-        if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-
-        const int32_t ret = decodeNative(inbuf, &m_nBytes, outbuf);
-        const int32_t consumed = remaining - m_nBytes;
-
-        m_flacCurrentFilePos += consumed;
-        *bytesLeft -= consumed;
-
-        // FLAC frame extends beyond the current OGG segment
-        if (m_nBytes < 0) { m_nBytes = 0; }
-
-        return ret;
-    }
+    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); }
 
     if (m_nBytes < 0) {
         FLAC_LOG_ERROR("Flac decoder asynchronous");
