@@ -161,22 +161,8 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
         m_rIndex++;
         (*bytesLeft)--;
         if (*bytesLeft == -1) {
-            if (m_isOGG) {
-                m_rIndex--;
-                (*bytesLeft)++;
-                // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
-                if (FLAC_specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
-                    parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
-                    m_segmLength = m_ogg_items.segment_table.front();         // read the front table
-                    m_ogg_items.segment_table.pop_front();                    // and remove them
-                    m_rIndex += abs(*bytesLeft);                              // increase m_rIndex
-                    continue;                                                 // go ahead
-                } else {
-                    FLAC_LOG_ERROR("error in bitreader");
-                    m_f_bitReaderError = true;
-                    break;
-                }
-            }
+            FLAC_LOG_ERROR("bitreader is negative");
+            break;
         }
         m_flac_bitBuffer = (m_flac_bitBuffer << 8) | temp;
         m_flacBitBufferLen += 8;
@@ -821,9 +807,6 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     int32_t ret = FLAC_NONE;
-    int32_t  segmLen = 0;
-    int32_t  bytesLeft_begin = *bytesLeft;
-    int32_t  bytes_consumed = 0;
 
     if (m_f_oggLastPage && m_ogg_items.segment_table.size() == 0) {
         if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) { // next round
@@ -836,6 +819,23 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // -------------------------------------------------------
     // 1. Process pending FLAC audio data
     // -------------------------------------------------------
+
+    if (!m_continued.need_next_segment && m_continued.filled > 0) {
+
+        int32_t       nBytes = m_continued.filled;
+        const int32_t ret = decodeNative(m_continued.buffer.get() + m_continued.consumed, &nBytes, outbuf);
+        const int32_t consumed = m_continued.filled - nBytes;
+
+        m_flacCurrentFilePos += consumed;
+        m_continued.filled -= consumed;
+        m_continued.consumed += consumed;
+
+        FLAC_LOG_INFO("filled {}, consumed {}", m_continued.filled, consumed);
+        if (m_continued.filled < 0) m_continued.filled = 0;
+
+        return ret;
+    }
+
     if (m_nBytes > 0) {
         const int32_t remaining = m_nBytes;
 
@@ -865,6 +865,33 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
 
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
+
+    if (m_continued.need_next_segment && m_f_oggContinuedPage) {
+        m_continued.need_next_segment = false;
+        if (m_continued.filled + m_segmLength > UINT16_MAX + 1) {
+            FLAC_LOG_ERROR("Continued packet exceeds buffer size");
+            m_continued.filled = 0;
+            return FLAC_ERR;
+        }
+        memcpy(m_continued.buffer.get() + m_continued.filled, inbuf, m_segmLength);
+        *bytesLeft -= m_segmLength;
+        m_continued.filled += m_segmLength;
+
+        FLAC_LOG_INFO("filled {}", m_continued.filled);
+        m_continued.consumed = 0;
+        ret = FLAC_CONTINUE;
+        return ret;
+    }
+
+    if (m_flacPageNr == FLAC_DECODE && !m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
+        memcpy(m_continued.buffer.get(), inbuf, m_segmLength);
+        m_continued.filled = m_segmLength;
+        *bytesLeft -= m_segmLength;
+        m_continued.need_next_segment = true;
+        FLAC_LOG_INFO("filled {}", m_continued.filled);
+        ret = FLAC_CONTINUE;
+        return ret;
+    }
 
     // -------------------------------------------------------
     // 3. Check for pending cover picture
@@ -929,6 +956,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // -------------------------------------------------------
     // 5. Update input position
     // -------------------------------------------------------
+
     *bytesLeft -= m_segmLength;
     m_flacCurrentFilePos += m_segmLength;
 

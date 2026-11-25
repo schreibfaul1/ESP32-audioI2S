@@ -170,7 +170,9 @@ class FlacDecoder : public Decoder {
 
     struct continued {
         ps_ptr<uint8_t> buffer;
-        uint32_t        filled = 0;
+        int32_t        filled = 0;
+        int32_t        consumed = 0;
+        bool            need_next_segment = false;
     } m_continued;
 
     typedef struct _ogg_items {
