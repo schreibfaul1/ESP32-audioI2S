@@ -843,21 +843,28 @@ int32_t FlacDecoder::decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, in
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::appendContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
-    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
-        m_continued.waitingForContinuation = false;
-        if (m_continued.remaining + segmentLength > UINT16_MAX + 1) {
-            FLAC_LOG_ERROR("Continued packet exceeds buffer size");
-            m_continued.remaining = 0;
-            return FLAC_ERR;
-        }
-        memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, segmentLength);
-        *bytesLeft -= segmentLength;
-        m_continued.remaining += segmentLength;
-
-        FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
-        m_continued.readOffset = 0;
-        return FLAC_CONTINUE;
+    m_continued.waitingForContinuation = false;
+    if (m_continued.remaining + segmentLength > UINT16_MAX + 1) {
+        FLAC_LOG_ERROR("Continued packet exceeds buffer size");
+        m_continued.remaining = 0;
+        return FLAC_ERR;
     }
+    memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, segmentLength);
+    *bytesLeft -= segmentLength;
+    m_continued.remaining += segmentLength;
+
+    FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
+    m_continued.readOffset = 0;
+    return FLAC_CONTINUE;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::startContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+    memcpy(m_continued.buffer.get(), inbuf, segmentLength);
+    m_continued.remaining = segmentLength;
+    *bytesLeft -= segmentLength;
+    m_continued.waitingForContinuation = true;
+    FLAC_LOG_INFO("buffer filled 1 {}", m_continued.remaining);
+    return FLAC_CONTINUE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
@@ -908,18 +915,12 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // 5. Handle continued OGG packets
     // -------------------------------------------------------
 
-    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) { //
         return appendContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
     }
 
-    if (m_flacPageNr == FLAC_DECODE && !m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
-        memcpy(m_continued.buffer.get(), inbuf, m_segmLength);
-        m_continued.remaining = m_segmLength;
-        *bytesLeft -= m_segmLength;
-        m_continued.waitingForContinuation = true;
-        FLAC_LOG_INFO("buffer filled 1 {}", m_continued.remaining);
-        ret = FLAC_CONTINUE;
-        return ret;
+    if (m_flacPageNr == FLAC_DECODE && m_ogg_items.segment_table.empty() && m_f_oggContinuedPacket) { //
+        return startContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
     }
 
     // -------------------------------------------------------
