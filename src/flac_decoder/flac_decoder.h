@@ -54,6 +54,7 @@ class FlacDecoder : public Decoder {
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
         FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_END = 110,
         FLAC_CONTINUE = 115,
         FLAC_OGG_PAGEHEADER = +3,
         FLAC_OGG_SYNC_FOUND = +2,

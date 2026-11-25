@@ -820,7 +820,18 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int32_t ret = 0;
+    int32_t ret = FLAC_NONE;
+    int32_t  segmLen = 0;
+    int32_t  bytesLeft_begin = *bytesLeft;
+    int32_t  bytes_consumed = 0;
+
+    if (m_f_oggLastPage && m_ogg_items.segment_table.size() == 0) {
+        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) { // next round
+            m_flacPageNr = 0;
+        } else {
+            return FLAC_END;
+        }
+    }
 
     // -------------------------------------------------------
     // 1. Process pending FLAC audio data
