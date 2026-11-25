@@ -842,6 +842,24 @@ int32_t FlacDecoder::decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, in
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::appendContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
+        m_continued.waitingForContinuation = false;
+        if (m_continued.remaining + segmentLength > UINT16_MAX + 1) {
+            FLAC_LOG_ERROR("Continued packet exceeds buffer size");
+            m_continued.remaining = 0;
+            return FLAC_ERR;
+        }
+        memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, segmentLength);
+        *bytesLeft -= segmentLength;
+        m_continued.remaining += segmentLength;
+
+        FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
+        m_continued.readOffset = 0;
+        return FLAC_CONTINUE;
+    }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     int32_t ret = FLAC_NONE;
@@ -875,36 +893,23 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     // 3. Get next OGG page if necessary
     // -------------------------------------------------------
 
-    if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
+    if (m_ogg_items.segment_table.empty()) { //
+        return parseOGG(inbuf, bytesLeft);
+    }
 
     // -------------------------------------------------------
     // 4. Get next OGG segment
     // -------------------------------------------------------
 
-
-
-
-
-
-
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
 
-    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
-        m_continued.waitingForContinuation = false;
-        if (m_continued.remaining + m_segmLength > UINT16_MAX + 1) {
-            FLAC_LOG_ERROR("Continued packet exceeds buffer size");
-            m_continued.remaining = 0;
-            return FLAC_ERR;
-        }
-        memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, m_segmLength);
-        *bytesLeft -= m_segmLength;
-        m_continued.remaining += m_segmLength;
+    // -------------------------------------------------------
+    // 5. Handle continued OGG packets
+    // -------------------------------------------------------
 
-        FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
-        m_continued.readOffset = 0;
-        ret = FLAC_CONTINUE;
-        return ret;
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
+        return appendContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
     }
 
     if (m_flacPageNr == FLAC_DECODE && !m_ogg_items.segment_table.size() && m_f_oggContinuedPacket) {
@@ -918,12 +923,12 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     }
 
     // -------------------------------------------------------
-    // 3. Check for pending cover picture
+    // 6. Check for pending cover picture
     // -------------------------------------------------------
     if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture && !m_flacBlockPicItem.empty()) { m_f_flacNewMetadataBlockPicture = true; }
 
     // -------------------------------------------------------
-    // 4. Process current FLAC packet
+    // 7. Process current FLAC packet
     // -------------------------------------------------------
     switch (m_flacPageNr) {
 
@@ -978,7 +983,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
     }
 
     // -------------------------------------------------------
-    // 5. Update input position
+    // 8. Update input position
     // -------------------------------------------------------
 
     *bytesLeft -= m_segmLength;
