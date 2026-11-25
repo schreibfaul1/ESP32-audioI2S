@@ -262,7 +262,7 @@ class FlacDecoder : public Decoder {
     int8_t   decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDepth, uint8_t ch, int32_t* bytesLeft);
     int8_t   decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft);
     void     restoreLinearPrediction(uint8_t ch, uint8_t shift, uint8_t sampleDepth);
-    int32_t  specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    int32_t  FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
     inline int32_t readSignedInt(int32_t nBits, int32_t* bytesLeft) {
         int32_t temp = readUint(nBits, bytesLeft) << (32 - nBits);

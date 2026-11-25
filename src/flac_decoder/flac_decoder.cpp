@@ -165,7 +165,7 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
                 m_rIndex--;
                 (*bytesLeft)++;
                 // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
-                if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
+                if (FLAC_specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
                     parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
                     m_segmLength = m_ogg_items.segment_table.front();         // read the front table
                     m_ogg_items.segment_table.pop_front();                    // and remove them
@@ -289,7 +289,7 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     };
 
     // OggS Wrapper Check
-    int32_t i = specialIndexOf(buf, "OggS", nBytes);
+    int32_t i = FLAC_specialIndexOf(buf, "OggS", nBytes);
     if (i == 0) {
         m_f_bitReaderError = false;
         return 0;
@@ -366,7 +366,7 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 boolean FlacDecoder::FLACFindMagicWord(unsigned char* buf, int32_t nBytes) {
-    int32_t idx = specialIndexOf(buf, "fLaC", nBytes);
+    int32_t idx = FLAC_specialIndexOf(buf, "fLaC", nBytes);
     if (idx > 0) { // Metadatablock follows
         idx += 4;
         boolean  lmdbf = ((buf[idx + 1] & 0x80) == 0x80);                          // Last-metadata-block flag
@@ -399,7 +399,7 @@ const char* FlacDecoder::whoIsIt() {
 int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    int32_t idx = specialIndexOf(inbuf, "OggS", 6);
+    int32_t idx = FLAC_specialIndexOf(inbuf, "OggS", 6);
 
     if (idx < 0) {
         FLAC_LOG_ERROR("Flac decoder asyncron, \"OggS\" not found");
@@ -498,7 +498,7 @@ std::vector<uint32_t> FlacDecoder::getMetadataBlockPicture() {
 int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4.2.2. Identification header   https://xiph.org/flac/ogg_mapping.html
 
     int32_t ret = 0;
-    int32_t idx = specialIndexOf(inbuf, "fLaC", nBytes);
+    int32_t idx = FLAC_specialIndexOf(inbuf, "fLaC", nBytes);
 
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
@@ -537,7 +537,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
 
     auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
         if (commentLength < valueOffset) return false;
-        return (specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
+        return (FLAC_specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (FLAC_specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
     };
 
     auto assignVorbisValue = [](ps_ptr<char>& dst, const uint8_t* comment, uint32_t commentLength, uint32_t valueOffset) -> bool {
@@ -801,7 +801,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     if (m_f_flacFirstCall) { // determine if ogg or flag
         m_f_flacFirstCall = false;
         m_nBytes = 0;
-        if (specialIndexOf(inbuf, "OggS", 5) == 0) {
+        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) {
             m_isOGG = true;
             m_flacPageNr = FLAC_IDENTIFICATION_HEADER;
             m_f_first_flac_frame = true;
@@ -1039,7 +1039,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
 
-    if (specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
+    if (FLAC_specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
         decoderReset();
         return FLAC_OGG_SYNC_FOUND;
     }
@@ -1463,7 +1463,7 @@ void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, uint8_t sam
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
+int32_t FlacDecoder::FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
     if (!base || !str || baselen < 0) return -1; // seek for str in buffer or in header up to baselen, not nullterminated
 
     const size_t haystackLen = (size_t)baselen;
