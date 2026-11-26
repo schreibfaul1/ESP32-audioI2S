@@ -1,11 +1,14 @@
 #pragma once
-
 #include <esp_crt_bundle.h>
 #include <esp_tls.h>
-#include <lwip/netdb.h>
-#include <lwip/sockets.h>
 #include <mbedtls/ssl.h>
+#include <lwip/sockets.h>
+#include <esp_timer.h>
+#include <lwip/netdb.h>
 #include <stdio.h>
+
+// lwIP exposes INADDR_NONE as a macro, which collides with Arduino's IPAddress constant.
+#undef INADDR_NONE
 
 namespace {
 constexpr int        SOCKET_INVALID = -1;       ///< parameter for "no descriptor open"

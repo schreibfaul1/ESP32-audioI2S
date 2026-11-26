@@ -5,12 +5,15 @@
 
 #pragma once
 #pragma GCC optimize("Ofast")
+#include "psram_unique_ptr.hpp"
 #include "audiolib_structs.hpp"
 #include "buffers.hpp"
-#include "esp_dsp.h"
-#include "peripherial/bluetooth.h"
-#include "psram_unique_ptr.hpp"
 #include "tcp_client.hpp"
+
+#include "Arduino.h"
+#include "peripherial/bluetooth.h"
+#include "esp_dsp.h"
+
 #include <FFat.h>
 #include <FS.h>
 #include <SD.h>

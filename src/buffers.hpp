@@ -1,6 +1,8 @@
 #pragma once
 
 #include "psram_unique_ptr.hpp"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 namespace {
 #define ANSI_ESC_RESET   "\033[0m"

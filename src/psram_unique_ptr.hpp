@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Arduino.h"
 #include "esp_psram.h"
+#include "esp_heap_caps.h"
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
