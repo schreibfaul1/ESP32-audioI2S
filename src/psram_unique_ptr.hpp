@@ -131,9 +131,9 @@ class ps_ptr {
 
     ~ps_ptr() { // destructor
         if (mem) {
-            // log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", allocated_size * sizeof(T), mem.get());
+            // printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: Freeing %zu bytes at %p" ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed", allocated_size * sizeof(T), mem.get());
         } else {
-            // log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+            // printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: No memory to free." ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed");
         }
         if (name) {
             free(name);
@@ -207,12 +207,12 @@ class ps_ptr {
         using Unsigned = std::make_unsigned_t<U>;
 
         if (!mem || !get()) {
-            log_e("to_integer: No valid string data");
+            printf("[%s:%i]" ANSI_ESC_RED " to_integer: No valid string data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0;
         }
 
         if (base != 10 && base != 16) {
-            log_e("to_integer: Unsupported base %i", base);
+            printf("[%s:%i]" ANSI_ESC_RED " to_integer: Unsupported base %i" ANSI_ESC_RESET "\n", __FILE__, __LINE__, base);
             return 0;
         }
 
@@ -220,7 +220,7 @@ class ps_ptr {
         const char* p = str;
 
         if (*p == '\0') {
-            log_e("to_integer: Empty string");
+            printf("[%s:%i]" ANSI_ESC_RED " to_integer: Empty string" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0;
         }
 
@@ -247,7 +247,7 @@ class ps_ptr {
 
         // A sign or 0x must be followed by at least one digit
         if (*p == '\0') {
-            log_e("to_integer: Invalid numeric value in '%s'", str);
+            printf("[%s:%i]" ANSI_ESC_RED " to_integer: Invalid numeric value in '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
             return 0;
         }
 
@@ -257,7 +257,7 @@ class ps_ptr {
 
         if constexpr (std::is_unsigned_v<U>) {
             if (negative) {
-                log_e("to_integer: Negative value '%s' is not valid", str);
+                printf("[%s:%i]" ANSI_ESC_RED " to_integer: Negative value '%s' is not valid" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
                 return 0;
             }
         }
@@ -298,12 +298,12 @@ class ps_ptr {
             } else if (base == 16 && *p >= 'A' && *p <= 'F') {
                 digit = static_cast<Unsigned>(*p - 'A' + 10);
             } else {
-                log_e("to_integer: Invalid numeric value in '%s' for base %i", str, base);
+                printf("[%s:%i]" ANSI_ESC_RED " to_integer: Invalid numeric value in '%s' for base %i" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str, base);
                 return 0;
             }
 
             if (result > (limit - digit) / base) {
-                log_e("to_integer: Value in '%s' exceeds range", str);
+                printf("[%s:%i]" ANSI_ESC_RED " to_integer: Value in '%s' exceeds range" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
                 return 0;
             }
 
@@ -542,7 +542,7 @@ class ps_ptr {
         requires(sizeof(U) == sizeof(T))
     void copy_from(const U* src, std::size_t count, bool zeroTerminate = true) {
         if (!src) {
-            log_e("arg. is null");
+            printf("[%s:%i]" ANSI_ESC_RED " arg. is null" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return;
         }
         std::size_t elements = count + (zeroTerminate ? 1 : 0);
@@ -556,7 +556,7 @@ class ps_ptr {
         requires(std::is_same_v<T, char> && (std::is_same_v<U, char> || std::is_same_v<U, uint8_t>))
     size_t copy_from(const U* src) {
         if (!src) {
-            log_e("arg. is null");
+            printf("[%s:%i]" ANSI_ESC_RED " arg. is null" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0;
         }
         std::size_t len = std::strlen(reinterpret_cast<const char*>(src));
@@ -576,7 +576,7 @@ class ps_ptr {
         requires(std::is_same_v<U, char> || std::is_same_v<U, uint8_t>)
     size_t copy_from_utf16(const U* src, bool is_big_endian = false) {
         if (!src) {
-            log_e("arg. is null");
+            printf("[%s:%i]" ANSI_ESC_RED " arg. is null" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0;
         }
         std::vector<char> out;
@@ -610,7 +610,7 @@ class ps_ptr {
             // Prüfe auf Surrogatenpaare
             if (ch >= 0xD800 && ch <= 0xDBFF) { // High surrogate
                 if ((i + 1 >= std::numeric_limits<size_t>::max()) || (src[i] == 0x00 && src[i + 1] == 0x00)) {
-                    log_e("Invalid surrogate pair: missing low surrogate");
+                    printf("[%s:%i]" ANSI_ESC_RED " Invalid surrogate pair: missing low surrogate" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
                     break;
                 }
                 uint16_t ch2;
@@ -620,13 +620,13 @@ class ps_ptr {
                     ch2 = (src[i + 1] << 8) | src[i];
                 }
                 if (ch2 < 0xDC00 || ch2 > 0xDFFF) {
-                    log_e("Invalid surrogate pair: invalid low surrogate");
+                    printf("[%s:%i]" ANSI_ESC_RED " Invalid surrogate pair: invalid low surrogate" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
                     break;
                 }
                 i += 2;
                 codepoint = 0x10000 + ((ch - 0xD800) << 10) + (ch2 - 0xDC00);
             } else if (ch >= 0xDC00 && ch <= 0xDFFF) {
-                log_e("Invalid surrogate pair: unexpected low surrogate");
+                printf("[%s:%i]" ANSI_ESC_RED " Invalid surrogate pair: unexpected low surrogate" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
                 break;
             }
 
@@ -646,7 +646,7 @@ class ps_ptr {
                 out.push_back(0x80 | ((codepoint >> 6) & 0x3F));
                 out.push_back(0x80 | (codepoint & 0x3F));
             } else {
-                log_e("Invalid codepoint");
+                printf("[%s:%i]" ANSI_ESC_RED " Invalid codepoint" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
                 break;
             }
         }
@@ -664,7 +664,7 @@ class ps_ptr {
         requires(sizeof(U) == 1)
     size_t copy_from_iso8859_1(const U* src) {
         if (!src) {
-            log_e("arg. is null");
+            printf("[%s:%i]" ANSI_ESC_RED " arg. is null" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0;
         }
         std::vector<char> out;
@@ -703,7 +703,7 @@ class ps_ptr {
         if (strlen() == 0) return;
         static_assert(std::is_same_v<T, char>, "urldecode() is only valid for ps_ptr<char>");
         if (!mem || !get()) {
-            log_e("urldecode: No valid string data");
+            printf("[%s:%i]" ANSI_ESC_RED " urldecode: No valid string data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return;
         }
 
@@ -1267,25 +1267,25 @@ class ps_ptr {
     int32_t special_index_of(const char* needle, uint32_t needle_length, uint32_t max_length) const {
         static_assert(std::is_same_v<T, char>, "index_of is only valid for ps_ptr<char>");
         if (!mem || !get()) {
-            log_e("index_of: No valid buffer data");
+            printf("[%s:%i]" ANSI_ESC_RED " index_of: No valid buffer data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return -1;
         }
         if (!needle || needle_length == 0) {
-            log_e("index_of: Invalid needle (null or empty)");
+            printf("[%s:%i]" ANSI_ESC_RED " index_of: Invalid needle (null or empty)" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return -1;
         }
         if (max_length < needle_length) {
-            log_e("index_of: max_length (%u) too short to find needle of length %u", max_length, needle_length);
+            printf("[%s:%i]" ANSI_ESC_RED " index_of: max_length (%u) too short to find needle of length %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
             return -1;
         }
         const char* data = get();
         for (uint32_t i = 0; i <= max_length - needle_length; ++i) {
             if (std::memcmp(data + i, needle, needle_length) == 0) {
-                // log_i("index_of: Found needle at offset %u", i);
+                // printf("index_of: Found needle at offset %u\n", i);
                 return static_cast<int32_t>(i);
             }
         }
-        log_d("index_of: Needle not found within %lu bytes", max_length);
+        printf("[%s:%i]" ANSI_ESC_YELLOW " index_of: Needle not found within %lu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length);
         return -1;
     }
     template <typename U = T>
@@ -1304,17 +1304,17 @@ class ps_ptr {
         static_assert(std::is_same_v<T, char>, "last_special_index_of is only valid for ps_ptr<char>");
 
         if (!mem || !get()) {
-            log_e("last_special_index_of: No valid buffer data");
+            printf("[%s:%i]" ANSI_ESC_RED " last_special_index_of: No valid buffer data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return -1;
         }
 
         if (!needle || needle_length == 0) {
-            log_e("last_special_index_of: Invalid needle (null or empty)");
+            printf("[%s:%i]" ANSI_ESC_RED " last_special_index_of: Invalid needle (null or empty)" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return -1;
         }
 
         if (max_length < needle_length) {
-            log_e("last_special_index_of: max_length (%u) too short to find needle of length %u", max_length, needle_length);
+            printf("[%s:%i]" ANSI_ESC_RED " last_special_index_of: max_length (%u) too short to find needle of length %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
             return -1;
         }
 
@@ -1325,7 +1325,7 @@ class ps_ptr {
             if (std::memcmp(data + i, needle, needle_length) == 0) { return i; }
         }
 
-        log_d("last_special_index_of: Needle not found within %lu bytes", max_length);
+        printf("[%s:%i]" ANSI_ESC_YELLOW " last_special_index_of: Needle not found within %lu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length);
         return -1;
     }
 
@@ -1771,7 +1771,7 @@ class ps_ptr {
     // ps_ptr<char> jsonIn, decoded;
     // jsonIn.assign("\\u041f\\u0440\\u0438\\u0432\\u0435\\u0442"); // Привет
     // decoded.unicodeToUTF8(jsonIn.get());
-    // log_i("%s", decoded.get()); // shows: Привет
+    // printf("%s\n", decoded.get()); // shows: Привет
 
     void unicodeToUTF8(const char* src) {
         this->clear();
@@ -1826,7 +1826,7 @@ class ps_ptr {
     // ps_ptr<char> html, utf8;
     // html.assign("Hello%20World");
     // utf8.unicodeToUTF8(html.get());
-    // log_i("%s", utf8.get()); // shows: Hallo World
+    // printf("%s\n", utf8.get()); // shows: Hallo World
 
     void htmlToUTF8(const char* src) {
         this->clear();
@@ -2114,7 +2114,7 @@ class ps_ptr {
         static_assert(std::is_same_v<T, char>, "toFloat() is only valid for ps_ptr<char>");
 
         if (!mem || !get()) {
-            log_e("toFloat: No valid string data");
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: No valid string data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return 0.0f;
         }
 
@@ -2122,7 +2122,7 @@ class ps_ptr {
 
         // no leading spaces
         if (std::isspace(static_cast<unsigned char>(*str))) {
-            log_e("toFloat: Leading whitespace is not allowed in '%s'", str);
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: Leading whitespace is not allowed in '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
             return 0.0f;
         }
 
@@ -2133,25 +2133,25 @@ class ps_ptr {
 
         // is not a number
         if (end == str) {
-            log_e("toFloat: Invalid numeric value '%s'", str);
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: Invalid numeric value '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
             return 0.0f;
         }
 
         // no other chars backwards
         if (*end != '\0') {
-            log_e("toFloat: Invalid character '%c' in '%s'", *end, str);
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: Invalid character '%c' in '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, *end, str);
             return 0.0f;
         }
 
         // Overflow / Underflow
         if (errno == ERANGE) {
-            log_e("toFloat: Value out of range '%s'", str);
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: Value out of range '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
             return 0.0f;
         }
 
         // NaN and Infinity are not allowed
         if (!std::isfinite(value)) {
-            log_e("toFloat: Non-finite value '%s'", str);
+            printf("[%s:%i]" ANSI_ESC_RED " toFloat: Non-finite value '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, str);
             return 0.0f;
         }
         return value;
@@ -2167,12 +2167,12 @@ class ps_ptr {
     void big_endian(const uint8_t* data, uint8_t size) {
         static_assert(std::is_same_v<T, char>, "big_endian is only valid for ps_ptr<char>");
         if (!data || size == 0) {
-            log_e("big_endian: Invalid input (data is null or size is 0)");
+            printf("[%s:%i]" ANSI_ESC_RED " big_endian: Invalid input (data is null or size is 0)" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             assign("0x0");
             return;
         }
         if (size > 8) {
-            log_e("big_endian: Size %u exceeds 8 bytes, truncating to 8", size);
+            printf("[%s:%i]" ANSI_ESC_RED " big_endian: Size %u exceeds 8 bytes, truncating to 8" ANSI_ESC_RESET "\n", __FILE__, __LINE__, size);
             size = 8;
         }
         uint64_t result = 0;
@@ -2191,12 +2191,12 @@ class ps_ptr {
     void little_endian(const uint8_t* data, uint8_t size) {
         static_assert(std::is_same_v<T, char>, "little_endian is only valid for ps_ptr<char>");
         if (!data || size == 0) {
-            log_e("little_endian: Invalid input (data is null or size is 0)");
+            printf("[%s:%i]" ANSI_ESC_RED " little_endian: Invalid input (data is null or size is 0)" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             assign("0x0");
             return;
         }
         if (size > 8) {
-            log_e("little_endian: Size %u exceeds 8 bytes, truncating to 8", size);
+            printf("[%s:%i]" ANSI_ESC_RED " little_endian: Size %u exceeds 8 bytes, truncating to 8" ANSI_ESC_RESET "\n", __FILE__, __LINE__, size);
             size = 8;
         }
         uint64_t result = 0;
@@ -2318,7 +2318,7 @@ class ps_ptr {
         if (pos < len)
             str[pos] = '\0';
         else
-            log_e("truncate pos %i out of length %i", pos, len);
+            printf("[%s:%i]" ANSI_ESC_RED " truncate pos %i out of length %i" ANSI_ESC_RESET "\n", __FILE__, __LINE__, pos, len);
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E M O V E _ P R E F I X   📌📌📌
@@ -2617,7 +2617,7 @@ class ps_ptr {
     // Safe operator[] with logging
     T& operator[](std::size_t index) noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " [%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy; // Access allowed, but ineffective
         }
         return mem[index];
@@ -2625,7 +2625,7 @@ class ps_ptr {
 
     const T& operator[](std::size_t index) const noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " [%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy;
         }
         return mem[index];
@@ -3237,9 +3237,9 @@ template <typename T> class ps_struct_ptr {
 
     ~ps_struct_ptr() { // destructor
         if (mem) {
-            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", sizeof(T), mem.get());
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: Freeing %zu bytes at %p" ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed", sizeof(T), mem.get());
         } else {
-            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: No memory to free." ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed");
         }
         if (name) {
             free(name);
@@ -3384,7 +3384,7 @@ template <typename... Args> inline void free_fields(Args&... fields) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌   2 D  A R R A Y   📌📌📌
 //
-// 2D Array in PSRAM with Bounds-Check, log_e and reset()
+// 2D Array in PSRAM with Bounds-Check, printf() and reset()
 //
 // ps_array2d<int32_t> s_samples; // standard constructor
 // s_samples.alloc(2, 1152);      // mem alloc for [2][1152]
@@ -3441,9 +3441,9 @@ template <typename T> class ps_array2d {
     // Destruktor
     ~ps_array2d() {
         if (mem) {
-            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", rows * cols * sizeof(T), mem.get());
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: Freeing %zu bytes at %p" ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed", rows * cols * sizeof(T), mem.get());
         } else {
-            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: No memory to free." ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed");
         }
         if (name) {
             free(name);
@@ -3561,7 +3561,7 @@ template <typename T> class ps_array2d {
 //
 // 📌📌📌   3 D  A R R A Y   📌📌📌
 //
-// 3D Array in PSRAM with Bounds-Check, log_e and reset()
+// 3D Array in PSRAM with Bounds-Check, printf() and reset()
 //
 // ps_array3d<int32_t> s_sbsample;
 // s_sbsample.alloc(2, 36, 32);
@@ -3620,9 +3620,9 @@ template <typename T> class ps_array3d {
     // Destruktor
     ~ps_array3d() {
         if (mem) {
-            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", dim1 * dim2 * dim3 * sizeof(T), mem.get());
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: Freeing %zu bytes at %p" ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed", dim1 * dim2 * dim3 * sizeof(T), mem.get());
         } else {
-            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_YELLOW " Destructor called for %s: No memory to free." ANSI_ESC_RESET "\n", __FILE__, __LINE__, name ? name : "unnamed");
         }
         if (name) {
             free(name);
