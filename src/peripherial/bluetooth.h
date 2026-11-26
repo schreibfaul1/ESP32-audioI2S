@@ -1,17 +1,5 @@
 #pragma once
-#include "../psram_unique_ptr.hpp"
-
-namespace {
-#define ANSI_ESC_RESET   "\033[0m"
-#define ANSI_ESC_BLACK   "\033[30m"
-#define ANSI_ESC_RED     "\033[31m"
-#define ANSI_ESC_GREEN   "\033[32m"
-#define ANSI_ESC_YELLOW  "\033[33m"
-#define ANSI_ESC_BLUE    "\033[34m"
-#define ANSI_ESC_MAGENTA "\033[35m"
-#define ANSI_ESC_CYAN    "\033[36m"
-#define ANSI_ESC_WHITE   "\033[37m"
-} // namespace
+#include <Arduino.h>
 
 #if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
         #include "../buffers.hpp"

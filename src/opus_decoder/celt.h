@@ -35,11 +35,11 @@
 #pragma once
 
 #include "../psram_unique_ptr.hpp"
-#include "range_decoder.h"
+#include "Arduino.h"
 #include "celt_defines.h"
 #include "celt_structs.h"
 #include "celt_tables.h"
-
+#include "range_decoder.h"
 
 extern const int16_t          eband5ms[22];
 extern const uint8_t          band_allocation[231];

@@ -3,10 +3,11 @@
 #pragma once
 
 #include "../Audio.h"
+#include "../psram_unique_ptr.hpp"
 #include "celt.h"
 #include "range_decoder.h"
 #include "silk.h"
-
+#include <vector>
 
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_BLACK   "\033[30m"

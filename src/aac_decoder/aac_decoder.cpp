@@ -6,6 +6,7 @@
  */
 
 #include "aac_decoder.h"
+#include "Arduino.h"
 #include "libfaad/neaacdec.h"
 #include <stdbool.h>
 #include <stdint.h>

@@ -12,6 +12,7 @@ BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DA
 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************************************************************************************************************************************/
 
+#include "Arduino.h"
 #include "opus_decoder.h"
 #include "range_decoder.h"
 #include "silk.h"

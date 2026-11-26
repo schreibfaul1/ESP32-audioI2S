@@ -28,6 +28,7 @@
 ** $Id: bits.c,v 1.44 2007/11/01 12:33:29 menno Exp $
 **/
 #include "neaacdec.h"
+#include "Arduino.h"
 #include <stdint-gcc.h>
 #include <stdlib.h>
 
@@ -9193,7 +9194,7 @@ uint32_t NeaacDecoder::latmAudioMuxElement(latm_header* latm, bitfile* ld) {
         if (latm->version) latm->versionA = (uint8_t)faad_getbits(ld, 1);
         if (latm->versionA) {
             // dunno the payload format for versionA
-            AAC_LOG_ERROR("versionA not supported");
+            fprintf(stderr, "versionA not supported\n");
             return 0;
         }
         if (latm->version) // read taraBufferFullness
@@ -9203,7 +9204,7 @@ uint32_t NeaacDecoder::latmAudioMuxElement(latm_header* latm, bitfile* ld) {
         latm->numPrograms = (uint8_t)faad_getbits(ld, 4) + 1;
         latm->numLayers = faad_getbits(ld, 3) + 1;
         if (latm->numPrograms > 1 || !latm->allStreamsSameTimeFraming || latm->numSubFrames > 1 || latm->numLayers > 1) {
-        AAC_LOG_ERROR("Unsupported LATM configuration: {} programs/ {} subframes, {} layers, allstreams: {}", latm->numPrograms, latm->numSubFrames, latm->numLayers,
+            fprintf(stderr, "\r\nUnsupported LATM configuration: %d programs/ %d subframes, %d layers, allstreams: %d\n", latm->numPrograms, latm->numSubFrames, latm->numLayers,
                     latm->allStreamsSameTimeFraming);
             return 0;
         }
@@ -9239,12 +9240,12 @@ uint32_t NeaacDecoder::latmAudioMuxElement(latm_header* latm, bitfile* ld) {
         } else if (latm->framelen_type == 1) {
             latm->frameLength = faad_getbits(ld, 9);
             if (latm->frameLength == 0) {
-                AAC_LOG_ERROR("Invalid frameLength: 0");
+                fprintf(stderr, "Invalid frameLength: 0\r\n");
                 return 0;
             }
             latm->frameLength = (latm->frameLength + 20) * 8;
         } else { // hellish CELP or HCVX stuff, discard
-            AAC_LOG_ERROR("Unsupported CELP/HCVX framelentype: {}", latm->framelen_type);
+            fprintf(stderr, "Unsupported CELP/HCVX framelentype: %d\n", latm->framelen_type);
             return 0;
         }
         latm->otherDataLenBits = 0;
@@ -9363,7 +9364,7 @@ uint8_t NeaacDecoder::rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bit
     int16_t is_position = 0;
     int16_t noise_energy = ics->global_gain - 90 - 256;
     #ifdef PRINT_RVLC
-    AAC_LOG_INFO("global_gain: {}", ics->global_gain);
+    printf("\nglobal_gain: %d\n", ics->global_gain);
     #endif
     for (g = 0; g < ics->num_window_groups; g++) {
         for (sfb = 0; sfb < ics->max_sfb; sfb++) {

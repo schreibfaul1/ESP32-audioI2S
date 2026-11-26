@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../psram_unique_ptr.hpp"
+#include "Arduino.h"
 #include "silk_defines.h"
 
 typedef struct {

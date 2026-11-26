@@ -5,6 +5,7 @@
  *  Updated on: 16.11.2026
  */
 
+#include "Arduino.h"
 #if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
     #include "../Audio.h"
     #include "bluetooth.h"
@@ -78,7 +79,7 @@ void BT_Source::gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t*
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static void log_codec_info(const char* source, const esp_a2d_mcc_t& mcc) {
 
-    // printf("[%s:%i]" ANSI_ESC_MAGENTA " %s: codec type %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, source, mcc.type);
+    log_d("%s: codec type %u", source, mcc.type);
 
     switch (mcc.type) {
 
@@ -87,21 +88,21 @@ static void log_codec_info(const char* source, const esp_a2d_mcc_t& mcc) {
             const auto& sbc = mcc.cie.sbc_info;
             (void)sbc;
 
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC sampling frequency mask: 0x%X" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.samp_freq);
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC channel mode mask:       0x%X" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.ch_mode);
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC block length mask:       0x%X" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.block_len);
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC subbands mask:           0x%X" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.num_subbands);
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC allocation method:       0x%X" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.alloc_mthd);
-            // printf("[%s:%i]" ANSI_ESC_MAGENTA " SBC bitpool min: %u, max: %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sbc.min_bitpool, sbc.max_bitpool);
+            log_d("SBC sampling frequency mask: 0x%X", sbc.samp_freq);
+            log_d("SBC channel mode mask:       0x%X", sbc.ch_mode);
+            log_d("SBC block length mask:       0x%X", sbc.block_len);
+            log_d("SBC subbands mask:           0x%X", sbc.num_subbands);
+            log_d("SBC allocation method:       0x%X", sbc.alloc_mthd);
+            log_d("SBC bitpool min: %u, max: %u", sbc.min_bitpool, sbc.max_bitpool);
 
             break;
         }
 
-        case ESP_A2D_MCT_M24: /* printf("[%s:%i]" ANSI_ESC_MAGENTA " AAC codec" ANSI_ESC_RESET "\n", __FILE__, __LINE__); */ break;
+        case ESP_A2D_MCT_M24: log_d("AAC codec"); break;
 
-        case ESP_A2D_MCT_M12: /* printf("[%s:%i]" ANSI_ESC_MAGENTA " MPEG Audio codec" ANSI_ESC_RESET "\n", __FILE__, __LINE__); */ break;
+        case ESP_A2D_MCT_M12: log_d("MPEG Audio codec"); break;
 
-        default: /* printf("[%s:%i]" ANSI_ESC_MAGENTA " Other codec" ANSI_ESC_RESET "\n", __FILE__, __LINE__); */ break;
+        default: log_d("Other codec"); break;
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -127,7 +128,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
                     s_instance->info(Audio::evt_bt, "A2DP: Connected");
                     esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
 
-                    if (err != ESP_OK) { printf("[%s:%i]" ANSI_ESC_RED " A2DP CHECK_SRC_RDY failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err)); }
+                    if (err != ESP_OK) { log_e("A2DP CHECK_SRC_RDY failed: %s", esp_err_to_name(err)); }
                     break;
                 }
                 case ESP_A2D_CONNECTION_STATE_DISCONNECTING:
@@ -184,7 +185,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             s_instance->info(Audio::evt_bt, "A2DP MEDIA_CTRL_ACK: cmd={} status={}", stat.cmd, stat.status);
 
             if (stat.status != ESP_A2D_MEDIA_CTRL_ACK_SUCCESS) {
-                printf("[%s:%i]" ANSI_ESC_RED " A2DP media control failed" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+                log_e("A2DP media control failed");
                 break;
             }
 
@@ -195,7 +196,7 @@ void BT_Source::a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t* para
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY) {
                 s_instance->info(Audio::evt_bt, "A2DP source ready, starting media");
                 esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
-                if (err != ESP_OK) { printf("[%s:%i]" ANSI_ESC_RED " A2DP START failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err)); }
+                if (err != ESP_OK) { log_e("A2DP START failed: %s", esp_err_to_name(err)); }
             }
 
             if (stat.cmd == ESP_A2D_MEDIA_CTRL_START) { //
@@ -266,7 +267,7 @@ void BT_Source::avrc_tg_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_pa
 
         case ESP_AVRC_TG_PASSTHROUGH_CMD_EVT: {
             const auto& cmd = param->psth_cmd;
-            printf("[%s:%i]" ANSI_ESC_YELLOW "cmd.key_code %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, cmd.key_code);
+            log_w("cmd.key_code %u", cmd.key_code);
             // Nur Tastendruck verarbeiten, nicht das Loslassen
             if (cmd.key_state != ESP_AVRC_PT_CMD_STATE_PRESSED) { break; }
 
@@ -303,14 +304,21 @@ bool BT_Source::init(ps_ptr<char> devName) {
     EventBits_t bits = {};
 
     if (!m_btEvents) {
-        printf("[%s:%i]" ANSI_ESC_RED " Bluetooth event group unavailable" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("Bluetooth event group unavailable");
         return false;
     }
 
     if (m_isInit) {
-        printf("[%s:%i]" ANSI_ESC_MAGENTA " Bluetooth already initialized" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_w("Bluetooth already initialized");
         return true;
     }
+
+    esp_log_level_set("BT_AVCT", ESP_LOG_ERROR);
+    esp_log_level_set("BT_L2CAP", ESP_LOG_NONE);
+    esp_log_level_set("BT_APPL", ESP_LOG_NONE);
+    esp_log_level_set("BT_HCI", ESP_LOG_ERROR);
+    esp_log_level_set("BT_AVRC", ESP_LOG_ERROR);
+    esp_log_level_set("BT_BTC", ESP_LOG_ERROR);
 
     s_instance = this;
 
@@ -329,7 +337,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     bt_samplesBuffer.setBufsize(m_bt_buffSize);
 
     if (bt_samplesBuffer.init() != m_bt_buffSize) {
-        printf("[%s:%i]" ANSI_ESC_RED " Bluetooth sample buffer initialization failed" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("Bluetooth sample buffer initialization failed");
         return false;
     }
 
@@ -347,7 +355,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bt_controller_init(&bt_cfg);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " bt_controller_init error: %i,  %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, err, esp_err_to_name(err));
+        log_e("bt_controller_init error: %i,  %s", err, esp_err_to_name(err));
         goto error;
     }
 
@@ -356,7 +364,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " bt_controller_enable error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("bt_controller_enable error");
         goto error;
     }
 
@@ -371,7 +379,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bluedroid_init();
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " bluedroid_init error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("bluedroid_init error");
         goto error;
     }
 
@@ -380,7 +388,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bluedroid_enable();
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " bluedroid_enable error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("bluedroid_enable error");
         goto error;
     }
 
@@ -395,7 +403,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_bt_gap_register_callback(gap_callback);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " bt_gap_register error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("bt_gap_register error");
         goto error;
     }
 
@@ -408,20 +416,20 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_avrc_tg_register_callback(avrc_tg_callback);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " avrc_tg_register error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("avrc_tg_register error");
         goto error;
     }
 
     err = esp_avrc_tg_init();
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " esp_avrc_tg_init error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("esp_avrc_tg_init error");
         goto error;
     }
 
     m_avrcTgInitRequested = true;
 
-    info(Audio::evt_bt, "AVRCP Target initialization requested" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+    info(Audio::evt_bt, "AVRCP Target initialization requested");
 
     // --------------------------------------------------
     // A2DP Source
@@ -430,14 +438,14 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_a2d_register_callback(a2dp_callback);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " a2d_register error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("a2d_register error");
         goto error;
     }
 
     err = esp_a2d_source_init();
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " a2d_source_init error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("a2d_source_init error");
         goto error;
     }
 
@@ -446,7 +454,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
     err = esp_a2d_source_register_data_callback(get_data);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " a2d_source_register error" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("a2d_source_register error");
         goto error;
     }
 
@@ -473,7 +481,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
         for (auto cmd : commands) {
             if (!esp_avrc_psth_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &cmdSet, cmd)) {
-                printf("[%s:%i]" ANSI_ESC_RED " AVRCP passthrough mask error: %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, cmd);
+                log_e("AVRCP passthrough mask error: %u", cmd);
                 err = ESP_FAIL;
                 goto error;
             }
@@ -482,7 +490,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
         err = esp_avrc_tg_set_psth_cmd_filter(ESP_AVRC_PSTH_FILTER_SUPPORTED_CMD, &cmdSet);
 
         if (err != ESP_OK) {
-            printf("[%s:%i]" ANSI_ESC_RED " AVRCP passthrough filter failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("AVRCP passthrough filter failed: %s", esp_err_to_name(err));
             goto error;
         }
 
@@ -491,7 +499,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
     if ((bits & (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) != (BT_EVT_AVRC_INIT | BT_EVT_A2DP_INIT)) {
 
-        printf("[%s:%i]" ANSI_ESC_RED " Bluetooth profile initialization timeout" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("Bluetooth profile initialization timeout");
         goto error;
     }
 
@@ -506,7 +514,7 @@ bool BT_Source::init(ps_ptr<char> devName) {
 
 error:
 
-    printf("[%s:%i]" ANSI_ESC_RED " Bluetooth initialization failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+    log_e("Bluetooth initialization failed: %s", esp_err_to_name(err));
 
     reset();
 
@@ -552,13 +560,13 @@ void BT_Source::reset() {
                                                    pdMS_TO_TICKS(5000));
 
             if ((bits & waitBits) != waitBits) {
-                printf("[%s:%i]" ANSI_ESC_RED " Bluetooth disconnect timeout: A2DP=%d AVRCP=%d" ANSI_ESC_RESET "\n", __FILE__, __LINE__, (bits & BT_EVT_DISCONNECTED) != 0, !waitAvrc || (bits & BT_EVT_AVRC_DISCONNECTED) != 0);
+                log_e("Bluetooth disconnect timeout: A2DP=%d AVRCP=%d", (bits & BT_EVT_DISCONNECTED) != 0, !waitAvrc || (bits & BT_EVT_AVRC_DISCONNECTED) != 0);
 
                 // Nicht mit der Deinitialisierung fortfahren!
                 return;
             }
         } else {
-            printf("[%s:%i]" ANSI_ESC_RED " A2DP disconnect failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("A2DP disconnect failed: %s", esp_err_to_name(err));
             return;
         }
     }
@@ -579,11 +587,11 @@ void BT_Source::reset() {
             EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_AVRC_DEINIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
 
             if (!(bits & BT_EVT_AVRC_DEINIT)) {
-                printf("[%s:%i]" ANSI_ESC_RED " AVRCP deinit timeout - keeping Bluetooth stack alive" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+                log_e("AVRCP deinit timeout - keeping Bluetooth stack alive");
                 return;
             }
         } else {
-            printf("[%s:%i]" ANSI_ESC_RED " AVRCP deinit failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("AVRCP deinit failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -605,11 +613,11 @@ void BT_Source::reset() {
             EventBits_t bits = xEventGroupWaitBits(m_btEvents, BT_EVT_A2DP_DEINIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000));
 
             if (!(bits & BT_EVT_A2DP_DEINIT)) {
-                printf("[%s:%i]" ANSI_ESC_RED " A2DP deinit timeout - keeping Bluetooth stack alive" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+                log_e("A2DP deinit timeout - keeping Bluetooth stack alive");
                 return;
             }
         } else {
-            printf("[%s:%i]" ANSI_ESC_RED " A2DP deinit failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("A2DP deinit failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -625,7 +633,7 @@ void BT_Source::reset() {
         esp_err_t err = esp_bluedroid_disable();
 
         if (err != ESP_OK) {
-            printf("[%s:%i]" ANSI_ESC_RED " Bluedroid disable failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("Bluedroid disable failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -637,7 +645,7 @@ void BT_Source::reset() {
         esp_err_t err = esp_bluedroid_deinit();
 
         if (err != ESP_OK) {
-            printf("[%s:%i]" ANSI_ESC_RED " Bluedroid deinit failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("Bluedroid deinit failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -653,7 +661,7 @@ void BT_Source::reset() {
         esp_err_t err = esp_bt_controller_disable();
 
         if (err != ESP_OK) {
-            printf("[%s:%i]" ANSI_ESC_RED " BT Controller disable failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("BT Controller disable failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -665,7 +673,7 @@ void BT_Source::reset() {
         esp_err_t err = esp_bt_controller_deinit();
 
         if (err != ESP_OK) {
-            printf("[%s:%i]" ANSI_ESC_RED " BT Controller deinit failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+            log_e("BT Controller deinit failed: %s", esp_err_to_name(err));
             return;
         }
 
@@ -693,7 +701,7 @@ bool BT_Source::startScan() {
     esp_err_t err = esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " GAP discovery failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+        log_e("GAP discovery failed: %s", esp_err_to_name(err));
         return false;
     }
 
@@ -706,11 +714,11 @@ bool BT_Source::getChunk(int32_t* chunk, size_t size) {
     if (size <= bt_samplesBuffer.freeSpace()) {
         written = bt_samplesBuffer.write(chunk, size);
         if (written != size) {
-            printf("[%s:%i]" ANSI_ESC_RED " buffer write error size: %lu, written: %lu" ANSI_ESC_RESET "\n", __FILE__, __LINE__, size, written);
+            log_e("buffer write error size: %lu, written: %lu", size, written);
             return false;
         }
     } else {
-        // printf("[%s:%i]" ANSI_ESC_MAGENTA " not enough space, size %lu, free %lu" ANSI_ESC_RESET "\n", __FILE__, __LINE__, size, bt_samplesBuffer.freeSpace());
+        log_d("not enough space, size %lu, free %lu", size, bt_samplesBuffer.freeSpace());
         return false;
     }
     return true;
@@ -734,8 +742,8 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
     (void)filled;
     size_t words = s_instance->bt_samplesBuffer.peek_words(s_instance->m_workBuff.get(), bytes / 2);
     if (++cbCount % 100 == 0) {
-        printf("[%s:%i]" ANSI_ESC_MAGENTA " BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
-        if (words > 1) { printf("[%s:%i]" ANSI_ESC_MAGENTA " PCM samples: 0x%08lX, 0x%08lX", (uint32_t)s_instance->m_workBuff[0], (uint32_t)s_instance->m_workBuff[1]); }
+        log_d("BT callback: requested=%d, words=%u, filled=%u", bytes / 2, words, filled);
+        if (words > 1) { log_d("PCM samples: 0x%08lX, 0x%08lX", (uint32_t)s_instance->m_workBuff[0], (uint32_t)s_instance->m_workBuff[1]); }
     }
 
     size_t requestedWords = bytes / 2;
@@ -755,19 +763,19 @@ int32_t BT_Source::get_data(uint8_t* data, int32_t bytes) {
 bool BT_Source::connect() {
     if (m_stopping || !m_isInit) return false;
     if (!m_a2dpInitialized) {
-        printf("[%s:%i]" ANSI_ESC_RED " A2DP not initialized" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("A2DP not initialized");
         return false;
     }
 
     if (!m_deviceFound) {
-        printf("[%s:%i]" ANSI_ESC_RED " Target device not found" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
+        log_e("Target device not found");
         return false;
     }
 
     esp_err_t err = esp_a2d_source_connect(m_targetBda);
 
     if (err != ESP_OK) {
-        printf("[%s:%i]" ANSI_ESC_RED " A2DP connect failed: %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, esp_err_to_name(err));
+        log_e("A2DP connect failed: %s", esp_err_to_name(err));
         return false;
     }
 
@@ -787,7 +795,7 @@ void BT_Source::restartDiscoveryIfDisconnected() {
     m_deviceFound = false;
     memset(m_targetBda, 0, sizeof(m_targetBda));
 
-    if (!startScan()) { printf("[%s:%i]" ANSI_ESC_RED " Restarting Bluetooth discovery failed" ANSI_ESC_RESET "\n", __FILE__, __LINE__); }
+    if (!startScan()) { log_e("Restarting Bluetooth discovery failed"); }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #endif

@@ -24,12 +24,15 @@
 
 #pragma once
 
-//#include "../aac_decoder.h"
-#include "../../psram_unique_ptr.hpp"
-#include "aac_defines.h"
-#include "settings.h"
 #include "aac_structs.h"
 #include "aac_tables.h"
+#include "aac_defines.h"
+#include <math.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
