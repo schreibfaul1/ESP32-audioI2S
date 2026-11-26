@@ -1276,7 +1276,7 @@ class ps_ptr {
             return -1;
         }
         if (max_length < needle_length) {
-            printf("[%s:%i]" ANSI_ESC_RED " index_of: max_length (%u) too short to find needle of length %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
+            printf("[%s:%i]" ANSI_ESC_RED " index_of: max_length (%lu) too short to find needle of length %lu" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
             return -1;
         }
         const char* data = get();
@@ -1315,7 +1315,7 @@ class ps_ptr {
         }
 
         if (max_length < needle_length) {
-            printf("[%s:%i]" ANSI_ESC_RED " last_special_index_of: max_length (%u) too short to find needle of length %u" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
+            printf("[%s:%i]" ANSI_ESC_RED " last_special_index_of: max_length (%lu) too short to find needle of length %lu" ANSI_ESC_RESET "\n", __FILE__, __LINE__, max_length, needle_length);
             return -1;
         }
 
@@ -2618,7 +2618,7 @@ class ps_ptr {
     // Safe operator[] with logging
     T& operator[](std::size_t index) noexcept {
         if (index >= allocated_size) {
-            printf("[%s:%i]" ANSI_ESC_RED " [%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy; // Access allowed, but ineffective
         }
         return mem[index];
