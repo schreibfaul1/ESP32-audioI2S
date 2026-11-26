@@ -9,16 +9,10 @@
 #include "audiolib_structs.hpp"
 #include "buffers.hpp"
 #include "tcp_client.hpp"
-
-#include "Arduino.h"
 #include "peripherial/bluetooth.h"
-#include "esp_dsp.h"
 
-#include <FFat.h>
+#include "esp_dsp.h"
 #include <FS.h>
-#include <SD.h>
-#include <SD_MMC.h>
-#include <WiFi.h>
 #include <atomic>
 #include <charconv>
 #include <codecvt>

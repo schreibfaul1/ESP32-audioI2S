@@ -28,9 +28,8 @@
 */
 
 #include "celt.h"
-#include "opus_decoder.h"
 #include "range_decoder.h"
-#include <Arduino.h>
+#include "opus_decoder.h"
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t CeltDecoder::celt_pvq_u_row(uint32_t row, uint32_t data) {

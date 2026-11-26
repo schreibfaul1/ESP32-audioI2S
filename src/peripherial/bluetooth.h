@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include "psram_unique_ptr.hpp"
 
 namespace {
 #define ANSI_ESC_RESET   "\033[0m"

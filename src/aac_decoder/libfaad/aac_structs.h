@@ -28,7 +28,7 @@
 ** $Id: structs.h,v 1.49 2009/01/26 23:51:15 menno Exp $
 **/
 #pragma once
-#include "Arduino.h"
+#include "../../psram_unique_ptr.hpp"
 #include "aac_defines.h"
 #include "aac_settings.h"
 

@@ -1,7 +1,7 @@
 
 // VORBIS DECODER  lookup.h
 
-#include "Arduino.h"
+
 #include "vorbis_decoder.h"
 
 #pragma once

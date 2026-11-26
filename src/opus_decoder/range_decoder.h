@@ -1,6 +1,5 @@
 #pragma once
-
-#include "Arduino.h"
+#include "../psram_unique_ptr.hpp"
 
 class RangeDecoder {
 public:

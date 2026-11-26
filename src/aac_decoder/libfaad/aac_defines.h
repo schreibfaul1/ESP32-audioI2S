@@ -1,5 +1,4 @@
 #pragma once
-#include "Arduino.h"
 #include "../../Audio.h"
 #include "aac_settings.h"
 
