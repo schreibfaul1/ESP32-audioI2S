@@ -5534,6 +5534,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
         if (res == FlacDecoder::FLAC_PARSE_OGG_DONE) return bytesDecoded;
         if (res == FlacDecoder::FLAC_CONTINUE) return bytesDecoded;
         if (res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;
+        if (res == FlacDecoder::FLAC_END) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_OPUS) {
         if (res == OpusDecoder::OPUS_PARSE_OGG_DONE) return bytesDecoded;

@@ -54,6 +54,7 @@ class FlacDecoder : public Decoder {
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
         FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_END = 110,
         FLAC_CONTINUE = 115,
         FLAC_OGG_PAGEHEADER = +3,
         FLAC_OGG_SYNC_FOUND = +2,
@@ -169,7 +170,9 @@ class FlacDecoder : public Decoder {
 
     struct continued {
         ps_ptr<uint8_t> buffer;
-        uint32_t        filled = 0;
+        int32_t         remaining = 0;
+        int32_t         readOffset = 0;
+        bool            waitingForContinuation = false;
     } m_continued;
 
     typedef struct _ogg_items {
@@ -250,6 +253,10 @@ class FlacDecoder : public Decoder {
     void     setDefaults();
     void     dropTransientOggState();
     void     decoderReset();
+    int32_t  decodeContinuedBuffer(int32_t* outbuf);
+    int32_t  decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
+    int32_t  appendContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
+    int32_t  startContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
     int32_t  decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
@@ -262,7 +269,7 @@ class FlacDecoder : public Decoder {
     int8_t   decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDepth, uint8_t ch, int32_t* bytesLeft);
     int8_t   decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft);
     void     restoreLinearPrediction(uint8_t ch, uint8_t shift, uint8_t sampleDepth);
-    int32_t  specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    int32_t  FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
     inline int32_t readSignedInt(int32_t nBits, int32_t* bytesLeft) {
         int32_t temp = readUint(nBits, bytesLeft) << (32 - nBits);

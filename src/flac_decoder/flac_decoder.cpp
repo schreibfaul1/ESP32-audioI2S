@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 24.11.2026
+ * Updated on: 26.11.2026
  *
  * Author: Wolle
  *
@@ -161,22 +161,8 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
         m_rIndex++;
         (*bytesLeft)--;
         if (*bytesLeft == -1) {
-            if (m_isOGG) {
-                m_rIndex--;
-                (*bytesLeft)++;
-                // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
-                if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
-                    parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
-                    m_segmLength = m_ogg_items.segment_table.front();         // read the front table
-                    m_ogg_items.segment_table.pop_front();                    // and remove them
-                    m_rIndex += abs(*bytesLeft);                              // increase m_rIndex
-                    continue;                                                 // go ahead
-                } else {
-                    FLAC_LOG_ERROR("error in bitreader");
-                    m_f_bitReaderError = true;
-                    break;
-                }
-            }
+            FLAC_LOG_ERROR("bitreader is negative");
+            break;
         }
         m_flac_bitBuffer = (m_flac_bitBuffer << 8) | temp;
         m_flacBitBufferLen += 8;
@@ -289,7 +275,7 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     };
 
     // OggS Wrapper Check
-    int32_t i = specialIndexOf(buf, "OggS", nBytes);
+    int32_t i = FLAC_specialIndexOf(buf, "OggS", nBytes);
     if (i == 0) {
         m_f_bitReaderError = false;
         return 0;
@@ -366,7 +352,7 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 boolean FlacDecoder::FLACFindMagicWord(unsigned char* buf, int32_t nBytes) {
-    int32_t idx = specialIndexOf(buf, "fLaC", nBytes);
+    int32_t idx = FLAC_specialIndexOf(buf, "fLaC", nBytes);
     if (idx > 0) { // Metadatablock follows
         idx += 4;
         boolean  lmdbf = ((buf[idx + 1] & 0x80) == 0x80);                          // Last-metadata-block flag
@@ -399,7 +385,7 @@ const char* FlacDecoder::whoIsIt() {
 int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    int32_t idx = specialIndexOf(inbuf, "OggS", 6);
+    int32_t idx = FLAC_specialIndexOf(inbuf, "OggS", 6);
 
     if (idx < 0) {
         FLAC_LOG_ERROR("Flac decoder asyncron, \"OggS\" not found");
@@ -498,7 +484,7 @@ std::vector<uint32_t> FlacDecoder::getMetadataBlockPicture() {
 int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4.2.2. Identification header   https://xiph.org/flac/ogg_mapping.html
 
     int32_t ret = 0;
-    int32_t idx = specialIndexOf(inbuf, "fLaC", nBytes);
+    int32_t idx = FLAC_specialIndexOf(inbuf, "fLaC", nBytes);
 
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
@@ -537,7 +523,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
 
     auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
         if (commentLength < valueOffset) return false;
-        return (specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
+        return (FLAC_specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (FLAC_specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
     };
 
     auto assignVorbisValue = [](ps_ptr<char>& dst, const uint8_t* comment, uint32_t commentLength, uint32_t valueOffset) -> bool {
@@ -801,7 +787,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     if (m_f_flacFirstCall) { // determine if ogg or flag
         m_f_flacFirstCall = false;
         m_nBytes = 0;
-        if (specialIndexOf(inbuf, "OggS", 5) == 0) {
+        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) {
             m_isOGG = true;
             m_flacPageNr = FLAC_IDENTIFICATION_HEADER;
             m_f_first_flac_frame = true;
@@ -817,60 +803,115 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::decodeContinuedBuffer(int32_t* outbuf) {
 
+    const int32_t available = m_continued.remaining;
+    int32_t       remaining = available;
+
+    const int32_t ret = decodeNative(m_continued.buffer.get() + m_continued.readOffset, &remaining, outbuf);
+
+    const int32_t consumed = available - remaining;
+
+    m_flacCurrentFilePos += consumed;
+
+    m_continued.remaining -= consumed;
+    m_continued.readOffset += consumed;
+
+    if (m_continued.remaining < 0) { m_continued.remaining = 0; }
+
+    FLAC_LOG_INFO("filled {}, consumed {}", m_continued.remaining, consumed);
+
+    return ret;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::decodePendingSegment(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    const int32_t remaining = m_nBytes;
+
+    if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
+
+    const int32_t ret = decodeNative(inbuf, &m_nBytes, outbuf);
+    const int32_t consumed = remaining - m_nBytes;
+
+    m_flacCurrentFilePos += consumed;
+    *bytesLeft -= consumed;
+
+    // FLAC frame extends beyond the current OGG segment.
+    if (m_nBytes < 0) { m_nBytes = 0; }
+
+    return ret;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::appendContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+    m_continued.waitingForContinuation = false;
+    if (m_continued.remaining + segmentLength > UINT16_MAX + 1) {
+        FLAC_LOG_ERROR("Continued packet exceeds buffer size");
+        m_continued.remaining = 0;
+        return FLAC_ERR;
+    }
+    memcpy(m_continued.buffer.get() + m_continued.remaining, inbuf, segmentLength);
+    *bytesLeft -= segmentLength;
+    m_continued.remaining += segmentLength;
+
+    FLAC_LOG_INFO("buffer filled 2 {}", m_continued.remaining);
+    m_continued.readOffset = 0;
+    return FLAC_CONTINUE;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t FlacDecoder::startContinuedOggSegment(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+    memcpy(m_continued.buffer.get(), inbuf, segmentLength);
+    m_continued.remaining = segmentLength;
+    *bytesLeft -= segmentLength;
+    m_continued.waitingForContinuation = true;
+    FLAC_LOG_INFO("buffer filled 1 {}", m_continued.remaining);
+    return FLAC_CONTINUE;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int32_t ret = 0;
+    int32_t ret = FLAC_NONE;
 
-    // -------------------------------------------------------
     // 1. Process pending FLAC audio data
-    // -------------------------------------------------------
-    if (m_nBytes > 0) {
-        const int32_t remaining = m_nBytes;
-
-        if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-
-        const int32_t ret = decodeNative(inbuf, &m_nBytes, outbuf);
-        const int32_t consumed = remaining - m_nBytes;
-
-        m_flacCurrentFilePos += consumed;
-        *bytesLeft -= consumed;
-
-        // FLAC frame extends beyond the current OGG segment
-        if (m_nBytes < 0) { m_nBytes = 0; }
-
-        return ret;
-    }
+    if (!m_continued.waitingForContinuation && m_continued.remaining > 0) { return decodeContinuedBuffer(outbuf); } // audio segment with OggS in between
+    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); }                                    // regular audio
 
     if (m_nBytes < 0) {
         FLAC_LOG_ERROR("Flac decoder asynchronous");
         return FLAC_ERR;
     }
 
-    // -------------------------------------------------------
-    // 2. Get next OGG segment
-    // -------------------------------------------------------
+    // 2. Check end of OGG stream
+    if (m_f_oggLastPage && m_ogg_items.segment_table.empty()) {
+        if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) {
+            m_flacPageNr = 0;
+        } else {
+            return FLAC_END;
+        }
+    }
+
+    // 3. Get next OGG page if necessary
     if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
 
+     // 4. Get next OGG segment
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
 
-    // -------------------------------------------------------
-    // 3. Check for pending cover picture
-    // -------------------------------------------------------
+     // 5. Handle continued OGG packets
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
+        return appendContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
+    }
+    if (m_flacPageNr == FLAC_DECODE && m_ogg_items.segment_table.empty() && m_f_oggContinuedPacket) { //
+        return startContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
+    }
+
+    // 6. Check for pending cover picture
     if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture && !m_flacBlockPicItem.empty()) { m_f_flacNewMetadataBlockPicture = true; }
 
-    // -------------------------------------------------------
-    // 4. Process current FLAC packet
-    // -------------------------------------------------------
+    // 7. Process current FLAC packet
     switch (m_flacPageNr) {
-
         case FLAC_IDENTIFICATION_HEADER: {
-
             ret = parseFlacFirstPacket(inbuf, m_segmLength);
-
-            if (ret == FLAC_OGG_PAGEHEADER) {
-                // Page header found, identification header follows
+            if (ret == FLAC_OGG_PAGEHEADER) {  // Page header found, identification header follows
                 *bytesLeft -= m_segmLength;
                 m_flacCurrentFilePos += m_segmLength;
                 return FLAC_PARSE_OGG_DONE;
@@ -915,9 +956,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
         }
     }
 
-    // -------------------------------------------------------
-    // 5. Update input position
-    // -------------------------------------------------------
+    // 8. Update input position
     *bytesLeft -= m_segmLength;
     m_flacCurrentFilePos += m_segmLength;
 
@@ -1039,7 +1078,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
 
-    if (specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
+    if (FLAC_specialIndexOf(inbuf, "OggS", *bytesLeft) == 0) { // async? => new sync is OggS => reset and decode (not page 0 or 1)
         decoderReset();
         return FLAC_OGG_SYNC_FOUND;
     }
@@ -1463,7 +1502,7 @@ void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, uint8_t sam
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
+int32_t FlacDecoder::FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
     if (!base || !str || baselen < 0) return -1; // seek for str in buffer or in header up to baselen, not nullterminated
 
     const size_t haystackLen = (size_t)baselen;
