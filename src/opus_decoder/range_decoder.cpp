@@ -134,7 +134,7 @@ int32_t RangeDecoder::laplace_decode(uint32_t fs, int32_t decay) {
     assert(fl < 32768);
     assert(fs > 0);
     assert(fl <= fm);
-    assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
-    dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
+    assert(fm < std::min((uint32_t)(fl + fs), (uint32_t)32768));
+    dec_update(fl, std::min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
     return val;
 }

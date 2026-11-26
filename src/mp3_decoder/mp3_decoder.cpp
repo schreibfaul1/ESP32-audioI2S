@@ -1102,7 +1102,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             uint32_t version = inbuf[8] | (inbuf[9] << 8) | (inbuf[10] << 16) | (inbuf[11] << 24);
             uint32_t size = inbuf[12] | (inbuf[13] << 8) | (inbuf[14] << 16) | (inbuf[15] << 24);
             MP3_LOG_DEBUG("version {} size {}", version, size);
-            *bytesLeft -= min(*bytesLeft, (int32_t)size);
+            *bytesLeft -= std::min(*bytesLeft, (int32_t)size);
             return MP3_NEXT_FRAME;
         }
     }
@@ -3050,7 +3050,7 @@ int32_t MP3Decoder::IMDCT(int32_t gr, int32_t ch) {
         /* all long transforms */
         int32_t x = (m_HuffmanInfo->nonZeroBound[ch] + 7) / 18 + 1;
         bc.nBlocksLong = (x < 32 ? x : 32);
-        // bc.nBlocksLong = min((hi->nonZeroBound[ch] + 7) / 18 + 1, 32);
+        // bc.nBlocksLong = std::min((hi->nonZeroBound[ch] + 7) / 18 + 1, 32);
         nBfly = bc.nBlocksLong - 1;
     } else if (m_SideInfoSub[gr][ch].blockType == 2 && m_SideInfoSub[gr][ch].mixedBlock) {
         /* mixed block - long transforms until cutoff, then short transforms */

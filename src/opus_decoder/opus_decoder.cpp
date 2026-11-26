@@ -391,7 +391,7 @@ int32_t OpusDecoder::opus_decode_frame(uint8_t* inbuf, int16_t* outbuf, int32_t 
     }
     int      i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
-    uint8_t  payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000); /* The SILK PLC cannot produce frames of less than 10 ms */
+    uint8_t  payloadSize_ms = std::max(10, 1000 * samplesPerFrame / 48000); /* The SILK PLC cannot produce frames of less than 10 ms */
     int      decoded_samples = 0;
     int32_t  silk_frame_size;
     uint8_t  start_band = 17;

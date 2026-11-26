@@ -528,7 +528,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int32_t nBytes) {
 
     auto assignVorbisValue = [](ps_ptr<char>& dst, const uint8_t* comment, uint32_t commentLength, uint32_t valueOffset) -> bool {
         if (commentLength < valueOffset) return false;
-        dst.assign((const char*)(comment + valueOffset), min((uint32_t)127, commentLength - valueOffset));
+        dst.assign((const char*)(comment + valueOffset), std::min((uint32_t)127, commentLength - valueOffset));
         return true;
     };
 

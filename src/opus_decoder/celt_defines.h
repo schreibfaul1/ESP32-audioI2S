@@ -135,7 +135,7 @@
 #define ALLOC_NONE                       1
 #define OPUS_FPRINTF                     (void)
 #define DECODE_BUFFER_SIZE               2048
-#define CELT_PVQ_U(_n, _k)               (celt_pvq_u_row(min(_n, _k), max(_n, _k)))
+#define CELT_PVQ_U(_n, _k)               (celt_pvq_u_row(std::min(_n, _k), std::max(_n, _k)))
 #define CELT_PVQ_V(_n, _k)               (CELT_PVQ_U(_n, _k) + CELT_PVQ_U(_n, (_k) + 1))
 #define CELT_GET_AND_CLEAR_ERROR_REQUEST 10007
 #define CELT_SET_CHANNELS_REQUEST        10008
