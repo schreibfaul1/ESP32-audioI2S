@@ -1,7 +1,18 @@
 #pragma once
 
-#include <Arduino.h>
 #include "psram_unique_ptr.hpp"
+
+namespace {
+#define ANSI_ESC_RESET   "\033[0m"
+#define ANSI_ESC_BLACK   "\033[30m"
+#define ANSI_ESC_RED     "\033[31m"
+#define ANSI_ESC_GREEN   "\033[32m"
+#define ANSI_ESC_YELLOW  "\033[33m"
+#define ANSI_ESC_BLUE    "\033[34m"
+#define ANSI_ESC_MAGENTA "\033[35m"
+#define ANSI_ESC_CYAN    "\033[36m"
+#define ANSI_ESC_WHITE   "\033[37m"
+} // namespace
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
@@ -59,8 +70,7 @@
 // ——————————————————————————————————————————————————————————————————————————————
 
 class AudioBuffer {
-#define ANSI_ESC_RED   "\033[31m"
-#define ANSI_ESC_RESET "\033[0m"
+
   public:
     // ------------------------------------------------------------
     // Configuration
@@ -615,7 +625,8 @@ class RingBuffer {
     //----------------------------------------------------------------------------------------------------------------------------------------------------
     size_t writeSpace() const {
         if (!m_init) {
-            log_e("Buffer is not initialized");
+            m_log.assignf("Buffer is not initialized");
+            m_log.println();
             return 0;
         }
         if (m_used == m_bufSize) return 0;

@@ -14,6 +14,18 @@
 #include <utility>
 #include <vector>
 
+namespace {
+#define ANSI_ESC_RESET   "\033[0m"
+#define ANSI_ESC_BLACK   "\033[30m"
+#define ANSI_ESC_RED     "\033[31m"
+#define ANSI_ESC_GREEN   "\033[32m"
+#define ANSI_ESC_YELLOW  "\033[33m"
+#define ANSI_ESC_BLUE    "\033[34m"
+#define ANSI_ESC_MAGENTA "\033[35m"
+#define ANSI_ESC_CYAN    "\033[36m"
+#define ANSI_ESC_WHITE   "\033[37m"
+} // namespace
+
 #ifndef PS_PTR_CLASS
     #define PS_PTR_CLASS 1
 
@@ -25,11 +37,11 @@
 
 // single objekt (int -> PSRAM)
 // auto pint = ps_make_unique<int>(123);
-// Serial.printf("Wert: %d\n", *pint);
+// printf("Wert: %d\n", *pint);
 
 // single objekt (std::string -> PSRAM)
 // auto pstr = ps_make_unique<std::string>("Hallo PSRAM");
-// Serial.printf("String: %s\n", pstr->c_str());
+// printf("String: %s\n", pstr->c_str());
 
 // array (char-Buffer)
 // auto buf = ps_make_unique<char>(256);
@@ -64,7 +76,7 @@ template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make
 template <typename T> std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
     T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
     if (!raw) {
-        printf("OOM: ps_malloc failed (%zu bytes)\n", sizeof(T) * count);
+        printf("[%s:%i]" ANSI_ESC_RED " OOM: ps_malloc failed (%zu bytes)" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T) * count);
         return std::unique_ptr<T[], PsramDeleter>(nullptr); // kein throw
     }
     return std::unique_ptr<T[], PsramDeleter>(raw);
@@ -110,7 +122,7 @@ class ps_ptr {
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
+                printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for name %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, len, new_name);
             }
         }
     }
@@ -338,7 +350,7 @@ class ps_ptr {
         allocated_size = size;
         if (alloc_name) { set_name(alloc_name); }
         if (!mem) {
-            printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, size, name ? name : "unnamed");
             return false;
         }
         return true;
@@ -357,7 +369,7 @@ class ps_ptr {
             mem.reset(new (raw_mem) T()); // placed new: constructor of T is called up in PSRAM
             allocated_size = sizeof(T);
         } else {
-            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T), name ? name : "unnamed");
             allocated_size = 0; // make sure that allocated_size is 0 if allocation fails
             return false;
         }
@@ -391,7 +403,7 @@ class ps_ptr {
             // Important: number of actual FIFO elements
             m_num_elements = num_elements;
         } else {
-            printf("OOM: failed to calloc %zu bytes for %s\n", total_size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to calloc %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, total_size, name ? name : "unnamed");
             allocated_size = 0;
             m_num_elements = 0;
             return false;
@@ -452,7 +464,7 @@ class ps_ptr {
             new_mem = malloc(new_size);
         }
         if (!new_mem) {
-            printf("OOM: failed to realloc %zu bytes for %s\n", new_size, name ? name : "unnamed");
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to realloc %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_size, name ? name : "unnamed");
             return;
         }
 
@@ -786,7 +798,7 @@ class ps_ptr {
             mem.reset(static_cast<T*>(malloc(new_len)));
         }
         if (!mem) {
-            printf("OOM: append() failed for %zu bytes\n", new_len);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: append() failed for %zu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_len);
             return;
         }
 
@@ -823,7 +835,7 @@ class ps_ptr {
             mem.reset(static_cast<T*>(malloc(new_len)));
         }
         if (!mem) {
-            printf("OOM: append(len) failed for %zu bytes\n", new_len);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: append(len) failed for %zu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_len);
             return;
         }
 
@@ -856,7 +868,7 @@ class ps_ptr {
         }
 
         if (!mem) {
-            printf("OOM: append(ps_ptr) failed for %zu bytes\n", new_len);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: append(ps_ptr) failed for %zu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_len);
             if (old_data) free(old_data);
             return;
         }
@@ -911,7 +923,7 @@ class ps_ptr {
             mem.reset(static_cast<char*>(malloc(new_size)));
 
         if (!mem) {
-            printf("OOM: reserve(%zu) failed\n", new_size);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: reserve(%zu) failed" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_size);
             if (old_data) free(old_data);
             return;
         }
@@ -1101,7 +1113,7 @@ class ps_ptr {
         size_t placeholder_count = count_placeholders(fmt);
 
         if (placeholder_count != arg_count) {
-            printf("assignf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
+            printf("[%s:%i]" ANSI_ESC_YELLOW " assignf(): placeholder mismatch (expected %zu, got %zu), content: '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, placeholder_count, arg_count, fmt);
             return;
         }
 
@@ -1114,7 +1126,7 @@ class ps_ptr {
         alloc(tmp.size() + 1);
 
         if (!mem) {
-            printf("OOM: assignf() failed for %zu bytes\n", tmp.size() + 1);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: assignf() failed for %zu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, tmp.size() + 1);
             return;
         }
 
@@ -1143,7 +1155,7 @@ class ps_ptr {
         size_t placeholder_count = count_placeholders(fmt);
 
         if (placeholder_count != arg_count) {
-            printf("appendf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
+            printf("[%s:%i]" ANSI_ESC_YELLOW " appendf(): placeholder mismatch (expected %zu, got %zu), content: '%s'" ANSI_ESC_RESET "\n", __FILE__, __LINE__, placeholder_count, arg_count, fmt);
             return;
         }
 
@@ -1156,7 +1168,7 @@ class ps_ptr {
         reset();
         alloc(new_len);
         if (!mem) {
-            printf("OOM: appendf1() failed for %zu bytes\n", new_len);
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: appendf1() failed for %zu bytes" ANSI_ESC_RESET "\n", __FILE__, __LINE__, new_len);
             if (old_data) { free(old_data); }
             return;
         }
@@ -2368,12 +2380,12 @@ class ps_ptr {
 
     void shift_left(int n) {
         if (!mem || allocated_size == 0) {
-            printf("Error: No allocated memory or invalid buffer\n");
+            printf("[%s:%i]" ANSI_ESC_RED " Error: No allocated memory or invalid buffer" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return;
         }
 
         if (n < 0 || static_cast<std::size_t>(n) > allocated_size) {
-            printf("Error: Invalid shift amount %d, allocated_size=%zu\n", n, allocated_size);
+            printf("[%s:%i]" ANSI_ESC_RED " Error: Invalid shift amount %d, allocated_size=%zu" ANSI_ESC_RESET "\n", __FILE__, __LINE__, n, allocated_size);
             return;
         }
 
@@ -2499,13 +2511,13 @@ class ps_ptr {
 
     void hex_dump(uint16_t n = UINT16_MAX) {
         if (!valid()) {
-            printf("hex_dump: invalid buffer\n");
+            printf("[%s:%i]" ANSI_ESC_RED " hex_dump: invalid buffer" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return;
         }
 
         if (allocated_size < n) n = allocated_size;
         if (n == 0) {
-            printf("hex_dump: no data\n");
+            printf("[%s:%i]" ANSI_ESC_YELLOW " hex_dump: no data" ANSI_ESC_RESET "\n", __FILE__, __LINE__);
             return;
         }
 
@@ -3211,7 +3223,7 @@ template <typename T> class ps_struct_ptr {
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
+                printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for name %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, len, new_name);
             }
         }
     }
@@ -3271,7 +3283,7 @@ template <typename T> class ps_struct_ptr {
         if (raw_mem) {
             mem.reset(new (raw_mem) T());
         } else {
-            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
         }
     }
 
@@ -3289,7 +3301,7 @@ template <typename T> class ps_struct_ptr {
         if (raw_mem) {
             mem.reset(static_cast<T*>(raw_mem));
         } else {
-            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
         }
     }
 
@@ -3414,7 +3426,7 @@ template <typename T> class ps_array2d {
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
+                printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for name %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, len, new_name);
             }
         }
     }
@@ -3486,7 +3498,7 @@ template <typename T> class ps_array2d {
             mem.reset(static_cast<T*>(malloc(total_size)));
         }
         if (!mem) {
-            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
             rows = 0;
             cols = 0;
         }
@@ -3510,7 +3522,7 @@ template <typename T> class ps_array2d {
         if (raw_mem) {
             mem.reset(static_cast<T*>(raw_mem));
         } else {
-            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
             rows = 0;
             cols = 0;
         }
@@ -3593,7 +3605,7 @@ template <typename T> class ps_array3d {
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
+                printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for name %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, len, new_name);
             }
         }
     }
@@ -3670,7 +3682,7 @@ template <typename T> class ps_array3d {
             mem.reset(static_cast<T*>(malloc(total_size)));
         }
         if (!mem) {
-            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
             dim1 = 0;
             dim2 = 0;
             dim3 = 0;
@@ -3696,7 +3708,7 @@ template <typename T> class ps_array3d {
         if (raw_mem) {
             mem.reset(static_cast<T*>(raw_mem));
         } else {
-            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            printf("[%s:%i]" ANSI_ESC_RED " OOM: failed to allocate %zu bytes for %s" ANSI_ESC_RESET "\n", __FILE__, __LINE__, total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
             dim1 = 0;
             dim2 = 0;
             dim3 = 0;
