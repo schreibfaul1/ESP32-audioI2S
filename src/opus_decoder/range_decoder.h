@@ -1,5 +1,6 @@
 #pragma once
 #include "../psram_unique_ptr.hpp"
+#include <climits>
 
 class RangeDecoder {
 public:
