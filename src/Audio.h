@@ -7,15 +7,12 @@
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
 #include "buffers.hpp"
-#include "esp_arduino_version.h"
 #include "esp_dsp.h"
 #include "peripherial/bluetooth.h"
 #include "psram_unique_ptr.hpp"
-#include <Arduino.h>
+#include "tcp_client.hpp"
 #include <FFat.h>
 #include <FS.h>
-#include <NetworkClient.h>
-#include <NetworkClientSecure.h>
 #include <SD.h>
 #include <SD_MMC.h>
 #include <WiFi.h>
@@ -117,8 +114,6 @@ class Audio {
     bool             connecttospeech(const char* speech, const char* lang);
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
-    void             setInsecure();
-    void             setCACert(const char* rootCA);
     bool             setAudioPlayTime(uint16_t sec);
     bool             setTimeOffset(int sec);
     bool             setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
@@ -366,10 +361,10 @@ class Audio {
     std::atomic<uint32_t> m_dmaFreeDesc = 0;
 
   private:
-    File                m_audiofile;
-    NetworkClient       client;
-    NetworkClientSecure clientsecure;
-    NetworkClient*      m_client = nullptr;
+    File             m_audiofile;
+    TCP_Client       client;
+    TCP_ClientSecure clientsecure;
+    Network_Client*  m_client = nullptr;
 
     SemaphoreHandle_t mutex_audioTask;
     SemaphoreHandle_t mutex_audioTaskIsDecoding;

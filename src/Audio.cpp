@@ -62,11 +62,6 @@ Audio::Audio(uint8_t i2sPort) : bt_source(this, &Audio::bt_info_callback) {
     m_f_I2S_init = false;
     mutex_audioTask = xSemaphoreCreateMutex();
     mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
-    if (ESP_ARDUINO_VERSION_MAJOR < 4) {
-        clientsecure.setInsecure();
-    } else {
-        clientsecure.useBuiltinCACertBundle();
-    }
     m_i2s_items.i2s_num = i2sPort; // i2s port number
 
     i2s_event_callbacks_t cbs = {};
@@ -169,7 +164,7 @@ void Audio::setDefaults() {
 
     client.stop();
     clientsecure.stop();
-    m_client = static_cast<NetworkClient*>(&client); /* default to *something* so that no NULL deref can happen */
+    m_client = static_cast<TCP_Client*>(&client); /* default to *something* so that no NULL deref can happen */
 
     m_f_timeout = false;
     m_f_chunked = false; // Assume not chunked
@@ -239,10 +234,6 @@ void Audio::setDefaults() {
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if (timeout_ms) m_timeout_ms = timeout_ms;
     if (timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::setCACert(const char* rootCA) {
-    clientsecure.setCACert(rootCA);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -317,7 +308,7 @@ bool Audio::openai_speech(const char* api_key, const char* model, const char* in
 
     bool res = true;
     int  port = 443;
-    m_client = static_cast<NetworkClientSecure*>(&clientsecure);
+    m_client = &clientsecure;
 
     uint32_t t = millis();
     info(*this, Audio::evt_info, "Connect to: \"{}\"", host.get());
@@ -488,10 +479,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.append("Connection: keep-alive\r\n\r\n");
 
     if (m_f_ssl) {
-        m_client = static_cast<NetworkClientSecure*>(&clientsecure);
+         m_client = &clientsecure;
         if (port == 80) port = 443;
     } else {
-        m_client = static_cast<NetworkClient*>(&client);
+        m_client = &client;
     }
 
     timestamp = millis();
@@ -613,10 +604,10 @@ bool Audio::httpPrint(const char* host) {
 
     if (!m_client->connected()) {
         if (m_f_ssl) {
-            m_client = static_cast<NetworkClientSecure*>(&clientsecure);
+            m_client = &clientsecure;
             if (m_f_ssl && port == 80) port = 443;
         } else {
-            m_client = static_cast<NetworkClient*>(&client);
+            m_client = &client;
         }
         if (f_equal) info(*this, Audio::evt_info, "The host has disconnected, reconnecting");
 
@@ -731,10 +722,10 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
 
     if (m_client->connected()) { m_client->stop(); }
     if (m_f_ssl) {
-        m_client = static_cast<NetworkClientSecure*>(&clientsecure);
+        m_client = &clientsecure;
         if (m_f_ssl && port == 80) port = 443;
     } else {
-        m_client = static_cast<NetworkClient*>(&client);
+        m_client = &client;
     }
 
     if (!m_client->connect(hwoe.get(), port)) {
@@ -829,7 +820,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     req.append("Accept: text/html\r\n");
     req.append("Connection: close\r\n\r\n");
 
-    m_client = static_cast<NetworkClient*>(&client);
+    m_client = &client;
     info(*this, Audio::evt_info, "connect to \"{}\"", host);
     if (!m_client->connect(host, 80)) {
         AUDIO_LOG_ERROR("Connection failed");
