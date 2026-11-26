@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Arduino.h"
+#include "esp32-hal-psram.h"
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -32,7 +33,7 @@ namespace {
 /** Auxiliary functions for using Unique Pointers in ESP32 PSRAM **/
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// PSRAM Deleter (ps_malloc → free)
+// PSRAM Deleter (heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);   → free)
 // Deleter for PSRAM
 
 // single objekt (int -> PSRAM)
@@ -62,7 +63,7 @@ struct PsramDeleter {
 // create individual object in PSRAM
 template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make_unique(Args&&... args) {
     // rohen Speicher im PSRAM holen
-    void* raw = ps_malloc(sizeof(T));
+    void* raw = heap_caps_malloc(sizeof(T), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!raw) { throw std::bad_alloc(); }
 
     // Objekt mit placement-new konstruieren
@@ -74,9 +75,9 @@ template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make
 
 // create an array of objects in PSRAM
 template <typename T> std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
-    T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
+    T* raw = static_cast<T*>(heap_caps_malloc(sizeof(T) * count, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!raw) {
-        printf("[%s:%i]" ANSI_ESC_RED " OOM: ps_malloc failed (%zu bytes)" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T) * count);
+        printf("[%s:%i]" ANSI_ESC_RED " OOM: heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);   failed (%zu bytes)" ANSI_ESC_RESET "\n", __FILE__, __LINE__, sizeof(T) * count);
         return std::unique_ptr<T[], PsramDeleter>(nullptr); // kein throw
     }
     return std::unique_ptr<T[], PsramDeleter>(raw);
@@ -115,7 +116,7 @@ class ps_ptr {
         if (new_name) {
             std::size_t len = std::strlen(new_name) + 1;
             if (psramFound()) {
-                name = static_cast<char*>(ps_malloc(len));
+                name = static_cast<char*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             } else {
                 name = static_cast<char*>(malloc(len));
             }
@@ -343,7 +344,7 @@ class ps_ptr {
     bool alloc(std::size_t size, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size = (size + 15) & ~15;                        // Align to 16 bytes
         if (psramFound() && usePSRAM) {                  // Check at the runtime whether PSRAM is available
-            mem.reset(static_cast<T*>(ps_malloc(size))); // <--- Important!
+            mem.reset(static_cast<T*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))); // <--- Important!
         } else {
             mem.reset(static_cast<T*>(malloc(size))); // <--- Important!
         }
@@ -360,7 +361,7 @@ class ps_ptr {
         reset();                                   // Freigabe des zuvor gehaltenen Speichers
         void* raw_mem = nullptr;
         if (psramFound()) {                 // Check at the runtime whether PSRAM is available
-            raw_mem = ps_malloc(sizeof(T)); // allocated im PSRAM
+            raw_mem = heap_caps_malloc(sizeof(T), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); // allocated im PSRAM
         } else {
             raw_mem = malloc(sizeof(T)); // allocated im RAM
         }
@@ -392,7 +393,7 @@ class ps_ptr {
 
         void* raw_mem = nullptr;
         if (psramFound() && usePSRAM) {
-            raw_mem = ps_malloc(total_size);
+            raw_mem = heap_caps_malloc(total_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         } else {
             raw_mem = malloc(total_size);
         }
@@ -459,7 +460,7 @@ class ps_ptr {
     void realloc(size_t new_size) {
         void* new_mem = nullptr;
         if (psramFound()) { // Check at the runtime whether PSRAM is available
-            new_mem = ps_malloc(new_size);
+            new_mem = heap_caps_malloc(new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         } else {
             new_mem = malloc(new_size);
         }
@@ -793,7 +794,7 @@ class ps_ptr {
         char* old_data = static_cast<char*>(mem.release());
 
         if (psramFound()) {                                 // Check at the runtime whether PSRAM is available
-            mem.reset(static_cast<T*>(ps_malloc(new_len))); // <--- Important!
+            mem.reset(static_cast<T*>(heap_caps_malloc(new_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))); // <--- Important!
         } else {
             mem.reset(static_cast<T*>(malloc(new_len)));
         }
@@ -830,7 +831,7 @@ class ps_ptr {
         char* old_data = static_cast<char*>(mem.release());
 
         if (psramFound()) { // Check at the runtime whether PSRAM is available
-            mem.reset(static_cast<T*>(ps_malloc(new_len)));
+            mem.reset(static_cast<T*>(heap_caps_malloc(new_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         } else {
             mem.reset(static_cast<T*>(malloc(new_len)));
         }
@@ -862,7 +863,7 @@ class ps_ptr {
         char* old_data = static_cast<char*>(mem.release());
 
         if (psramFound()) {
-            mem.reset(static_cast<T*>(ps_malloc(new_len)));
+            mem.reset(static_cast<T*>(heap_caps_malloc(new_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         } else {
             mem.reset(static_cast<T*>(malloc(new_len)));
         }
@@ -918,7 +919,7 @@ class ps_ptr {
         size_t new_size = new_cap + 1; // +1 für '\0'
 
         if (psramFound())
-            mem.reset(static_cast<char*>(ps_malloc(new_size)));
+            mem.reset(static_cast<char*>(heap_caps_malloc(new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         else
             mem.reset(static_cast<char*>(malloc(new_size)));
 
@@ -3216,7 +3217,7 @@ template <typename T> class ps_struct_ptr {
         if (new_name) {
             std::size_t len = std::strlen(new_name) + 1;
             if (psramFound()) {
-                name = static_cast<char*>(ps_malloc(len));
+                name = static_cast<char*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             } else {
                 name = static_cast<char*>(malloc(len));
             }
@@ -3276,7 +3277,7 @@ template <typename T> class ps_struct_ptr {
         if (name_str) { set_name(name_str); }
         void* raw_mem = nullptr;
         if (psramFound()) {
-            raw_mem = ps_malloc(sizeof(T));
+            raw_mem = heap_caps_malloc(sizeof(T), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         } else {
             raw_mem = malloc(sizeof(T));
         }
@@ -3343,7 +3344,7 @@ template <typename T> class ps_struct_ptr {
             std::size_t len = strlen(text) + 1;
             char*       p = nullptr;
             if (psramFound()) { // Check at the runtime whether PSRAM is available
-                p = static_cast<char*>(ps_malloc(len));
+                p = static_cast<char*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             } else {
                 p = static_cast<char*>(malloc(len));
             }
@@ -3419,7 +3420,7 @@ template <typename T> class ps_array2d {
         if (new_name) {
             std::size_t len = std::strlen(new_name) + 1;
             if (psramFound()) {
-                name = static_cast<char*>(ps_malloc(len));
+                name = static_cast<char*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             } else {
                 name = static_cast<char*>(malloc(len));
             }
@@ -3493,7 +3494,7 @@ template <typename T> class ps_array2d {
         size_t total_size = rows * cols * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes
         if (psramFound() && usePSRAM) {
-            mem.reset(static_cast<T*>(ps_malloc(total_size)));
+            mem.reset(static_cast<T*>(heap_caps_malloc(total_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         } else {
             mem.reset(static_cast<T*>(malloc(total_size)));
         }
@@ -3598,7 +3599,7 @@ template <typename T> class ps_array3d {
         if (new_name) {
             std::size_t len = std::strlen(new_name) + 1;
             if (psramFound()) {
-                name = static_cast<char*>(ps_malloc(len));
+                name = static_cast<char*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
             } else {
                 name = static_cast<char*>(malloc(len));
             }
@@ -3677,7 +3678,7 @@ template <typename T> class ps_array3d {
         size_t total_size = dim1 * dim2 * dim3 * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes
         if (psramFound() && usePSRAM) {
-            mem.reset(static_cast<T*>(ps_malloc(total_size)));
+            mem.reset(static_cast<T*>(heap_caps_malloc(total_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
         } else {
             mem.reset(static_cast<T*>(malloc(total_size)));
         }
