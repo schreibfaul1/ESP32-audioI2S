@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03,07.2020
- * Updated on: 24.11.2026
+ * Updated on: 26.11.2026
  *
  * Author: Wolle
  *
@@ -871,23 +871,16 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
 
     int32_t ret = FLAC_NONE;
 
-    // -------------------------------------------------------
     // 1. Process pending FLAC audio data
-    // -------------------------------------------------------
-
     if (!m_continued.waitingForContinuation && m_continued.remaining > 0) { return decodeContinuedBuffer(outbuf); } // audio segment with OggS in between
-
-    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); } // regular audio
+    if (m_nBytes > 0) { return decodePendingSegment(inbuf, bytesLeft, outbuf); }                                    // regular audio
 
     if (m_nBytes < 0) {
         FLAC_LOG_ERROR("Flac decoder asynchronous");
         return FLAC_ERR;
     }
 
-    // -------------------------------------------------------
-    // Check end of OGG stream
-    // -------------------------------------------------------
-
+    // 2. Check end of OGG stream
     if (m_f_oggLastPage && m_ogg_items.segment_table.empty()) {
         if (FLAC_specialIndexOf(inbuf, "OggS", 5) == 0) {
             m_flacPageNr = 0;
@@ -896,49 +889,29 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
         }
     }
 
-    // -------------------------------------------------------
     // 3. Get next OGG page if necessary
-    // -------------------------------------------------------
+    if (m_ogg_items.segment_table.empty()) { return parseOGG(inbuf, bytesLeft); }
 
-    if (m_ogg_items.segment_table.empty()) { //
-        return parseOGG(inbuf, bytesLeft);
-    }
-
-    // -------------------------------------------------------
-    // 4. Get next OGG segment
-    // -------------------------------------------------------
-
+     // 4. Get next OGG segment
     m_segmLength = m_ogg_items.segment_table.front();
     m_ogg_items.segment_table.pop_front();
 
-    // -------------------------------------------------------
-    // 5. Handle continued OGG packets
-    // -------------------------------------------------------
-
-    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) { //
+     // 5. Handle continued OGG packets
+    if (m_continued.waitingForContinuation && m_f_oggContinuedPage) {
         return appendContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
     }
-
     if (m_flacPageNr == FLAC_DECODE && m_ogg_items.segment_table.empty() && m_f_oggContinuedPacket) { //
         return startContinuedOggSegment(inbuf, bytesLeft, m_segmLength);
     }
 
-    // -------------------------------------------------------
     // 6. Check for pending cover picture
-    // -------------------------------------------------------
     if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture && !m_flacBlockPicItem.empty()) { m_f_flacNewMetadataBlockPicture = true; }
 
-    // -------------------------------------------------------
     // 7. Process current FLAC packet
-    // -------------------------------------------------------
     switch (m_flacPageNr) {
-
         case FLAC_IDENTIFICATION_HEADER: {
-
             ret = parseFlacFirstPacket(inbuf, m_segmLength);
-
-            if (ret == FLAC_OGG_PAGEHEADER) {
-                // Page header found, identification header follows
+            if (ret == FLAC_OGG_PAGEHEADER) {  // Page header found, identification header follows
                 *bytesLeft -= m_segmLength;
                 m_flacCurrentFilePos += m_segmLength;
                 return FLAC_PARSE_OGG_DONE;
@@ -983,10 +956,7 @@ int32_t FlacDecoder::decodeOgg(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outb
         }
     }
 
-    // -------------------------------------------------------
     // 8. Update input position
-    // -------------------------------------------------------
-
     *bytesLeft -= m_segmLength;
     m_flacCurrentFilePos += m_segmLength;
 
