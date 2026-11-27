@@ -3,7 +3,6 @@
 #pragma once
 
 #include "../Audio.h"
-#include "../psram_unique_ptr.hpp"
 #include "celt.h"
 #include "range_decoder.h"
 #include "silk.h"

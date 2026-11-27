@@ -20,7 +20,6 @@ char audioI2SVers[] = "\
 #include "flac_decoder/flac_decoder.h"
 #include "mp3_decoder/mp3_decoder.h"
 #include "opus_decoder/opus_decoder.h"
-#include "psram_unique_ptr.hpp"
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "wav_decoder/wav_decoder.h"
 

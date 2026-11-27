@@ -2,10 +2,11 @@
 
 #include "esp_psram.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -14,6 +15,13 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <stdint-gcc.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <time.h>
+
+
 
 namespace {
 #define ANSI_ESC_RESET   "\033[0m"

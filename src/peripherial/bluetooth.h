@@ -1,7 +1,9 @@
 /*
  * bluetooth.h
-*/
+ */
 
+#include "../psram_unique_ptr.hpp"
+#include "../buffers.hpp"
 #include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
 #include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
 
@@ -9,8 +11,6 @@
 
 #if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
 
-    #include "../buffers.hpp"
-    #include "../psram_unique_ptr.hpp"
     #include "esp32-hal-alloc-bt-classic-mem.h"
     #include "esp_a2dp_api.h"
     #include "esp_avrc_api.h"

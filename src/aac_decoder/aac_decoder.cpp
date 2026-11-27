@@ -7,11 +7,7 @@
 
 #include "aac_decoder.h"
 #include "libfaad/neaacdec.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 AACDecoder::AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef), m_neaacdec(std::make_unique<NeaacDecoder>()) {}

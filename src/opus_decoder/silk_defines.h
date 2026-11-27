@@ -1,4 +1,5 @@
 #pragma once
+#include "../Audio.h"
 
     #define SILK_MAX_FRAMES_PER_PACKET 3
     /* Decoder API flags */

@@ -4,8 +4,8 @@
  *  Created on: 30.10.2026
  *  Updated on: 16.11.2026
  */
-    #include "../Audio.h"
     #include "bluetooth.h"
+    #include "../Audio.h"
     #include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
     #include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
 

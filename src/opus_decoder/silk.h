@@ -26,8 +26,7 @@ POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************/
 
 #pragma once
-#include <Arduino.h>
-#include "../psram_unique_ptr.hpp"
+#include "../Audio.h"
 #include "opus_decoder.h"
 #include "silk_defines.h"
 #include "silk_tables.h"

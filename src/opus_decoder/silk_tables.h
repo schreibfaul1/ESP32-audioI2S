@@ -1,4 +1,5 @@
 #pragma once
+#include "../Audio.h"
 #include "silk.h"
 #include "silk_defines.h"
 

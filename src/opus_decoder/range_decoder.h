@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Arduino.h"
+#include "../Audio.h"
 
 class RangeDecoder {
 public:

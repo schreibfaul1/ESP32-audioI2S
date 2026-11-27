@@ -27,9 +27,9 @@
 **
 ** $Id: bits.c,v 1.44 2007/11/01 12:33:29 menno Exp $
 **/
+
+#include "../../Audio.h"
 #include "neaacdec.h"
-#include <stdint-gcc.h>
-#include <stdlib.h>
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t NeaacDecoder::get_sr_index(const uint32_t samplerate) {
@@ -136,21 +136,14 @@ int8_t NeaacDecoder::can_decode_ot(const uint8_t object_type) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* NeaacDecoder::faad_malloc(size_t size) {
     char* ps_str = NULL;
-    if (psramFound()) {
-        ps_str = (char*)ps_malloc(size);
-    } else {
-        ps_str = (char*)malloc(size);
-    }
+    ps_str = (char*)heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
     return ps_str;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* NeaacDecoder::faad_calloc(size_t len, size_t size) {
     char* ps_str = NULL;
-    if (psramFound()) {
-        ps_str = (char*)ps_calloc(len, size);
-    } else {
-        ps_str = (char*)calloc(len, size);
-    }
+    ps_str = (char*)heap_caps_calloc(len, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     return ps_str;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3244,8 +3237,8 @@ void NeaacDecoder::pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t*
 #endif
                     /* swb_offset_max is per-window, not per-frame; clamping
                        group>0 offsets against it zeroed out begin/end. */
-                    begin = min<uint16_t>(base + ics_left->swb_offset[sfb], frame_len);
-                    end = min<uint16_t>(base + ics_left->swb_offset[sfb + 1], frame_len);
+                    begin = std::min<uint16_t>(base + ics_left->swb_offset[sfb], frame_len);
+                    end = std::min<uint16_t>(base + ics_left->swb_offset[sfb + 1], frame_len);
 
                     r1_dep = *__r1;
                     r2_dep = *__r2;
@@ -3281,15 +3274,15 @@ void NeaacDecoder::pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t*
                     if (channel_pair && is_noise(ics_left, g, sfb) && (((ics_left->ms_mask_present == 1) && (ics_left->ms_used[g][sfb])) || (ics_left->ms_mask_present == 2))) {
                         /*uint16_t c;*/
 
-                        begin = min<uint16_t>(base + ics_right->swb_offset[sfb], frame_len);
-                        end = min<uint16_t>(base + ics_right->swb_offset[sfb + 1], frame_len);
+                        begin = std::min<uint16_t>(base + ics_right->swb_offset[sfb], frame_len);
+                        end = std::min<uint16_t>(base + ics_right->swb_offset[sfb + 1], frame_len);
 
                         /* Generate random vector dependent on left channel*/
                         gen_rand_vector(&spec_right[begin], ics_right->scale_factors[g][sfb], end - begin, sub, &r1_dep, &r2_dep);
 
                     } else /*if (ics_left->ms_mask_present == 0)*/ {
-                        begin = min<uint16_t>(base + ics_right->swb_offset[sfb], frame_len);
-                        end = min<uint16_t>(base + ics_right->swb_offset[sfb + 1], frame_len);
+                        begin = std::min<uint16_t>(base + ics_right->swb_offset[sfb], frame_len);
+                        end = std::min<uint16_t>(base + ics_right->swb_offset[sfb + 1], frame_len);
 
                         /* Generate random vector */
                         gen_rand_vector(&spec_right[begin], ics_right->scale_factors[g][sfb], end - begin, sub, __r1, __r2);
@@ -3837,7 +3830,7 @@ void NeaacDecoder::faad_imdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
     #endif
 #endif
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)heap_caps_malloc(512 * sizeof(complex_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     complex_t* sincos = mdct_select->sincos;
     uint16_t   N = mdct_select->N;
     uint16_t   N2 = N >> 1;
@@ -3921,7 +3914,7 @@ void NeaacDecoder::faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
     uint16_t  k;
     complex_t x;
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)heap_caps_malloc(512 * sizeof(complex_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     complex_t* sincos = mdct_select->sincos;
     uint16_t   N = mdct_select->N;
     uint16_t   N2 = N >> 1;
@@ -7221,9 +7214,9 @@ uint8_t NeaacDecoder::reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_st
             goto exit;
         }
         if (sce->ics1.window_sequence == EIGHT_SHORT_SEQUENCE)
-            hDecoder->sbr[ele]->maxAACLine = 8 * std::min(sce->ics1.swb_offset[max(sce->ics1.max_sfb - 1, 0)], sce->ics1.swb_offset_max);
+            hDecoder->sbr[ele]->maxAACLine = 8 * std::min(sce->ics1.swb_offset[std::max(sce->ics1.max_sfb - 1, 0)], sce->ics1.swb_offset_max);
         else
-            hDecoder->sbr[ele]->maxAACLine = std::min(sce->ics1.swb_offset[max(sce->ics1.max_sfb - 1, 0)], sce->ics1.swb_offset_max);
+            hDecoder->sbr[ele]->maxAACLine = std::min(sce->ics1.swb_offset[std::max(sce->ics1.max_sfb - 1, 0)], sce->ics1.swb_offset_max);
         /* check if any of the PS tools is used */
     #if (defined(PS_DEC) || defined(DRM_PS))
         if (hDecoder->ps_used[ele] == 0) {
@@ -7403,9 +7396,9 @@ uint8_t NeaacDecoder::reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stre
             goto exit;
         }
         if (cpe->ics1.window_sequence == EIGHT_SHORT_SEQUENCE)
-            hDecoder->sbr[ele]->maxAACLine = 8 * std::min(cpe->ics1.swb_offset[max(cpe->ics1.max_sfb - 1, 0)], cpe->ics1.swb_offset_max);
+            hDecoder->sbr[ele]->maxAACLine = 8 * std::min(cpe->ics1.swb_offset[std::max(cpe->ics1.max_sfb - 1, 0)], cpe->ics1.swb_offset_max);
         else
-            hDecoder->sbr[ele]->maxAACLine = std::min(cpe->ics1.swb_offset[max(cpe->ics1.max_sfb - 1, 0)], cpe->ics1.swb_offset_max);
+            hDecoder->sbr[ele]->maxAACLine = std::min(cpe->ics1.swb_offset[std::max(cpe->ics1.max_sfb - 1, 0)], cpe->ics1.swb_offset_max);
         retval = sbrDecodeCoupleFrame(hDecoder->sbr[ele], hDecoder->time_out[ch0], hDecoder->time_out[ch1], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR);
         if (retval > 0) { goto exit; }
     } else if (((hDecoder->sbr_present_flag == 1) || (hDecoder->forceUpSampling == 1)) && !hDecoder->sbr_alloced[hDecoder->fr_ch_ele]) {
@@ -12434,7 +12427,7 @@ uint8_t NeaacDecoder::qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rat
         }
     #endif
         /* bs_stop_freq <= 13 */
-        return std::min(64, stopMin + offset[get_sr_index(sample_rate)][min(bs_stop_freq, (uint8_t)13)]);
+        return std::min(64, stopMin + offset[get_sr_index(sample_rate)][std::min(bs_stop_freq, (uint8_t)13)]);
     }
     return 0;
 }

@@ -24,7 +24,6 @@
  */
 
 #include "../Audio.h"
-#include "../psram_unique_ptr.hpp"
 
 class VorbisDecoder : public Decoder {
 
