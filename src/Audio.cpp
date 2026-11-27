@@ -22,6 +22,9 @@ char audioI2SVers[] = "\
 #include "opus_decoder/opus_decoder.h"
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "wav_decoder/wav_decoder.h"
+#include <libb64/cencode.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 // constants
 constexpr size_t m_frameSizeWav = 4096;

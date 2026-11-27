@@ -4,8 +4,6 @@
  */
 
 #pragma once
-#include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
-#include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
 
 #include "psram_unique_ptr.hpp"
 #include "tcp_client.hpp"

@@ -1,8 +1,5 @@
 #pragma once
 #include "psram_unique_ptr.hpp"
-#include <cstdint>
-#include <deque>
-#include <stddef.h>
 
 // this file contains definitions of various structs used in Audio lib
 
