@@ -6,8 +6,6 @@
 #pragma once
 
 #include "../Audio.h"
-#include "libfaad/aac_defines.h"
-#include "libfaad/aac_settings.h"
 #include "libfaad/aac_structs.h"
 #include "libfaad/aac_tables.h"
 #include "libfaad/neaacdec.h"

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdint-gcc.h>
 #include "celt_defines.h"
 
 typedef struct {

@@ -29,7 +29,6 @@
 **/
 #pragma once
 #include "aac_defines.h"
-#include "aac_settings.h"
 
 typedef void* NeAACDecHandle;
 typedef struct mp4AudioSpecificConfig {

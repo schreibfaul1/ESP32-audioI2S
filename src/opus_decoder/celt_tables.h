@@ -1,7 +1,6 @@
 #pragma once // celt_tables
 
 #include "celt_structs.h"
-#include <stdint-gcc.h>
 
 static const int16_t eband5ms[22] = {
     /*0  200 400 600 800  1k 1.2 1.4 1.6  2k 2.4 2.8 3.2  4k 4.8 5.6 6.8  8k 9.6 12k 15.6 */

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "esp_psram.h"
-#include "esp_heap_caps.h"
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -12,6 +10,9 @@
 #include <atomic>
 #include <algorithm>
 #include <charconv>
+#include "esp_psram.h"
+#include "esp_heap_caps.h"
+
 namespace {
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_BLACK   "\033[30m"

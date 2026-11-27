@@ -1,7 +1,5 @@
 #pragma once
 
-#include "stdint-gcc.h"
-
 #define SYNCWORDH            0xFF
 #define SYNCWORDL            0xE0
 #define DQ_FRACBITS_OUT      25 // number of fraction bits in output of dequant

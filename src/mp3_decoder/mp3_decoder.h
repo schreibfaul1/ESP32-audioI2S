@@ -2,7 +2,6 @@
 #pragma once
 #include "../Audio.h"
 #include "structs.h"
-#include "tables.h"
 
 class MP3Decoder : public Decoder {
 
