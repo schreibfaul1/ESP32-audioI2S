@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "../../psram_unique_ptr.hpp"
 #include "aac_structs.h"
 #include "aac_tables.h"
 #include "aac_defines.h"

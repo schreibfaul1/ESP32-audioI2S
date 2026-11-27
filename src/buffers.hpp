@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
 #include "psram_unique_ptr.hpp"
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -615,7 +614,8 @@ class RingBuffer {
     //----------------------------------------------------------------------------------------------------------------------------------------------------
     size_t writeSpace() const {
         if (!m_init) {
-            log_e("Buffer is not initialized");
+            m_log.assignf("Buffer is not initialized");
+            m_log.println();
             return 0;
         }
         if (m_used == m_bufSize) return 0;

@@ -4,11 +4,13 @@
  *  Created on: 30.10.2026
  *  Updated on: 16.11.2026
  */
-
-#include "Arduino.h"
-#if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
-    #include "../Audio.h"
+    #include "Audio.h"
     #include "bluetooth.h"
+    #include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
+    #include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
+
+#if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
+
     #include "nvs.h"
     #include "nvs_flash.h"
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

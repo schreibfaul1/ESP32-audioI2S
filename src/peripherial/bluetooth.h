@@ -1,19 +1,30 @@
+/*
+ * bluetooth.h
+*/
+
+#include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
+#include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
+
 #pragma once
-#include <Arduino.h>
 
 #if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
-        #include "../buffers.hpp"
-        #include "../psram_unique_ptr.hpp"
-        #include "esp_a2dp_api.h"
-        #include "esp_avrc_api.h"
-        #include "esp_bt.h"
-        #include "esp_bt_main.h"
-        #include "esp_err.h"
-        #include "esp_gap_bt_api.h"
-        #include "esp32-hal-alloc-bt-classic-mem.h"
-        #include "freertos/FreeRTOS.h"
-        #include "freertos/event_groups.h"
-        #include <atomic>
+
+#ifdef INADDR_NONE
+#undef INADDR_NONE
+#endif
+
+    #include "../buffers.hpp"
+    #include "../psram_unique_ptr.hpp"
+    #include "esp32-hal-alloc-bt-classic-mem.h"
+    #include "esp_a2dp_api.h"
+    #include "esp_avrc_api.h"
+    #include "esp_bt.h"
+    #include "esp_bt_main.h"
+    #include "esp_err.h"
+    #include "esp_gap_bt_api.h"
+    #include "freertos/FreeRTOS.h"
+    #include "freertos/event_groups.h"
+    #include <atomic>
 
 using bt_info_callback_t = bool (*)(void* context, uint16_t event, ps_ptr<char>&& message);
 class BT_Source {
@@ -95,9 +106,9 @@ class BT_Source {
     }
 };
 
-    #else // dummy
+#else // dummy
 
-        #include "../psram_unique_ptr.hpp"
+    #include "../psram_unique_ptr.hpp"
 
 using bt_info_callback_t = bool (*)(void*, uint16_t, ps_ptr<char>&&);
 

@@ -5,6 +5,8 @@
  *  Created on: 26.10.2018
  *  Updated on: 25.10.2026
  */
+#include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
+#include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
 #include "mp3_decoder.h"
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

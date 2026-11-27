@@ -2,6 +2,7 @@
 
 #include <esp_crt_bundle.h>
 #include <esp_tls.h>
+#include <esp_timer.h>
 #include <lwip/netdb.h>
 #include <lwip/sockets.h>
 #include <mbedtls/ssl.h>

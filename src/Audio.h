@@ -4,13 +4,17 @@
  */
 
 #pragma once
-#pragma GCC optimize("Ofast")
-#include "audiolib_structs.hpp"
-#include "buffers.hpp"
-#include "esp_dsp.h"
-#include "peripherial/bluetooth.h"
+#include "esp_idf_version.h" // get IDF e.g. ESP_IDF_VERSION_MAJOR
+#include "sdkconfig.h"       // get TARGET, e.g. CONFIG_IDF_TARGET_ESP32S31
+
 #include "psram_unique_ptr.hpp"
 #include "tcp_client.hpp"
+#include "audiolib_structs.hpp"
+#include "buffers.hpp"
+#include "peripherial/bluetooth.h"
+
+#include "Arduino.h"
+#include "esp_dsp.h"
 #include <FFat.h>
 #include <FS.h>
 #include <SD.h>

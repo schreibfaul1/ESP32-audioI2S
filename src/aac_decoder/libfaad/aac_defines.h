@@ -1,5 +1,4 @@
 #pragma once
-#include "Arduino.h"
 #include "../../Audio.h"
 #include "aac_settings.h"
 
@@ -347,15 +346,6 @@ typedef real_t complex_t[2];
     #define M_PI 3.14159265358979323846
 #endif
 
-#if !defined(max) && !defined(__cplusplus)
-    #define max(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-#if !defined(min) && !defined(__cplusplus)
-    #define min(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef FAAD2_VERSION
-    #define FAAD2_VERSION "unknown"
-#endif
 /* object types for AAC */
 #define MAIN      1
 #define LC        2
