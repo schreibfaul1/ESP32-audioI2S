@@ -8,6 +8,10 @@
 #include <mbedtls/ssl.h>
 #include <stdio.h>
 
+#ifdef INADDR_NONE
+#undef INADDR_NONE
+#endif
+
 namespace {
 constexpr int        SOCKET_INVALID = -1;       ///< parameter for "no descriptor open"
 constexpr size_t     PORT_STR_LEN = 8;          ///< buffer for the port as text during name resolution

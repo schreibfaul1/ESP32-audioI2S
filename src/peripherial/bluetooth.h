@@ -9,10 +9,6 @@
 
 #if (defined(CONFIG_IDF_TARGET_ESP32S31) && ESP_IDF_VERSION_MAJOR >= 6)
 
-#ifdef INADDR_NONE
-#undef INADDR_NONE
-#endif
-
     #include "../buffers.hpp"
     #include "../psram_unique_ptr.hpp"
     #include "esp32-hal-alloc-bt-classic-mem.h"
