@@ -20,8 +20,14 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-
-
+#include <locale>
+#include <optional>
+#include <functional>
+#include <libb64/cencode.h>
+#include <atomic>
+#include <charconv>
+#include <codecvt>
+#include <deque>
 
 namespace {
 #define ANSI_ESC_RESET   "\033[0m"

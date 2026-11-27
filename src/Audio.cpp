@@ -1961,7 +1961,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         tag.copy_from(data, 3);
         m_ID3Hdr.v22_tag_length = bigEndian(data + 3, 3) + 6;
-        value.copy_from(data + 7, min(m_ID3Hdr.v22_tag_length - 7, (size_t)1024));
+        value.copy_from(data + 7, std::min(m_ID3Hdr.v22_tag_length - 7, (size_t)1024));
 
         if (tag.starts_with("PIC")) { // image embedded in header
             size_t   pic_len = bigEndian(data + 3, 3);
@@ -2785,7 +2785,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             //     sub atom length   |   ©    d     a     y  |  sub sub atom length  |  d     a     t     a  | data type   1->UTF-8  |   reserved            |  2     0     2     2
 
             ps_ptr<char> sa; // sub atom
-            sa.copy_from(data + consumed - as, min(as, (uint32_t)1024));
+            sa.copy_from(data + consumed - as, std::min(as, (uint32_t)1024));
 
             char san[5] = {0};  // sub atom name
             char ssan[5] = {0}; // sub sub atom name (should be 'data')
@@ -4060,8 +4060,8 @@ void Audio::processLocalFile() {
         return;
     }
 
-    m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
-    m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
+    m_prlf.availableBytes = std::min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
+    m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), std::min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_prlf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_prlf.bytesAddedToBuffer); }
     if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
         if (!m_f_allDataReceived) m_f_allDataReceived = true;
@@ -4167,7 +4167,7 @@ void Audio::processWebStream() {
             m_pwst.chunkSize = chunkLen;
             m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
         }
-        m_pwst.writeSpace = min(m_pwst.writeSpace, m_pwst.chunkSize);
+        m_pwst.writeSpace = std::min(m_pwst.writeSpace, m_pwst.chunkSize);
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4176,7 +4176,7 @@ void Audio::processWebStream() {
         readedBytes = 0;
         bool res = false;
         if (m_f_chunked) {
-            res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
+            res = readMetadata(std::min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
         } else {
             res = readMetadata(m_pwst.availableBytes, &readedBytes);
         }
@@ -4186,12 +4186,12 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         return;
     }
-    if (m_metaint) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
+    if (m_metaint) m_pwst.writeSpace = std::min(m_pwst.writeSpace, m_metacount);
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_pwst.availableBytes) {
-        m_pwst.writeSpace = min(m_pwst.writeSpace, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwst.writeSpace, (uint32_t)UINT16_MAX));
+        m_pwst.writeSpace = std::min(m_pwst.writeSpace, (uint32_t)InBuff.writeSpace());
+        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), std::min(m_pwst.writeSpace, (uint32_t)UINT16_MAX));
 
         if (bytesAddedToBuffer > 0) {
             m_pwst.writeSpace -= bytesAddedToBuffer;
@@ -4269,8 +4269,8 @@ void Audio::processWebFile() {
         return;
     }
 
-    m_pwf.availableBytes = min(m_client->available(), (int)InBuff.writeSpace());
-    m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwf.availableBytes, (uint32_t)UINT16_MAX));
+    m_pwf.availableBytes = std::min(m_client->available(), (int)InBuff.writeSpace());
+    m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), std::min(m_pwf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_pwf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_pwf.bytesAddedToBuffer); }
 
     // AUDIO_LOG_ERROR("m_audioFilePosition {} >= m_audioDataSize {}, m_f_allDataReceived {}", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
@@ -4396,7 +4396,7 @@ nextRound:
         if (m_pwsst.chunkSize)
             minAvBytes = min3(availableBytes, m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr, m_pwsst.chunkSize - m_pwsst.byteCounter);
         else
-            minAvBytes = min(availableBytes, (uint32_t)(m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr));
+            minAvBytes = std::min(availableBytes, (uint32_t)(m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr));
 
         int res = audioFileRead(m_pwsst.ts_packet.get() + m_pwsst.ts_packetPtr, minAvBytes);
         if (res > 0) {
@@ -4671,7 +4671,7 @@ void Audio::playAudioData() {
             if (m_audioDataSize - m_audioDataReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
 
             if (m_pad.lastFrames) {
-                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataSize - m_audioDataReadPtr));
+                m_pad.bytesToDecode = std::min(InBuff.readSpace(), (size_t)(m_audioDataSize - m_audioDataReadPtr));
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
                 m_pad.bytesToDecode = InBuff.readSpace();
@@ -4691,7 +4691,7 @@ void Audio::playAudioData() {
                 if (m_f_chunked) {
                     m_pad.bytesToDecode = InBuff.readSpace();
                 } else {
-                    m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                    m_pad.bytesToDecode = std::min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
                 }
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
@@ -5953,7 +5953,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setVolumeSteps(uint8_t steps) {
     // clamp new steps
-    uint8_t new_steps = max(steps, (uint8_t)21);
+    uint8_t new_steps = std::max(steps, (uint8_t)21);
     uint8_t old_steps = m_audio_items.volume_steps;
 
     if (new_steps == old_steps) return;
@@ -6431,7 +6431,7 @@ void Audio::setBalance(float balance) { // left -16.0dB ... 0dB ... -16.0dB righ
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setVolume(uint8_t volume, uint8_t curve) {
 
-    m_audio_items.volume = min(volume, m_audio_items.volume_steps);
+    m_audio_items.volume = std::min(volume, m_audio_items.volume_steps);
 
     // curve is obsolete
     calculateVolumeLimits();
@@ -7116,7 +7116,7 @@ bool Audio::readMetadata(uint32_t maxBytes, uint16_t* readedBytes, bool first) {
     }
     if (!m_rmet.metaDataSize) { return *readedBytes; } // metalen is 0
 
-    int32_t a = audioFileRead((uint8_t*)&m_metadataBuff[m_rmet.pos_ml], min(m_rmet.metaDataSize - m_rmet.pos_ml, maxBytes));
+    int32_t a = audioFileRead((uint8_t*)&m_metadataBuff[m_rmet.pos_ml], std::min(m_rmet.metaDataSize - m_rmet.pos_ml, maxBytes));
     if (a > 0) {
         m_rmet.res += a;
         *readedBytes += a;

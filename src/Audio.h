@@ -13,26 +13,12 @@
 #include "buffers.hpp"
 #include "peripherial/bluetooth.h"
 
-#include "Arduino.h"
 #include "esp_dsp.h"
-#include <FFat.h>
 #include <FS.h>
-#include <SD.h>
-#include <SD_MMC.h>
-#include <WiFi.h>
-#include <atomic>
-#include <charconv>
-#include <codecvt>
-#include <deque>
 #include <driver/i2s_std.h>
 #include <esp32-hal-log.h>
-#include <functional>
-#include <libb64/cencode.h>
-#include <locale>
-#include <memory>
-#include <optional>
-#include <span>
-#include <vector>
+
+
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
